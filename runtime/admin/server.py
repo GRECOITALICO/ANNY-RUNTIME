@@ -110,3 +110,38 @@ class AdminServer:
             if self.thread:
                 self.thread.join(timeout=2.0)
             logger.info("Admin Server stopped")
+
+def start_admin_server(host: str, port: int):
+    """Convenience function to instantiate and run the AdminServer."""
+    import time
+    from runtime.identity.manager import IdentityManager
+    from runtime.admin.auth import AuthManager
+    from runtime.admin.audit import AuditManager
+    from runtime.github.manager import GitHubManager
+    
+    # Initialize basic components required by the server
+    identity_manager = IdentityManager()
+    auth_manager = AuthManager(identity_manager)
+    audit_manager = AuditManager()
+    github_manager = GitHubManager()
+    
+    server = AdminServer(
+        host=host, 
+        port=port, 
+        auth_manager=auth_manager, 
+        audit_manager=audit_manager, 
+        github_manager=github_manager
+    )
+    
+    if server.start():
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("Received interrupt, shutting down...")
+        finally:
+            server.stop()
+    else:
+        logger.error("Failed to start admin server")
+        import sys
+        sys.exit(1)
