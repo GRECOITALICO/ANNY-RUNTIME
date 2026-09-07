@@ -9,8 +9,9 @@ import shutil
 import socket
 from pathlib import Path
 
+from runtime.core.config import get_install_mode, get_data_dir, get_admin_port, get_runtime_dir, RuntimeConfig
+
 VERSION = "0.2.0"
-DATA_DIR = Path.home() / ".anny-runtime"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("anny-runtime")
@@ -21,9 +22,14 @@ def cmd_version(args):
 
 
 def cmd_status(args):
+    DATA_DIR = get_data_dir()
+    install_mode = get_install_mode()
     identity_file = DATA_DIR / "identity" / "runtime_identity.json"
     print(f"ANNY Runtime v{VERSION}")
-    print(f"Data Directory: {DATA_DIR}")
+    print(f"Install Mode:    {install_mode}")
+    print(f"Data Directory:  {DATA_DIR}")
+    print(f"Runtime Dir:     {get_runtime_dir()}")
+    print(f"Admin Port:      {get_admin_port()}")
     print()
     
     # Identity
@@ -74,6 +80,7 @@ def cmd_doctor(args):
     check("Python >= 3.11", py_ok, f"{sys.version.split()[0]}")
     
     # Data directory
+    DATA_DIR = get_data_dir()
     check("Data directory exists", DATA_DIR.exists(), str(DATA_DIR))
     
     # Identity
@@ -89,7 +96,7 @@ def cmd_doctor(args):
         check("Private key exists", False)
     
     # Port
-    port = 3643
+    port = get_admin_port()
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -110,8 +117,12 @@ def cmd_doctor(args):
         check("cryptography library", False, "pip install cryptography>=41.0.0")
     
     # Systemd
-    systemd_unit = Path.home() / ".config" / "systemd" / "user" / "anny-runtime.service"
-    check("Systemd unit installed", systemd_unit.exists())
+    install_mode = get_install_mode()
+    if install_mode == "system":
+        systemd_unit = Path("/etc/systemd/system/anny-runtime.service")
+    else:
+        systemd_unit = Path.home() / ".config" / "systemd" / "user" / "anny-runtime.service"
+    check("Systemd unit installed", systemd_unit.exists(), f"mode={install_mode}")
     
     # Sandbox
     sandbox_dir = DATA_DIR / "sandboxes"
@@ -127,6 +138,7 @@ def cmd_doctor(args):
 
 
 def cmd_identity_bootstrap(args):
+    DATA_DIR = get_data_dir()
     id_dir = DATA_DIR / "identity"
     id_file = id_dir / "runtime_identity.json"
     
@@ -200,7 +212,7 @@ def cmd_server(args):
     
     try:
         from runtime.admin.server import start_admin_server
-        port = getattr(args, 'port', 3643)
+        port = getattr(args, 'port', get_admin_port())
         start_admin_server(host='127.0.0.1', port=port)
     except ImportError as e:
         logger.error(f"Cannot start server: {e}")
@@ -217,12 +229,17 @@ def cmd_install(args):
 
 
 def cmd_uninstall(args):
+    DATA_DIR = get_data_dir()
     print("ANNY Runtime Uninstall")
     print()
     print("This will remove:")
-    print(f"  - Software:  ~/.local/share/anny-runtime")
-    print(f"  - Systemd:   ~/.config/systemd/user/anny-runtime.service")
-    print(f"  - CLI:       ~/.local/bin/anny-runtime")
+    print(f"  - Software:  {get_runtime_dir()}")
+    if get_install_mode() == "system":
+        print(f"  - Systemd:   /etc/systemd/system/anny-runtime.service")
+        print(f"  - CLI:       /usr/local/bin/anny-runtime")
+    else:
+        print(f"  - Systemd:   ~/.config/systemd/user/anny-runtime.service")
+        print(f"  - CLI:       ~/.local/bin/anny-runtime")
     print()
     print("The following will be PRESERVED unless --purge is specified:")
     print(f"  - Identity:  {DATA_DIR}/identity")
@@ -237,22 +254,41 @@ def cmd_uninstall(args):
             return
     
     # Remove systemd
-    unit = Path.home() / ".config" / "systemd" / "user" / "anny-runtime.service"
+    if get_install_mode() == "system":
+        unit = Path("/etc/systemd/system/anny-runtime.service")
+        cmd_disable = "sudo systemctl disable anny-runtime.service 2>/dev/null || true"
+    else:
+        unit = Path.home() / ".config" / "systemd" / "user" / "anny-runtime.service"
+        cmd_disable = "systemctl --user disable anny-runtime.service 2>/dev/null || true"
+        
     if unit.exists():
-        os.system("systemctl --user disable anny-runtime.service 2>/dev/null || true")
-        unit.unlink()
+        os.system(cmd_disable)
+        if get_install_mode() == "system":
+            os.system(f"sudo rm {unit}")
+        else:
+            unit.unlink()
         print("  Removed systemd unit.")
     
     # Remove CLI symlink
-    cli_link = Path.home() / ".local" / "bin" / "anny-runtime"
+    if get_install_mode() == "system":
+        cli_link = Path("/usr/local/bin/anny-runtime")
+    else:
+        cli_link = Path.home() / ".local" / "bin" / "anny-runtime"
+    
     if cli_link.exists():
-        cli_link.unlink()
+        if get_install_mode() == "system":
+            os.system(f"sudo rm {cli_link}")
+        else:
+            cli_link.unlink()
         print("  Removed CLI.")
     
     # Remove software
-    install_dir = Path.home() / ".local" / "share" / "anny-runtime"
+    install_dir = get_runtime_dir()
     if install_dir.exists():
-        shutil.rmtree(install_dir)
+        if get_install_mode() == "system":
+            os.system(f"sudo rm -rf {install_dir}")
+        else:
+            shutil.rmtree(install_dir)
         print("  Removed software.")
     
     if getattr(args, 'purge', False):

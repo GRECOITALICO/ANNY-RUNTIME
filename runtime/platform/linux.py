@@ -21,10 +21,12 @@ class LinuxAdapter(PlatformAdapter):
         return "unknown"
 
     def get_default_data_dir(self) -> Path:
-        return Path.home() / ".anny-runtime"
+        from runtime.core.config import get_data_dir
+        return get_data_dir()
 
     def get_secure_storage_path(self) -> Path:
-        return Path.home() / ".anny-runtime" / "secure"
+        from runtime.core.config import get_data_dir
+        return get_data_dir() / "secure"
 
     def get_shell_path(self) -> str:
         return os.environ.get("SHELL", "/bin/bash")

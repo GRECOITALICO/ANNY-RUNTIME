@@ -4,6 +4,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+PREFERRED_PORT = 3643
 FORBIDDEN_PORTS = {3434}  # Reserved by Legacy Architecture — MUST NOT USE
 
 

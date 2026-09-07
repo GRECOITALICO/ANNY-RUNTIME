@@ -9,10 +9,48 @@ def detect_platform() -> str:
     return platform.system().lower()
 
 
+def get_install_mode() -> str:
+    """Returns the installation mode: 'system' or 'user'."""
+    return os.environ.get("ANNY_INSTALL_MODE", "user").lower()
+
+def get_data_dir() -> Path:
+    """Returns the canonical data directory based on install mode or explicit environment override."""
+    env_dir = os.environ.get("ANNY_DATA_DIR")
+    if env_dir:
+        return Path(env_dir)
+    
+    if get_install_mode() == "system":
+        return Path("/var/lib/anny-runtime")
+    return Path.home() / ".anny-runtime"
+
+def get_config_dir() -> Path:
+    """Returns the directory containing configuration files."""
+    return get_data_dir()
+
+def get_runtime_dir() -> Path:
+    """Returns the path to the runtime executable/installation."""
+    if get_install_mode() == "system":
+        return Path("/opt/anny-runtime")
+    return Path.home() / ".local/share/anny-runtime"
+
+def get_admin_port() -> int:
+    """Returns the configured admin port."""
+    try:
+        from runtime.admin.port import PREFERRED_PORT
+        default_port = PREFERRED_PORT
+    except ImportError:
+        default_port = 3643
+        
+    env_port = os.environ.get("ANNY_ADMIN_PORT")
+    if env_port and env_port.isdigit():
+        return int(env_port)
+    return default_port
+
+
 @dataclass
 class RuntimeConfig:
     """Configuration for the ANNY Runtime."""
-    data_dir: str = str(Path.home() / ".anny-runtime")
+    data_dir: str = field(default_factory=lambda: str(get_data_dir()))
     max_concurrent_executions: int = 10
     max_process_duration_seconds: int = 3600
     max_workspace_disk_mb: int = 10240
@@ -26,7 +64,7 @@ class RuntimeConfig:
     # Admin panel configuration
     admin_enabled: bool = True
     admin_host: str = '127.0.0.1'
-    admin_port: int = 3643
+    admin_port: int = field(default_factory=get_admin_port)
     admin_session_ttl_seconds: int = 1800
     
     platform: str = field(default_factory=detect_platform)
@@ -34,7 +72,7 @@ class RuntimeConfig:
     @classmethod
     def load(cls) -> "RuntimeConfig":
         """Loads configuration from YAML if present, merges with defaults."""
-        config_path = Path.home() / ".anny-runtime" / "config.yaml"
+        config_path = get_config_dir() / "config.yaml"
         config_data = {}
         if config_path.exists():
             try:
