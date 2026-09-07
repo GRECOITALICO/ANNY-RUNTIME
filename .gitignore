@@ -1,0 +1,15 @@
+*.pyc
+__pycache__/
+.venv
+venv/
+.env
+
+# ANNY Runtime State & Internal Audit (STRICTLY IGNORED IN PUBLIC REPO)
+audit/
+ANNY-RUNTIME-*.tar.gz
+SHA256SUMS
+TRANSPORT-*.json
+RELEASE-GATE.json
+
+# Local Dev Caches
+.pytest_cache/
