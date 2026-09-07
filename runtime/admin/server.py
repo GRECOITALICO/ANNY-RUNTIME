@@ -127,7 +127,7 @@ def start_admin_server(host: str, port: int):
     identity_manager = RuntimeIdentity.load(data_dir)
     auth_manager = AdminSessionManager(str(data_dir), identity_manager.runtime_id)
     audit_manager = AdminAuditLog(str(data_dir), identity_manager.runtime_id)
-    secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager.private_key)
+    secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
     github_manager = GitHubAuthManager(secret_backend)
     
     if not auth_manager.load_bootstrap_token():
