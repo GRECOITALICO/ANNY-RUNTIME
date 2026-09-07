@@ -114,16 +114,17 @@ class AdminServer:
 def start_admin_server(host: str, port: int):
     """Convenience function to instantiate and run the AdminServer."""
     import time
-    from runtime.identity.manager import IdentityManager
-    from runtime.admin.auth import AuthManager
-    from runtime.admin.audit import AuditManager
-    from runtime.github.manager import GitHubManager
+    import sys
+    from runtime.identity.runtime_identity import RuntimeIdentity
+    from runtime.admin.auth import AdminSessionManager
+    from runtime.admin.audit import AdminAuditLog
+    from runtime.admin.github import GitHubAuthManager
     
     # Initialize basic components required by the server
-    identity_manager = IdentityManager()
-    auth_manager = AuthManager(identity_manager)
-    audit_manager = AuditManager()
-    github_manager = GitHubManager()
+    identity_manager = RuntimeIdentity()
+    auth_manager = AdminSessionManager(identity_manager)
+    audit_manager = AdminAuditLog()
+    github_manager = GitHubAuthManager()
     
     server = AdminServer(
         host=host, 
@@ -143,5 +144,4 @@ def start_admin_server(host: str, port: int):
             server.stop()
     else:
         logger.error("Failed to start admin server")
-        import sys
         sys.exit(1)
