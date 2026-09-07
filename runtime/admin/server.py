@@ -2,7 +2,6 @@
 
 Binds to local interface, integrates router and middleware.
 """
-import cgi
 import logging
 import socketserver
 import threading
@@ -35,7 +34,9 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             return
             
         # Parse form data
-        ctype, pdict = cgi.parse_header(self.headers.get('content-type', ''))
+        content_type = self.headers.get('content-type', '')
+        ctype = content_type.split(';')[0].strip().lower()
+        
         form_data = {}
         if ctype == 'application/x-www-form-urlencoded':
             length = int(self.headers.get('content-length', 0))
