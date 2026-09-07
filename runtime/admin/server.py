@@ -130,6 +130,9 @@ def start_admin_server(host: str, port: int):
     secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager.private_key)
     github_manager = GitHubAuthManager(secret_backend)
     
+    if not auth_manager.load_bootstrap_token():
+        auth_manager.generate_bootstrap_token()
+    
     server = AdminServer(
         host=host, 
         port=port, 
