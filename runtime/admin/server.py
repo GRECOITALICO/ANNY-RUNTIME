@@ -115,16 +115,20 @@ def start_admin_server(host: str, port: int):
     """Convenience function to instantiate and run the AdminServer."""
     import time
     import sys
+    from runtime.core.config import get_data_dir
     from runtime.identity.runtime_identity import RuntimeIdentity
     from runtime.admin.auth import AdminSessionManager
     from runtime.admin.audit import AdminAuditLog
     from runtime.admin.github import GitHubAuthManager
+    from runtime.secrets.backend import FileSecretBackend
     
     # Initialize basic components required by the server
-    identity_manager = RuntimeIdentity()
-    auth_manager = AdminSessionManager(identity_manager)
-    audit_manager = AdminAuditLog()
-    github_manager = GitHubAuthManager()
+    data_dir = get_data_dir()
+    identity_manager = RuntimeIdentity.load(data_dir)
+    auth_manager = AdminSessionManager(str(data_dir), identity_manager.runtime_id)
+    audit_manager = AdminAuditLog(str(data_dir), identity_manager.runtime_id)
+    secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager.private_key)
+    github_manager = GitHubAuthManager(secret_backend)
     
     server = AdminServer(
         host=host, 
