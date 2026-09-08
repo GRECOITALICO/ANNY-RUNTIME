@@ -54,70 +54,58 @@ class OrganizationDiscoveryService:
 
     def discover_principal(self) -> Optional[DiscoveredPrincipal]:
         """Discover the authenticated GitHub user profile."""
-        try:
-            user_data = self.github_client.get_authenticated_principal()
-            return DiscoveredPrincipal(
-                login=user_data.get('login', 'unknown'),
-                identity_type=user_data.get('type', 'User'),
-                authorization_state="AUTHORIZED",
-                raw_metadata={
-                    'id': user_data.get('id'),
-                    'name': user_data.get('name'),
-                    'email': user_data.get('email')
-                }
-            )
-        except GitHubClientError as e:
-            logger.error(f"Failed to discover principal: {e}")
-            return None
+        user_data = self.github_client.get_authenticated_principal()
+        return DiscoveredPrincipal(
+            login=user_data.get('login', 'unknown'),
+            identity_type=user_data.get('type', 'User'),
+            authorization_state="AUTHORIZED",
+            raw_metadata={
+                'id': user_data.get('id'),
+                'name': user_data.get('name'),
+                'email': user_data.get('email')
+            }
+        )
 
     def discover_organizations(self) -> List[DiscoveredOrganization]:
         """Discover accessible GitHub organizations."""
-        try:
-            orgs_data = self.github_client.list_organizations()
-            result = []
-            for org in orgs_data:
-                result.append(
-                    DiscoveredOrganization(
-                        login=org.get('login', ''),
-                        display_name=org.get('description') or org.get('login'),
-                        repository_count=org.get('public_repos', 0),
-                        raw_metadata={'id': org.get('id'), 'url': org.get('url')}
-                    )
+        orgs_data = self.github_client.list_organizations()
+        result = []
+        for org in orgs_data:
+            result.append(
+                DiscoveredOrganization(
+                    login=org.get('login', ''),
+                    display_name=org.get('description') or org.get('login'),
+                    repository_count=org.get('public_repos', 0),
+                    raw_metadata={'id': org.get('id'), 'url': org.get('url')}
                 )
-            return result
-        except GitHubClientError as e:
-            logger.error(f"Failed to discover organizations: {e}")
-            return []
+            )
+        return result
 
     def discover_repositories(self, org: Optional[str] = None) -> List[DiscoveredRepository]:
         """Discover accessible repositories for an organization or authenticated principal."""
-        try:
-            repos_data = self.github_client.list_repositories(org=org)
-            result = []
-            for repo in repos_data:
-                full_name = repo.get('full_name', '')
-                owner = repo.get('owner', {}).get('login', '') if isinstance(repo.get('owner'), dict) else ''
-                name = repo.get('name', '')
-                is_private = repo.get('private', False)
-                visibility = "private" if is_private else "public"
-                
-                result.append(
-                    DiscoveredRepository(
-                        full_name=full_name,
-                        name=name,
-                        owner=owner,
-                        visibility=visibility,
-                        archived=repo.get('archived', False),
-                        default_branch=repo.get('default_branch', 'main'),
-                        latest_metadata={
-                            'description': repo.get('description'),
-                            'pushed_at': repo.get('pushed_at'),
-                            'updated_at': repo.get('updated_at'),
-                            'stargazers_count': repo.get('stargazers_count', 0)
-                        }
-                    )
+        repos_data = self.github_client.list_repositories(org=org)
+        result = []
+        for repo in repos_data:
+            full_name = repo.get('full_name', '')
+            owner = repo.get('owner', {}).get('login', '') if isinstance(repo.get('owner'), dict) else ''
+            name = repo.get('name', '')
+            is_private = repo.get('private', False)
+            visibility = "private" if is_private else "public"
+            
+            result.append(
+                DiscoveredRepository(
+                    full_name=full_name,
+                    name=name,
+                    owner=owner,
+                    visibility=visibility,
+                    archived=repo.get('archived', False),
+                    default_branch=repo.get('default_branch', 'main'),
+                    latest_metadata={
+                        'description': repo.get('description'),
+                        'pushed_at': repo.get('pushed_at'),
+                        'updated_at': repo.get('updated_at'),
+                        'stargazers_count': repo.get('stargazers_count', 0)
+                    }
                 )
-            return result
-        except GitHubClientError as e:
-            logger.error(f"Failed to discover repositories (org={org}): {e}")
-            return []
+            )
+        return result

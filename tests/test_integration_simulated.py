@@ -23,7 +23,7 @@ class MockGitHubManager:
         return status
 
 
-class TestCustomerZeroIntegration(unittest.TestCase):
+class TestCustomerZeroIntegrationSimulated(unittest.TestCase):
     def setUp(self):
         self.data_dir = tempfile.mkdtemp()
         self.op_dir = os.path.join(self.data_dir, "ANNY-OPERATIONAL")

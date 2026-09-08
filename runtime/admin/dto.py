@@ -213,7 +213,7 @@ class CanonicalStateDTO:
 class ContinuityDTO:
     """Sanitized Continuity Status DTO for Control Plane."""
     status: str                          # CONSISTENT, DEGRADED, CONFLICTED, UNKNOWN, BLOCKED
-    canonical_source: str                # e.g., "GRECOITALICO/ANNY-OPERATIONAL"
+    canonical_source: str                # e.g., "UNKNOWN/UNKNOWN"
     canonical_revision: Optional[str]
     current_mission: Optional[str]
     current_task: Optional[str]

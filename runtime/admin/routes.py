@@ -112,7 +112,10 @@ class AdminRouter:
             self._send_json(handler, dto.to_dict())
         except Exception as e:
             logger.error(f"Error serving bootstrap API: {e}", exc_info=True)
-            self._send_json(handler, {"error": str(e), "status": "ERROR"}, status=500)
+            # Safe error classification: do not expose raw exception strings
+            error_class = type(e).__name__
+            safe_msg = f"Bootstrap API error: {error_class}"
+            self._send_json(handler, {"error": safe_msg, "status": "ERROR"}, status=500)
 
     def _get_continuity_dto(self) -> ContinuityDTO:
         from runtime.github.discovery import DiscoveredRepository
@@ -162,8 +165,16 @@ class AdminRouter:
         blockers = [BlockerDTO(id=b.id, description=b.description, severity=b.severity) for b in (can_state.blockers if can_state else [])]
         l2_count = len(can_state.l2_workers) if (can_state and can_state.l2_workers) else 0
 
-        # Determine runtime status
-        rt_status = "HEALTHY" if self.context.get('runtime_engine') else "UNKNOWN"
+        # Determine runtime status from observable state
+        runtime_engine = self.context.get('runtime_engine')
+        if runtime_engine:
+            # Check if runtime_engine exposes a health method
+            if hasattr(runtime_engine, 'get_health_status'):
+                rt_status = runtime_engine.get_health_status()
+            else:
+                rt_status = "UNKNOWN"
+        else:
+            rt_status = "UNKNOWN"
 
         # Read actual identity from auth manager if available
         # or runtime_engine. The runtime ID comes from identity manager.
@@ -212,17 +223,29 @@ class AdminRouter:
         else:
             continuity_dto = self._get_continuity_dto()
             
-            # Pass identity info
+            # Derive identity from observable state, not hardcoded values
             auth_manager = self.context.get('auth_manager')
             runtime_id = auth_manager.runtime_id if auth_manager else "UNKNOWN"
+            
+            # Check for actual identity key presence
+            identity_manager = self.context.get('identity_manager')
+            if identity_manager and hasattr(identity_manager, 'get_key_type'):
+                key_type = identity_manager.get_key_type()
+            else:
+                key_type = "UNKNOWN"
+            
+            if identity_manager and hasattr(identity_manager, 'get_status'):
+                id_status = identity_manager.get_status()
+            else:
+                id_status = "UNKNOWN"
             
             status_data = {
                 'github': gh_status,
                 'continuity': continuity_dto.to_dict(),
                 'identity': {
                     'runtime_id': runtime_id,
-                    'status': 'ACTIVE' if auth_manager else 'UNKNOWN',
-                    'key_type': 'ED25519'
+                    'status': id_status,
+                    'key_type': key_type
                 }
             }
             return ready_page(status_data, self._get_csrf())

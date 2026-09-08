@@ -9,12 +9,17 @@ from runtime.github.client import GitHubClient, GitHubClientError, GitHubNotFoun
 
 logger = logging.getLogger(__name__)
 
-# Removed hardcoded GRECOITALICO owner
-DEFAULT_OPERATIONAL_REPOS = ["ANNY-OPERATIONAL", "ANNY"]
+class OperationalRepositoryAmbiguousError(Exception):
+    """Raised when multiple valid operational repositories are found."""
+    pass
+
+class OperationalRepositoryNotFoundError(Exception):
+    """Raised when no operational repositories are found."""
+    pass
 
 
 class OperationalRepositoryProvider:
-    """Reads canonical state from GRECOITALICO/ANNY-OPERATIONAL repository."""
+    """Reads canonical state from the dynamically discovered operational repository."""
 
     def __init__(self, github_client: Optional[GitHubClient] = None, local_path_override: Optional[str] = None):
         self.github_client = github_client
@@ -37,60 +42,77 @@ class OperationalRepositoryProvider:
         if not self.github_client:
             return None
 
-        # 1. Check principal
+        # 1. Check principal and orgs repos
+        candidates = []
         try:
-            user = self.github_client.get_authenticated_principal()
-            owner = user.get('login')
-            if owner:
-                for repo_name in DEFAULT_OPERATIONAL_REPOS:
-                    try:
-                        repo = self.github_client.get_repository(owner, repo_name)
-                        if repo:
-                            self._resolved_repo = {
-                                'type': 'github',
-                                'owner': owner,
-                                'repo': repo_name,
-                                'full_name': f"{owner}/{repo_name}",
-                                'default_branch': repo.get('default_branch', 'main')
-                            }
-                            logger.info(f"Resolved operational repository: {self._resolved_repo['full_name']}")
-                            return self._resolved_repo
-                    except GitHubNotFoundError:
-                        continue
-                    except GitHubClientError as e:
-                        logger.warning(f"Error checking {owner}/{repo_name}: {e}")
-                        continue
-        except GitHubClientError as e:
-            logger.warning(f"Failed to get principal for operational resolution: {e}")
+            # Gather repos
+            all_repos = self.github_client.list_repositories()
+            
+            for repo in all_repos:
+                if not repo: continue
+                owner = repo.get('owner', {}).get('login')
+                repo_name = repo.get('name')
+                if not owner or not repo_name:
+                    continue
+                
+                # 4. inspect repository metadata/content for an explicit operational-repository marker
+                # We check for a file named `BOOTSTRAP.md` or similar, but the user says:
+                # "inspect repository metadata/content for an explicit operational-repository marker"
+                # Let's check for BOOTSTRAP.md existence as the marker.
+                # Actually, maybe a file `.anny-operational` or topic `anny-operational`.
+                # Let's check repository topics first, as it's metadata.
+                topics = repo.get('topics', [])
+                if 'anny-operational' in topics:
+                    candidates.append({
+                        'type': 'github',
+                        'owner': owner,
+                        'repo': repo_name,
+                        'full_name': f"{owner}/{repo_name}",
+                        'default_branch': repo.get('default_branch', 'main')
+                    })
+                    continue
+                
+                # If no topic, maybe check if `BOOTSTRAP.md` and `state/CURRENT_STATE.yaml` exist.
+                # Wait, doing a network call per repo is very slow if they have many repos.
+                # The user says "4. inspect repository metadata/content for an explicit operational-repository marker".
+                # It's better if we only check `BOOTSTRAP.md` if the name might be relevant, or check all.
+                # Let's just check `BOOTSTRAP.md` for all repos?
+                # A better approach: filter repos that could be candidates. But we shouldn't assume names!
+                # Actually, if we list repositories, we can filter by topic easily if we use search, but we just got all_repos.
+                # Let's inspect `BOOTSTRAP.md` in repos that have it. 
+                try:
+                    # Let's just check if BOOTSTRAP.md exists.
+                    self.github_client._request(
+                        f"/repos/{owner}/{repo_name}/contents/BOOTSTRAP.md",
+                        query_params={'ref': repo.get('default_branch', 'main')}
+                    )
+                    candidates.append({
+                        'type': 'github',
+                        'owner': owner,
+                        'repo': repo_name,
+                        'full_name': f"{owner}/{repo_name}",
+                        'default_branch': repo.get('default_branch', 'main')
+                    })
+                except GitHubNotFoundError:
+                    pass
+                except GitHubClientError as e:
+                    logger.warning(f"Error checking BOOTSTRAP.md in {owner}/{repo_name}: {e}")
 
-        # 2. Check organizations
-        try:
-            orgs = self.github_client.list_organizations()
-            for org in orgs:
-                owner = org.get('login')
-                if not owner: continue
-                for repo_name in DEFAULT_OPERATIONAL_REPOS:
-                    try:
-                        repo = self.github_client.get_repository(owner, repo_name)
-                        if repo:
-                            self._resolved_repo = {
-                                'type': 'github',
-                                'owner': owner,
-                                'repo': repo_name,
-                                'full_name': f"{owner}/{repo_name}",
-                                'default_branch': repo.get('default_branch', 'main')
-                            }
-                            logger.info(f"Resolved operational repository: {self._resolved_repo['full_name']}")
-                            return self._resolved_repo
-                    except GitHubNotFoundError:
-                        continue
-                    except GitHubClientError as e:
-                        logger.warning(f"Error checking {owner}/{repo_name}: {e}")
-                        continue
         except GitHubClientError as e:
-            logger.warning(f"Failed to list orgs for operational resolution: {e}")
+            logger.warning(f"Failed to list repos for operational resolution: {e}")
 
-        return None
+        # 5. select only if exactly one valid candidate is identified
+        if len(candidates) == 0:
+            logger.info("No operational repository candidates found.")
+            return None
+        elif len(candidates) == 1:
+            self._resolved_repo = candidates[0]
+            logger.info(f"Resolved operational repository: {self._resolved_repo['full_name']}")
+            return self._resolved_repo
+        else:
+            names = [c['full_name'] for c in candidates]
+            logger.warning(f"Ambiguous operational repositories found: {names}")
+            raise OperationalRepositoryAmbiguousError(f"Multiple operational candidates: {names}")
 
     def _read_file_content(self, relative_path: str) -> Optional[str]:
         """Read text content of a file from operational repo or local path."""
