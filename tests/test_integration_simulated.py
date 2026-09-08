@@ -48,13 +48,23 @@ class TestCustomerZeroIntegrationSimulated(unittest.TestCase):
         audit_mgr = MagicMock()
         gh_mgr = MockGitHubManager(token="fake-token")
         
+        from runtime.continuity.operational import OperationalRepositoryProvider
+        from runtime.continuity.bootstrap import CustomerZeroBootstrapResolver
+        
+        provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override=self.op_dir)
+        resolver = CustomerZeroBootstrapResolver(provider=provider, event_bus=None)
+
         server = AdminServer(
             host="127.0.0.1",
             port=0,
             auth_manager=auth_mgr,
             audit_manager=audit_mgr,
             github_manager=gh_mgr,
-            local_operational_path=self.op_dir
+            local_operational_path=self.op_dir,
+            bootstrap_snapshot={
+                'result': resolver.resolve(),
+                'discovered_repos': []
+            }
         )
         
         dto = server.router._get_continuity_dto()

@@ -252,7 +252,7 @@ class TestCustomerZeroBootstrap(unittest.TestCase):
     # --- Blocker 3 & 4: Bootstrap Stages and Schema ---
 
     def test_operational_provider_and_bootstrap_resolver(self):
-        provider = OperationalRepositoryProvider(local_path_override=self.temp_dir)
+        provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override=self.temp_dir)
         bus = EventBus()
         events_emitted = []
         bus.subscribe(EventType.BOOTSTRAP_COMPLETED, lambda e: events_emitted.append(e))
@@ -269,7 +269,7 @@ class TestCustomerZeroBootstrap(unittest.TestCase):
     def test_missing_required_bootstrap_stage(self):
         """Missing required stage (constitution) should result in BLOCKED."""
         shutil.rmtree(os.path.join(self.temp_dir, "constitution"))
-        provider = OperationalRepositoryProvider(local_path_override=self.temp_dir)
+        provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override=self.temp_dir)
         result = CustomerZeroBootstrapResolver(provider=provider).resolve()
         self.assertEqual(result.status, ContinuityStatus.BLOCKED)
         self.assertTrue(any("constitution" in b.description for b in result.blockers))
@@ -277,7 +277,7 @@ class TestCustomerZeroBootstrap(unittest.TestCase):
     def test_optional_missing_bootstrap_stage(self):
         """Missing optional stage (proposals) should register as OPTIONAL_ABSENT."""
         shutil.rmtree(os.path.join(self.temp_dir, "proposals"))
-        provider = OperationalRepositoryProvider(local_path_override=self.temp_dir)
+        provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override=self.temp_dir)
         result = CustomerZeroBootstrapResolver(provider=provider).resolve()
         self.assertIn(result.status, (ContinuityStatus.CONSISTENT, ContinuityStatus.DEGRADED))
         self.assertTrue(any("OPTIONAL_ABSENT" in s for s in result.stages_completed))
@@ -286,7 +286,7 @@ class TestCustomerZeroBootstrap(unittest.TestCase):
         """Missing mission_id in CURRENT_MISSION should produce SCHEMA_MISMATCH."""
         with open(os.path.join(self.state_dir, "CURRENT_MISSION.yaml"), "w") as f:
             f.write("title: Missing ID\nstatus: ACTIVE\n")
-        provider = OperationalRepositoryProvider(local_path_override=self.temp_dir)
+        provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override=self.temp_dir)
         result = CustomerZeroBootstrapResolver(provider=provider).resolve()
         self.assertEqual(result.status, ContinuityStatus.BLOCKED)
         self.assertTrue(any("SCHEMA_MISMATCH" in b.description or "SCHEMA_MISMATCH" in b.id for b in result.blockers))
@@ -294,7 +294,7 @@ class TestCustomerZeroBootstrap(unittest.TestCase):
     def test_missing_state_handling(self):
         """Missing CURRENT_MISSION.yaml should result in BLOCKED."""
         os.remove(os.path.join(self.state_dir, "CURRENT_MISSION.yaml"))
-        provider = OperationalRepositoryProvider(local_path_override=self.temp_dir)
+        provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override=self.temp_dir)
         result = CustomerZeroBootstrapResolver(provider=provider).resolve()
         self.assertEqual(result.status, ContinuityStatus.BLOCKED)
         self.assertTrue(any("CURRENT_MISSION" in b.description for b in result.blockers))
@@ -303,7 +303,7 @@ class TestCustomerZeroBootstrap(unittest.TestCase):
 
     def test_reconciler_consistent(self):
         reconciler = ContinuityReconciler()
-        provider = OperationalRepositoryProvider(local_path_override=self.temp_dir)
+        provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override=self.temp_dir)
         result = CustomerZeroBootstrapResolver(provider=provider).resolve()
 
         status = reconciler.reconcile(
@@ -317,7 +317,7 @@ class TestCustomerZeroBootstrap(unittest.TestCase):
 
     def test_reconciler_conflicted(self):
         reconciler = ContinuityReconciler()
-        provider = OperationalRepositoryProvider(local_path_override=self.temp_dir)
+        provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override=self.temp_dir)
         result = CustomerZeroBootstrapResolver(provider=provider).resolve()
         result.canonical_state.metadata["repo_type"] = "github"
         result.canonical_state.repository_name = "test-org/NONEXISTENT"
@@ -343,7 +343,7 @@ import time
 from runtime.continuity.operational import OperationalRepositoryProvider
 from runtime.continuity.bootstrap import CustomerZeroBootstrapResolver
 
-provider = OperationalRepositoryProvider(local_path_override='{self.temp_dir}')
+provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override='{self.temp_dir}')
 resolver = CustomerZeroBootstrapResolver(provider=provider)
 result = resolver.resolve()
 
@@ -461,7 +461,7 @@ elif os.environ.get('PHASE') == 'B':
 
     def test_no_automatic_mission_execution(self):
         """Bootstrap should stop at ANNY_READY_FOR_WORK without executing missions."""
-        provider = OperationalRepositoryProvider(local_path_override=self.temp_dir)
+        provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override=self.temp_dir)
         resolver = CustomerZeroBootstrapResolver(provider=provider)
         result = resolver.resolve()
         
@@ -559,3 +559,49 @@ class TestGitHubDiscovery(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_production_rejects_local_override(self):
+        """P0-D: Production environment ignores local path override."""
+        provider = OperationalRepositoryProvider(environment="PRODUCTION", local_path_override=self.temp_dir)
+        self.assertIsNone(provider.resolve_operational_repository())
+
+    def test_controlled_test_accepts_local_override(self):
+        """P0-D: Controlled test environment accepts local path override."""
+        provider = OperationalRepositoryProvider(environment="CONTROLLED_TEST", local_path_override=self.temp_dir)
+        repo = provider.resolve_operational_repository()
+        self.assertEqual(repo['type'], 'local')
+
+    def test_read_file_errors(self):
+        """P0-C: _read_file_content should propagate typed errors, except 404 -> None."""
+        from runtime.github.client import GitHubNotFoundError, GitHubAuthError, GitHubClientError, GitHubTimeoutError, GitHubRateLimitError
+        class MockErrorClient(MockGitHubClient):
+            def get_file(self, owner, repo, path, ref=None):
+                if path == "404.md":
+                    raise GitHubNotFoundError("Not found")
+                elif path == "401.md":
+                    raise GitHubAuthError("Unauthorized")
+                elif path == "403.md":
+                    raise GitHubClientError("Forbidden") 
+                elif path == "timeout.md":
+                    raise GitHubTimeoutError("Timeout")
+                elif path == "ratelimit.md":
+                    raise GitHubRateLimitError("Rate limit")
+                return "content"
+
+        client = MockErrorClient(repos=[{"full_name": f"{CUSTOMER_ZERO_TEST_ORG}/{CUSTOMER_ZERO_TEST_REPO}", "name": CUSTOMER_ZERO_TEST_REPO, "owner": {"login": CUSTOMER_ZERO_TEST_ORG}, "topics": ["anny-operational"], "default_branch": "main"}])
+        provider = OperationalRepositoryProvider(github_client=client, environment="PRODUCTION")
+        provider._resolved_repo = {'type': 'github', 'owner': 'a', 'repo': 'b'}
+        
+        self.assertIsNone(provider._read_file_content("404.md"))
+        
+        with self.assertRaises(GitHubAuthError):
+            provider._read_file_content("401.md")
+            
+        with self.assertRaises(GitHubClientError):
+            provider._read_file_content("403.md")
+            
+        with self.assertRaises(GitHubTimeoutError):
+            provider._read_file_content("timeout.md")
+            
+        with self.assertRaises(GitHubRateLimitError):
+            provider._read_file_content("ratelimit.md")

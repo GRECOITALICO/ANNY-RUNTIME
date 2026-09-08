@@ -21,9 +21,10 @@ class OperationalRepositoryNotFoundError(Exception):
 class OperationalRepositoryProvider:
     """Reads canonical state from the dynamically discovered operational repository."""
 
-    def __init__(self, github_client: Optional[GitHubClient] = None, local_path_override: Optional[str] = None):
+    def __init__(self, github_client: Optional[GitHubClient] = None, local_path_override: Optional[str] = None, environment: str = "PRODUCTION"):
         self.github_client = github_client
         self.local_path_override = local_path_override
+        self.environment = environment
         self._resolved_repo: Optional[Dict[str, str]] = None
 
     def resolve_operational_repository(self) -> Optional[Dict[str, str]]:
@@ -31,14 +32,18 @@ class OperationalRepositoryProvider:
         if self._resolved_repo:
             return self._resolved_repo
 
-        if self.local_path_override and os.path.exists(self.local_path_override):
-            self._resolved_repo = {
-                'type': 'local',
-                'path': self.local_path_override,
-                'full_name': 'LOCAL_CONTROLLED_TEST'
-            }
-            logger.info("Using local override for Operational Repository: LOCAL_CONTROLLED_TEST")
-            return self._resolved_repo
+        if self.local_path_override:
+            if self.environment == "PRODUCTION":
+                logger.error("PRODUCTION environment rejects local_path_override. Configuration ignored.")
+            elif self.environment in ("CONTROLLED_TEST", "CUSTOMER_ZERO_TEST"):
+                if os.path.exists(self.local_path_override):
+                    self._resolved_repo = {
+                        'type': 'local',
+                        'path': self.local_path_override,
+                        'full_name': 'LOCAL_CONTROLLED_TEST'
+                    }
+                    logger.info("Using local override for Operational Repository: LOCAL_CONTROLLED_TEST")
+                    return self._resolved_repo
 
         if not self.github_client:
             return None
@@ -145,9 +150,6 @@ class OperationalRepositoryProvider:
                 )
             except GitHubNotFoundError:
                 logger.warning(f"File not found in GitHub operational repo: {relative_path}")
-                return None
-            except GitHubClientError as e:
-                logger.error(f"Error fetching file {relative_path} from GitHub: {e}")
                 return None
 
         return None

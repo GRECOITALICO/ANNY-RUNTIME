@@ -118,36 +118,28 @@ class AdminRouter:
             self._send_json(handler, {"error": safe_msg, "status": "ERROR"}, status=500)
 
     def _get_continuity_dto(self) -> ContinuityDTO:
-        from runtime.github.discovery import DiscoveredRepository
         gh_mgr = self.context.get('github_manager')
-        secret_backend = self.context.get('secret_backend')
-        event_bus = self.context.get('event_bus')
-
         gh_status_dto = gh_mgr.get_status() if gh_mgr else None
         gh_status_str = gh_status_dto.auth_status if gh_status_dto else "UNAUTHORIZED"
 
-        github_client = GitHubClient(secret_backend=secret_backend) if secret_backend and gh_mgr and gh_mgr.has_token() else None
+        snapshot = self.context.get('bootstrap_snapshot')
+        if not snapshot:
+            return ContinuityDTO(
+                status="UNKNOWN",
+                canonical_source="UNKNOWN",
+                canonical_revision=None,
+                current_mission=None,
+                current_task=None,
+                next_action=None,
+                blocker_count=0,
+                reconciliation_status="UNKNOWN",
+                github_status=gh_status_str,
+                runtime_status="UNKNOWN",
+                fabric_status="NOT_CONFIGURED"
+            )
 
-        principal_dto = None
-        org_dtos = []
-        repo_dtos = []
-        disc_repos_raw = []
-        if github_client:
-            disc = OrganizationDiscoveryService(github_client)
-            disc_p = disc.discover_principal()
-            if disc_p:
-                principal_dto = disc_p.login
-            disc_orgs = disc.discover_organizations()
-            org_dtos = [OrganizationDTO(login=o.login, display_name=o.display_name, repository_count=o.repository_count) for o in disc_orgs]
-            disc_repos_raw = disc.discover_repositories()
-            repo_dtos = [RepositoryDTO(full_name=r.full_name, name=r.name, owner=r.owner, visibility=r.visibility, archived=r.archived, default_branch=r.default_branch) for r in disc_repos_raw]
-
-        local_path = self.context.get('local_operational_path')
-        # Removed fallback local path for dev/certification workspace
-
-        provider = OperationalRepositoryProvider(github_client=github_client, local_path_override=local_path)
-        resolver = CustomerZeroBootstrapResolver(provider=provider, event_bus=event_bus)
-        result = resolver.resolve()
+        result = snapshot['result']
+        disc_repos_raw = snapshot['discovered_repos']
 
         reconciler = ContinuityReconciler()
         recon_status = reconciler.reconcile(
@@ -167,20 +159,11 @@ class AdminRouter:
 
         # Determine runtime status from observable state
         runtime_engine = self.context.get('runtime_engine')
-        if runtime_engine:
-            # Check if runtime_engine exposes a health method
-            if hasattr(runtime_engine, 'get_health_status'):
-                rt_status = runtime_engine.get_health_status()
-            else:
-                rt_status = "UNKNOWN"
-        else:
-            rt_status = "UNKNOWN"
+        rt_status = "UNKNOWN"
+        if runtime_engine and hasattr(runtime_engine, 'get_health_status'):
+            rt_status = runtime_engine.get_health_status()
 
-        # Read actual identity from auth manager if available
-        # or runtime_engine. The runtime ID comes from identity manager.
-        # But we only need to not hardcode ED25519/ACTIVE in the DTO if that was where it is.
-        # The ContinuityDTO doesn't have an identity field, the UI just shows it.
-        # I'll let templates handle identity parsing.
+        repo_dtos = [RepositoryDTO(full_name=r.full_name, name=r.name, owner=r.owner, visibility=r.visibility, archived=r.archived, default_branch=r.default_branch) for r in disc_repos_raw]
 
         return ContinuityDTO(
             status=result.status.value,
@@ -194,7 +177,7 @@ class AdminRouter:
             github_status=gh_status_str,
             runtime_status=rt_status,
             fabric_status="NOT_CONFIGURED",
-            organizations=org_dtos,
+            organizations=[],
             repositories=repo_dtos,
             blockers=blockers,
             l2_worker_summary=L2WorkerSummaryDTO(count=l2_count, registered_workers=[w.get('name', 'worker') for w in (can_state.l2_workers if can_state and isinstance(can_state.l2_workers, list) else []) if isinstance(w, dict)])
@@ -266,6 +249,14 @@ class AdminRouter:
             elif parsed.query == 'poll':
                 # Quick poll trigger
                 res = gh_mgr.poll_device_flow()
+                if res and gh_mgr.has_token():
+                    # Token obtained successfully via polling
+                    session = self.context.get('admin_session')
+                    if session and session.scope == "ONBOARDING_ONLY":
+                        auth_mgr = self.context.get('auth_manager')
+                        if auth_mgr:
+                            auth_mgr.destroy(session.admin_session_id)
+                            self.context['destroy_session'] = True
         else:
             status = GitHubStatusDTO(False, None, "UNAUTHORIZED", "MISSING", None, [], None, None).to_dict()
             df = None
@@ -322,6 +313,13 @@ class AdminRouter:
         if gh_mgr:
             success = gh_mgr.validate()
             self._audit("GITHUB_VALIDATE", "SUCCESS" if success else "FAILED")
+            if success:
+                session = self.context.get('admin_session')
+                if session and session.scope == "ONBOARDING_ONLY":
+                    auth_mgr = self.context.get('auth_manager')
+                    if auth_mgr:
+                        auth_mgr.destroy(session.admin_session_id)
+                        self.context['destroy_session'] = True
         return '/github'
 
     def handle_admin_restart(self, form_data) -> str:
