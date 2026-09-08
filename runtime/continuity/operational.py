@@ -35,8 +35,9 @@ class OperationalRepositoryProvider:
             self._resolved_repo = {
                 'type': 'local',
                 'path': self.local_path_override,
-                'full_name': 'local/ANNY-OPERATIONAL'
+                'full_name': 'LOCAL_CONTROLLED_TEST'
             }
+            logger.info("Using local override for Operational Repository: LOCAL_CONTROLLED_TEST")
             return self._resolved_repo
 
         if not self.github_client:
@@ -55,12 +56,7 @@ class OperationalRepositoryProvider:
                 if not owner or not repo_name:
                     continue
                 
-                # 4. inspect repository metadata/content for an explicit operational-repository marker
-                # We check for a file named `BOOTSTRAP.md` or similar, but the user says:
-                # "inspect repository metadata/content for an explicit operational-repository marker"
-                # Let's check for BOOTSTRAP.md existence as the marker.
-                # Actually, maybe a file `.anny-operational` or topic `anny-operational`.
-                # Let's check repository topics first, as it's metadata.
+                # Check topics for explicit marker
                 topics = repo.get('topics', [])
                 if 'anny-operational' in topics:
                     candidates.append({
@@ -72,16 +68,8 @@ class OperationalRepositoryProvider:
                     })
                     continue
                 
-                # If no topic, maybe check if `BOOTSTRAP.md` and `state/CURRENT_STATE.yaml` exist.
-                # Wait, doing a network call per repo is very slow if they have many repos.
-                # The user says "4. inspect repository metadata/content for an explicit operational-repository marker".
-                # It's better if we only check `BOOTSTRAP.md` if the name might be relevant, or check all.
-                # Let's just check `BOOTSTRAP.md` for all repos?
-                # A better approach: filter repos that could be candidates. But we shouldn't assume names!
-                # Actually, if we list repositories, we can filter by topic easily if we use search, but we just got all_repos.
-                # Let's inspect `BOOTSTRAP.md` in repos that have it. 
+                # Check for explicit BOOTSTRAP.md marker
                 try:
-                    # Let's just check if BOOTSTRAP.md exists.
                     self.github_client._request(
                         f"/repos/{owner}/{repo_name}/contents/BOOTSTRAP.md",
                         query_params={'ref': repo.get('default_branch', 'main')}
@@ -94,17 +82,31 @@ class OperationalRepositoryProvider:
                         'default_branch': repo.get('default_branch', 'main')
                     })
                 except GitHubNotFoundError:
+                    # 404 means it's not a candidate, continue safely
                     pass
                 except GitHubClientError as e:
-                    logger.warning(f"Error checking BOOTSTRAP.md in {owner}/{repo_name}: {e}")
+                    # P0-C: Stop discovery on network/auth errors, do not treat as "not candidate"
+                    status_code = getattr(e, 'status_code', None)
+                    if status_code == 401:
+                        logger.error(f"Unauthorized accessing {owner}/{repo_name}")
+                        raise OperationalRepositoryNotFoundError("UNAUTHORIZED")
+                    elif status_code == 403:
+                        if "rate limit" in str(e).lower():
+                            raise OperationalRepositoryNotFoundError("RATE_LIMITED")
+                        raise OperationalRepositoryNotFoundError("FORBIDDEN")
+                    elif status_code == 404: # Just in case it wasn't caught by GitHubNotFoundError
+                        pass
+                    else:
+                        raise OperationalRepositoryNotFoundError("UNKNOWN_ERROR")
 
         except GitHubClientError as e:
             logger.warning(f"Failed to list repos for operational resolution: {e}")
+            raise OperationalRepositoryNotFoundError("NETWORK_ERROR")
 
         # 5. select only if exactly one valid candidate is identified
         if len(candidates) == 0:
             logger.info("No operational repository candidates found.")
-            return None
+            raise OperationalRepositoryNotFoundError("OPERATIONAL_REPOSITORY_NOT_FOUND")
         elif len(candidates) == 1:
             self._resolved_repo = candidates[0]
             logger.info(f"Resolved operational repository: {self._resolved_repo['full_name']}")
@@ -112,7 +114,7 @@ class OperationalRepositoryProvider:
         else:
             names = [c['full_name'] for c in candidates]
             logger.warning(f"Ambiguous operational repositories found: {names}")
-            raise OperationalRepositoryAmbiguousError(f"Multiple operational candidates: {names}")
+            raise OperationalRepositoryAmbiguousError(f"OPERATIONAL_REPOSITORY_AMBIGUOUS: {names}")
 
     def _read_file_content(self, relative_path: str) -> Optional[str]:
         """Read text content of a file from operational repo or local path."""
@@ -167,8 +169,11 @@ class OperationalRepositoryProvider:
                 return True
             except GitHubNotFoundError:
                 return False
-            except GitHubClientError:
-                return False
+            except GitHubClientError as e:
+                status_code = getattr(e, 'status_code', None)
+                if status_code == 404:
+                    return False
+                raise
         return False
 
     def _parse_yaml_or_json(self, content: str) -> Optional[Any]:

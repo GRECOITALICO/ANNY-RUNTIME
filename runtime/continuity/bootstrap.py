@@ -40,9 +40,35 @@ class CustomerZeroBootstrapResolver:
         self._emit(EventType.BOOTSTRAP_STARTED, {"status": "STARTING"})
 
         # Stage 1: Resolve Operational Repository & BOOTSTRAP.md
-        repo_info = self.provider.resolve_operational_repository()
+        try:
+            repo_info = self.provider.resolve_operational_repository()
+        except Exception as e:
+            # P0-C & P0-E: Handle Operational Repository Exceptions correctly
+            error_msg = str(e)
+            if "UNAUTHORIZED" in error_msg:
+                status = ContinuityStatus.UNKNOWN
+            elif "FORBIDDEN" in error_msg:
+                status = ContinuityStatus.UNKNOWN
+            elif "NETWORK_ERROR" in error_msg:
+                status = ContinuityStatus.UNKNOWN
+            elif "RATE_LIMITED" in error_msg:
+                status = ContinuityStatus.UNKNOWN
+            elif "AMBIGUOUS" in error_msg:
+                status = ContinuityStatus.BLOCKED
+            else:
+                status = ContinuityStatus.BLOCKED
+                
+            b = Blocker(id="BLK-BOOTSTRAP-001", description=f"ANNY-OPERATIONAL repository inaccessible: {error_msg}", severity="CRITICAL")
+            blockers.append(b)
+            return BootstrapResult(
+                status=status,
+                stages_completed=stages_completed,
+                blockers=blockers,
+                error_message=f"Operational repository resolution failed: {error_msg}"
+            )
+        
         if not repo_info:
-            b = Blocker(id="BLK-BOOTSTRAP-001", description="ANNY-OPERATIONAL repository inaccessible or unresolved", severity="CRITICAL")
+            b = Blocker(id="BLK-BOOTSTRAP-001", description="ANNY-OPERATIONAL repository unresolved", severity="CRITICAL")
             blockers.append(b)
             return BootstrapResult(
                 status=ContinuityStatus.BLOCKED,

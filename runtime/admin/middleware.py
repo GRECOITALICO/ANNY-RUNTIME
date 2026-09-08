@@ -36,7 +36,12 @@ class AdminMiddleware:
         parsed = urllib.parse.urlparse(path)
         is_public = parsed.path in self.public_paths
         
-        # 1. Authenticate Session
+        # 1. Determine Transport Security (P0-A First-Run Cookie Transport)
+        host = headers.get('Host', '')
+        is_local = host.startswith('127.0.0.1') or host.startswith('localhost')
+        context['secure_cookie'] = not is_local
+
+        # 2. Authenticate Session
         session_id = None
         if 'Cookie' in headers:
             cookie = SimpleCookie(headers['Cookie'])
@@ -117,6 +122,7 @@ class AdminMiddleware:
     def process_response(self, context: Dict[str, Any]) -> None:
         """Set or clear cookies based on context flags set by handlers."""
         cookies = context.get('set_cookies', [])
+        secure_cookie = context.get('secure_cookie', True)
         
         if context.get('new_session_id'):
             c = SimpleCookie()
@@ -125,7 +131,8 @@ class AdminMiddleware:
             c['admin_session_id']['samesite'] = 'Strict'
             c['admin_session_id']['path'] = '/'
             c['admin_session_id']['max-age'] = self.auth_manager.ttl_seconds
-            c['admin_session_id']['secure'] = True
+            if secure_cookie:
+                c['admin_session_id']['secure'] = True
             cookies.append(c['admin_session_id'].OutputString())
             
         if context.get('destroy_session'):
@@ -135,7 +142,8 @@ class AdminMiddleware:
             c['admin_session_id']['samesite'] = 'Strict'
             c['admin_session_id']['path'] = '/'
             c['admin_session_id']['max-age'] = 0
-            c['admin_session_id']['secure'] = True
+            if secure_cookie:
+                c['admin_session_id']['secure'] = True
             cookies.append(c['admin_session_id'].OutputString())
             
         context['set_cookies'] = cookies

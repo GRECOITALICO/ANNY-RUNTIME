@@ -33,6 +33,7 @@ from runtime.github.discovery import (
 from runtime.continuity.operational import (
     OperationalRepositoryProvider,
     OperationalRepositoryAmbiguousError,
+    OperationalRepositoryNotFoundError,
 )
 from runtime.continuity.bootstrap import CustomerZeroBootstrapResolver
 from runtime.continuity.reconciler import ContinuityReconciler
@@ -180,8 +181,9 @@ class TestCustomerZeroBootstrap(unittest.TestCase):
             {"full_name": "org/some-repo", "name": "some-repo", "owner": {"login": "org"}, "topics": [], "default_branch": "main"},
         ])
         provider = OperationalRepositoryProvider(github_client=client)
-        result = provider.resolve_operational_repository()
-        self.assertIsNone(result)
+        with self.assertRaises(OperationalRepositoryNotFoundError) as cm:
+            provider.resolve_operational_repository()
+        self.assertIn("OPERATIONAL_REPOSITORY_NOT_FOUND", str(cm.exception))
 
     def test_one_operational_candidate(self):
         """Exactly one candidate should resolve successfully."""
@@ -380,7 +382,7 @@ elif os.environ.get('PHASE') == 'B':
         self.assertEqual(reconstructed["task_id"], "TASK-TEST-001")
         self.assertEqual(reconstructed["next_action"], "Execute test verification")
         self.assertEqual(reconstructed["blockers_count"], 0)
-        self.assertEqual(reconstructed["repo_name"], "local/ANNY-OPERATIONAL")
+        self.assertEqual(reconstructed["repo_name"], "LOCAL_CONTROLLED_TEST")
         self.assertEqual(reconstructed["revision"], "REV-TEST-001")
 
     # --- Blocker 7: First Run Session Scope ---
@@ -474,6 +476,50 @@ elif os.environ.get('PHASE') == 'B':
 
 class TestGitHubDiscovery(unittest.TestCase):
     """UNIT tests for GitHub discovery service."""
+
+    def test_github_timeout(self):
+        """P0-C & P0-G: GitHub timeout during discovery should raise exception."""
+        class TimeoutMockClient(MockGitHubClient):
+            def list_repositories(self):
+                e = GitHubClientError("Timeout")
+                e.status_code = 504
+                raise e
+
+        provider = OperationalRepositoryProvider(github_client=TimeoutMockClient())
+        with self.assertRaises(OperationalRepositoryNotFoundError) as cm:
+            provider.resolve_operational_repository()
+        self.assertIn("NETWORK_ERROR", str(cm.exception))
+
+    def test_github_unauthorized(self):
+        """P0-C: Unauthorized returns specific error."""
+        class AuthErrorMockClient(MockGitHubClient):
+            def _request(self, path, query_params=None):
+                if "BOOTSTRAP.md" in path:
+                    e = GitHubClientError("Unauthorized")
+                    e.status_code = 401
+                    raise e
+                return super()._request(path, query_params)
+
+        provider = OperationalRepositoryProvider(github_client=AuthErrorMockClient())
+        with self.assertRaises(OperationalRepositoryNotFoundError) as cm:
+            provider.resolve_operational_repository()
+        self.assertIn("UNAUTHORIZED", str(cm.exception))
+
+    def test_path_exists_non_404(self):
+        """P0-D & P0-G: path_exists should raise exception on non-404 errors."""
+        class BrokenClient(MockGitHubClient):
+            def _request(self, path, query_params=None):
+                if "constitution/" in path:
+                    e = GitHubClientError("Internal Error")
+                    e.status_code = 500
+                    raise e
+                return super()._request(path, query_params)
+
+        provider = OperationalRepositoryProvider(github_client=BrokenClient())
+        provider.resolve_operational_repository()
+        
+        with self.assertRaises(GitHubClientError):
+            provider.path_exists("constitution/")
 
     def test_github_discovery(self):
         client = MockGitHubClient()
