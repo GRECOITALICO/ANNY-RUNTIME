@@ -525,29 +525,26 @@ def base_layout(title, content, active_path="/", csrf_token=""):
 </html>"""
 
 
-def login_page(error=""):
-    error_html = f'<div class="error-msg">{error}</div>' if error else ''
+def first_run_page(csrf_token=""):
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title>Login — ANNY Runtime</title>
+    <title>Setup — ANNY Runtime</title>
     <style>{COMMON_CSS}</style>
 </head>
 <body>
 <div class="login-container">
-    <div class="login-card animate-fade-in">
-        <h1>ANNY Runtime</h1>
-        <p>Enter the bootstrap token from your terminal to authenticate.</p>
-        {error_html}
-        <form method="POST" action="/login">
-            <div class="input-group">
-                <label for="token">Bootstrap Token</label>
-                <input type="password" id="token" name="token" placeholder="Paste token here..." required autofocus>
-            </div>
-            <button type="submit" class="btn btn-primary login-btn">Authenticate</button>
+    <div class="login-card animate-fade-in" style="text-align:center;">
+        <h1>ANNY</h1>
+        <p style="color:var(--text-primary);font-weight:600;margin-bottom:8px;">Runtime installed</p>
+        <p style="color:var(--text-primary);font-weight:600;margin-bottom:24px;">Runtime active</p>
+        <p style="color:var(--text-secondary);margin-bottom:32px;">Connect GitHub to begin.</p>
+        <form method="POST" action="/github/connect">
+            <input type="hidden" name="csrf_token" value="{csrf_token}">
+            <button type="submit" class="btn btn-primary login-btn">CONNECT GITHUB</button>
         </form>
     </div>
 </div>
@@ -555,57 +552,129 @@ def login_page(error=""):
 </html>"""
 
 
-def dashboard_page(status, csrf_token=""):
-    """Render the main Runtime dashboard."""
-    gh_badge = 'badge-success' if status.get('github_status') == 'AUTHORIZED' else 'badge-danger'
-    fab_badge = 'badge-success' if status.get('fabric_status') == 'CONNECTED' else 'badge-muted'
-    health_badge = 'badge-success' if status.get('state') == 'READY' else 'badge-warning'
+def reconnect_page(csrf_token=""):
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Reconnect — ANNY Runtime</title>
+    <style>{COMMON_CSS}</style>
+</head>
+<body>
+<div class="login-container">
+    <div class="login-card animate-fade-in" style="text-align:center;">
+        <h1>ANNY</h1>
+        <p style="color:var(--text-primary);font-weight:600;margin-bottom:32px;">GitHub authorization expired</p>
+        <form method="POST" action="/github/connect">
+            <input type="hidden" name="csrf_token" value="{csrf_token}">
+            <button type="submit" class="btn btn-primary login-btn">RECONNECT GITHUB</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>"""
+
+
+def failure_page(reason, csrf_token=""):
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Failure — ANNY Runtime</title>
+    <style>{COMMON_CSS}</style>
+</head>
+<body>
+<div class="login-container">
+    <div class="login-card animate-fade-in" style="text-align:center;">
+        <h1>ANNY</h1>
+        <p style="color:var(--text-primary);font-weight:600;margin-bottom:16px;">GitHub connection failed.</p>
+        <p style="color:var(--text-secondary);margin-bottom:32px;">Reason:<br>{reason}</p>
+        <form method="POST" action="/github/connect">
+            <input type="hidden" name="csrf_token" value="{csrf_token}">
+            <button type="submit" class="btn btn-primary login-btn">RETRY</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>"""
+
+
+def ready_page(status, csrf_token=""):
+    cont = status.get('continuity', {}) if isinstance(status, dict) else {}
+    gh = status.get('github', {}) if isinstance(status, dict) else {}
+    runtime_st = status.get('runtime', {}) if isinstance(status, dict) else {}
+    
+    continuity_status = cont.get('status', 'UNKNOWN')
+    badge_class = 'badge-success' if continuity_status in ('CONSISTENT', 'READY') else ('badge-warning' if continuity_status == 'DEGRADED' else 'badge-danger')
+    
+    mission = cont.get('current_mission', '—')
+    task = cont.get('current_task', '—')
+    next_action = cont.get('next_action', '—')
+    blocker_count = cont.get('blocker_count', 0)
+    
+    orgs = cont.get('organizations', [])
+    org_name = orgs[0].get('login') if orgs and isinstance(orgs[0], dict) else gh.get('principal', '—')
+    
+    repos = cont.get('repositories', [])
+    repo_count = len(repos)
+    
+    l2_info = cont.get('l2_worker_summary') or {}
+    l2_count = l2_info.get('count', 0) if isinstance(l2_info, dict) else 0
 
     return base_layout("Dashboard", f"""
         <div class="page-header">
-            <h2>Runtime Dashboard</h2>
-            <p>Real-time status of ANNY Runtime services and integrations.</p>
+            <h2>ANNY Control Plane</h2>
+            <p>Operational Dashboard & Continuity Status</p>
         </div>
 
-        <div class="card-grid">
-            <div class="card">
-                <div class="card-label">Status</div>
-                <div class="card-value"><span class="badge {health_badge}">{status.get('state', 'UNKNOWN')}</span></div>
-                <div class="card-sub">Generation {status.get('generation', 0)}</div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div class="card" style="padding:20px;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Continuity</div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge {badge_class}">{continuity_status}</span></div>
+                <div style="font-size:12px; color:var(--text-secondary); margin-top:8px;">Source: {cont.get('canonical_source', '—')}</div>
             </div>
-            <div class="card">
-                <div class="card-label">GitHub</div>
-                <div class="card-value"><span class="badge {gh_badge}">{status.get('github_status', 'UNKNOWN')}</span></div>
-                <div class="card-sub">{status.get('github_principal', '—')}</div>
+            <div class="card" style="padding:20px;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Repository Fabric</div>
+                <div style="font-size:20px; font-weight:700; color:var(--text-muted);"><span class="badge badge-muted">NOT CONFIGURED</span></div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:8px;">Fabric endpoint unavailable</div>
             </div>
-            <div class="card">
-                <div class="card-label">Fabric</div>
-                <div class="card-value"><span class="badge {fab_badge}">{status.get('fabric_status', 'UNKNOWN')}</span></div>
-                <div class="card-sub">{status.get('fabric_tenant', '—')}</div>
+            <div class="card" style="padding:20px;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">GitHub Principal & Org</div>
+                <div style="font-size:18px; font-weight:600; color:var(--accent-indigo);">{gh.get('principal', '—')} / {org_name}</div>
+                <div style="font-size:12px; color:var(--text-secondary); margin-top:8px;">Repos Discovered: {repo_count}</div>
             </div>
-            <div class="card">
-                <div class="card-label">Active Sessions</div>
-                <div class="card-value">{status.get('current_sessions', 0)}</div>
-                <div class="card-sub">{status.get('active_operations', 0)} operations</div>
+            <div class="card" style="padding:20px;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Blockers & Workers</div>
+                <div style="font-size:18px; font-weight:600; color:var(--accent-amber);">Blockers: {blocker_count} | L2 Workers: {l2_count}</div>
+                <div style="font-size:12px; color:var(--text-secondary); margin-top:8px;">Runtime: HEALTHY</div>
             </div>
         </div>
 
-        <div class="detail-panel">
-            <div class="detail-row"><span class="detail-label">Runtime ID</span><span class="detail-value">{status.get('runtime_id', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Installation ID</span><span class="detail-value">{status.get('installation_id', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Version</span><span class="detail-value">{status.get('version', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Protocol</span><span class="detail-value">{status.get('protocol_version', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Platform</span><span class="detail-value">{status.get('platform', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Admin Port</span><span class="detail-value">{status.get('admin_port', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Workspaces</span><span class="detail-value">{status.get('workspace_count', 0)}</span></div>
-            <div class="detail-row"><span class="detail-label">Update Status</span><span class="detail-value">{status.get('update_status', 'UNKNOWN')}</span></div>
+        <div class="detail-panel" style="margin-bottom: 24px;">
+            <h3 style="font-size:15px; margin-bottom:16px; color:var(--accent-indigo);">Canonical State Overview</h3>
+            <div class="detail-row"><span class="detail-label">Runtime Identity</span><span class="detail-value">ED25519 / ACTIVE</span></div>
+            <div class="detail-row"><span class="detail-label">GitHub Connection</span><span class="detail-value">{gh.get('auth_status', 'CONNECTED')}</span></div>
+            <div class="detail-row"><span class="detail-label">Operational State</span><span class="detail-value">{cont.get('canonical_source', 'CONNECTED')}</span></div>
+            <div class="detail-row"><span class="detail-label">Current Mission</span><span class="detail-value" style="font-weight:600; color:var(--accent-emerald);">{mission}</span></div>
+            <div class="detail-row"><span class="detail-label">Current Task</span><span class="detail-value">{task}</span></div>
+            <div class="detail-row"><span class="detail-label">Next Action</span><span class="detail-value" style="color:var(--accent-cyan);">{next_action}</span></div>
+            <div class="detail-row"><span class="detail-label">Repository Fabric</span><span class="detail-value" style="color:var(--text-muted);">NOT CONFIGURED</span></div>
         </div>
 
-        <div class="btn-group">
-            <form method="POST" action="/admin/diagnostics"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-ghost" type="submit">✚ Run Diagnostics</button></form>
-            <form method="POST" action="/admin/update-check"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-ghost" type="submit">⟳ Check Update</button></form>
+        <div class="card" style="text-align:center; padding:32px 24px;">
+            <h2 style="color:var(--accent-emerald);margin-bottom:16px;font-weight:700;letter-spacing:1px;font-size:24px;">ANNY READY FOR WORK</h2>
+            <p style="font-size:13px; color:var(--text-secondary); max-width:500px; margin:0 auto 24px;">ANNY Runtime Customer Zero bootstrap complete. Node is listening and ready for authorized mission work.</p>
+            <form method="POST" action="/github/disconnect">
+                <input type="hidden" name="csrf_token" value="{csrf_token}">
+                <button type="submit" class="btn btn-ghost">Disconnect GitHub</button>
+            </form>
         </div>
     """, "/", csrf_token)
+
 
 
 def github_page(gh_status, csrf_token="", device_flow=None):

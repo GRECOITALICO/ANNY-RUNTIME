@@ -23,6 +23,17 @@ class EventType(Enum):
     RUNTIME_STOPPING = auto()
     RUNTIME_RECOVERY = auto()
     GENERATION_INCREMENTED = auto()
+    BOOTSTRAP_STARTED = auto()
+    GITHUB_DISCOVERED = auto()
+    ORGANIZATION_DISCOVERED = auto()
+    REPOSITORIES_DISCOVERED = auto()
+    OPERATIONAL_REPOSITORY_RESOLVED = auto()
+    CANONICAL_STATE_LOADED = auto()
+    CURRENT_MISSION_RESOLVED = auto()
+    BLOCKERS_LOADED = auto()
+    NEXT_ACTION_LOADED = auto()
+    CONTINUITY_RECONCILED = auto()
+    BOOTSTRAP_COMPLETED = auto()
 
 @dataclass
 class Event:

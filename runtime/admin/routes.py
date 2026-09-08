@@ -4,14 +4,23 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler
 from typing import Callable, Dict, Any, Optional
 
+import json
 from runtime.admin.templates import (
-    login_page, dashboard_page, github_page, fabric_page,
+    first_run_page, reconnect_page, failure_page, ready_page, github_page, fabric_page,
     sessions_page, operations_page, receipts_page, doctor_page
 )
 from runtime.admin.dto import (
     RuntimeStatusDTO, GitHubStatusDTO, FabricStatusDTO,
-    SessionStatusDTO, OperationSummaryDTO, ReceiptSummaryDTO
+    SessionStatusDTO, OperationSummaryDTO, ReceiptSummaryDTO,
+    ContinuityDTO, OrganizationDTO, RepositoryDTO, MissionDTO,
+    NextActionDTO, BlockerDTO, L2WorkerSummaryDTO
 )
+from runtime.github.client import GitHubClient
+from runtime.github.discovery import OrganizationDiscoveryService
+from runtime.continuity.operational import OperationalRepositoryProvider
+from runtime.continuity.bootstrap import CustomerZeroBootstrapResolver
+from runtime.continuity.reconciler import ContinuityReconciler
+from runtime.continuity.state import ContinuityStatus
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +37,9 @@ class AdminRouter:
             '/operations': self.handle_operations,
             '/receipts': self.handle_receipts,
             '/doctor': self.handle_doctor,
-            '/login': self.handle_login_page,
+            '/api/v1/continuity/bootstrap': self.handle_bootstrap_api,
         }
         self._post_routes = {
-            '/login': self.handle_login_submit,
             '/logout': self.handle_logout,
             '/github/connect': self.handle_github_connect,
             '/github/disconnect': self.handle_github_disconnect,
@@ -47,10 +55,13 @@ class AdminRouter:
 
     def dispatch_get(self, path: str, handler: BaseHTTPRequestHandler) -> None:
         """Dispatch a GET request."""
-        # Simple exact path matching
         parsed = urllib.parse.urlparse(path)
-        route_handler = self._get_routes.get(parsed.path)
         
+        if parsed.path == '/api/v1/continuity/bootstrap':
+            self.handle_bootstrap_api(handler)
+            return
+
+        route_handler = self._get_routes.get(parsed.path)
         if not route_handler:
             self._send_html(handler, "404 Not Found", status=404)
             return
@@ -62,27 +73,20 @@ class AdminRouter:
             logger.error(f"Error handling GET {path}: {e}", exc_info=True)
             self._send_html(handler, "500 Internal Server Error", status=500)
 
-    def dispatch_post(self, path: str, form_data: dict, handler: BaseHTTPRequestHandler) -> None:
-        """Dispatch a POST request."""
-        parsed = urllib.parse.urlparse(path)
-        route_handler = self._post_routes.get(parsed.path)
-        
-        if not route_handler:
-            self._send_html(handler, "404 Not Found", status=404)
-            return
-            
-        try:
-            redirect_url = route_handler(form_data)
-            self._redirect(handler, redirect_url)
-        except Exception as e:
-            logger.error(f"Error handling POST {path}: {e}", exc_info=True)
-            self._send_html(handler, "500 Internal Server Error", status=500)
+    def _send_json(self, handler: BaseHTTPRequestHandler, data: Any, status: int = 200) -> None:
+        handler.send_response(status)
+        handler.send_header('Content-type', 'application/json; charset=utf-8')
+        self._set_security_headers(handler)
+        for cookie in self.context.get('set_cookies', []):
+            handler.send_header('Set-Cookie', cookie)
+        handler.end_headers()
+        body = json.dumps(data, indent=2) if not isinstance(data, str) else data
+        handler.wfile.write(body.encode('utf-8'))
 
     def _send_html(self, handler: BaseHTTPRequestHandler, html: str, status: int = 200) -> None:
         handler.send_response(status)
         handler.send_header('Content-type', 'text/html; charset=utf-8')
         self._set_security_headers(handler)
-        # Auth middleware sets cookies on context
         for cookie in self.context.get('set_cookies', []):
             handler.send_header('Set-Cookie', cookie)
         handler.end_headers()
@@ -101,41 +105,107 @@ class AdminRouter:
         handler.send_header('X-Frame-Options', 'DENY')
         handler.send_header('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com;")
 
+
+    def handle_bootstrap_api(self, handler: BaseHTTPRequestHandler) -> None:
+        try:
+            dto = self._get_continuity_dto()
+            self._send_json(handler, dto.to_dict())
+        except Exception as e:
+            logger.error(f"Error serving bootstrap API: {e}", exc_info=True)
+            self._send_json(handler, {"error": str(e), "status": "ERROR"}, status=500)
+
+    def _get_continuity_dto(self) -> ContinuityDTO:
+        from runtime.github.discovery import DiscoveredRepository
+        gh_mgr = self.context.get('github_manager')
+        secret_backend = self.context.get('secret_backend')
+        event_bus = self.context.get('event_bus')
+
+        gh_status_dto = gh_mgr.get_status() if gh_mgr else None
+        gh_status_str = gh_status_dto.auth_status if gh_status_dto else "UNAUTHORIZED"
+
+        github_client = GitHubClient(secret_backend=secret_backend) if secret_backend and gh_mgr and gh_mgr.has_token() else None
+
+        principal_dto = None
+        org_dtos = []
+        repo_dtos = []
+        disc_repos_raw = []
+        if github_client:
+            disc = OrganizationDiscoveryService(github_client)
+            disc_p = disc.discover_principal()
+            if disc_p:
+                principal_dto = disc_p.login
+            disc_orgs = disc.discover_organizations()
+            org_dtos = [OrganizationDTO(login=o.login, display_name=o.display_name, repository_count=o.repository_count) for o in disc_orgs]
+            disc_repos_raw = disc.discover_repositories()
+            repo_dtos = [RepositoryDTO(full_name=r.full_name, name=r.name, owner=r.owner, visibility=r.visibility, archived=r.archived, default_branch=r.default_branch) for r in disc_repos_raw]
+
+        local_path = self.context.get('local_operational_path')
+        if not local_path and not github_client:
+            # Fallback local path for dev/certification workspace
+            dev_path = "/home/anny/Workspace/ANNY"
+            if os.path.exists(dev_path):
+                local_path = dev_path
+
+        provider = OperationalRepositoryProvider(github_client=github_client, local_path_override=local_path)
+        resolver = CustomerZeroBootstrapResolver(provider=provider, event_bus=event_bus)
+        result = resolver.resolve()
+
+        reconciler = ContinuityReconciler()
+        recon_status = reconciler.reconcile(
+            canonical_state=result.canonical_state,
+            principal=None,
+            discovered_repos=disc_repos_raw,
+            github_connected=(gh_status_str == "AUTHORIZED"),
+            runtime_ready=True
+        )
+
+        can_state = result.canonical_state
+        mission_id = can_state.current_mission.id if (can_state and can_state.current_mission) else None
+        task_id = can_state.current_task.name if (can_state and can_state.current_task) else None
+        next_action_str = can_state.next_action.action if (can_state and can_state.next_action) else None
+        blockers = [BlockerDTO(id=b.id, description=b.description, severity=b.severity) for b in (can_state.blockers if can_state else [])]
+        l2_count = len(can_state.l2_workers) if (can_state and can_state.l2_workers) else 0
+
+        return ContinuityDTO(
+            status=result.status.value,
+            canonical_source=can_state.repository_name if can_state else "GRECOITALICO/ANNY-OPERATIONAL",
+            canonical_revision=can_state.revision if can_state else None,
+            current_mission=mission_id,
+            current_task=task_id,
+            next_action=next_action_str,
+            blocker_count=len(blockers),
+            reconciliation_status=recon_status.value,
+            github_status=gh_status_str,
+            runtime_status="HEALTHY",
+            fabric_status="NOT_CONFIGURED",
+            organizations=org_dtos,
+            repositories=repo_dtos,
+            blockers=blockers,
+            l2_worker_summary=L2WorkerSummaryDTO(count=l2_count, registered_workers=[w.get('name', 'worker') for w in (can_state.l2_workers if can_state and isinstance(can_state.l2_workers, list) else []) if isinstance(w, dict)])
+        )
+
     # --- GET Handlers ---
 
-    def handle_login_page(self, parsed) -> str:
-        # If already logged in, redirect to dashboard handled by middleware?
-        # Assuming middleware let us through, render login
-        error = ""
-        query = urllib.parse.parse_qs(parsed.query)
-        if query.get('error'):
-            error = "Invalid bootstrap token"
-        elif query.get('expired'):
-            error = "Session expired. Please log in again."
-        return login_page(error=error)
-
     def handle_dashboard(self, parsed) -> str:
-        # In a real impl, fetch from actual runtime managers
-        # Here we mock the status DTO assembly for demonstration based on the structure
-        runtime = self.context.get('runtime_engine')
-        status = RuntimeStatusDTO(
-            runtime_id="RT-1",
-            installation_id="INSTALL-1",
-            version="0.1.1",
-            protocol_version="1.0",
-            generation=1,
-            state="READY",
-            health={"core": "OK"},
-            github_status="AUTHORIZED",
-            fabric_status="DISCONNECTED",
-            workspace_count=1,
-            active_operations=0,
-            current_sessions=0,
-            update_status="UP_TO_DATE",
-            platform="linux",
-            admin_port=3643
-        ).to_dict()
-        return dashboard_page(status, self._get_csrf())
+        gh_mgr = self.context.get('github_manager')
+        gh_status = gh_mgr.get_status().to_dict() if gh_mgr else {}
+        auth_status = gh_status.get('auth_status', 'UNAUTHORIZED')
+        
+        if auth_status in ('UNAUTHORIZED', 'MISSING'):
+            return first_run_page(self._get_csrf())
+        elif auth_status in ('EXPIRED', 'DEGRADED'):
+            return reconnect_page(self._get_csrf())
+        elif auth_status == 'FAILED':
+            reason = gh_status.get('last_failure_reason', 'Unknown error')
+            return failure_page(reason, self._get_csrf())
+        else:
+            continuity_dto = self._get_continuity_dto()
+            status_data = {
+                'github': gh_status,
+                'continuity': continuity_dto.to_dict()
+            }
+            return ready_page(status_data, self._get_csrf())
+
 
     def handle_github(self, parsed) -> str:
         gh_mgr = self.context.get('github_manager')
@@ -175,24 +245,6 @@ class AdminRouter:
         return doctor_page(diagnostics, self._get_csrf())
 
     # --- POST Handlers (Action) ---
-
-    def handle_login_submit(self, form_data) -> str:
-        token = form_data.get('token', [''])[0]
-        auth_mgr = self.context.get('auth_manager')
-        audit_mgr = self.context.get('audit_manager')
-        
-        if auth_mgr:
-            session = auth_mgr.authenticate(token)
-            if session:
-                if audit_mgr:
-                    audit_mgr.record(session.admin_session_id, "LOGIN", "local-admin", "SUCCESS")
-                # Cookie is set by middleware via context
-                self.context['new_session_id'] = session.admin_session_id
-                return '/'
-                
-        if audit_mgr:
-            audit_mgr.record("none", "LOGIN", "unknown", "FAILED", "Invalid bootstrap token")
-        return '/login?error=1'
 
     def handle_logout(self, form_data) -> str:
         session = self.context.get('admin_session')

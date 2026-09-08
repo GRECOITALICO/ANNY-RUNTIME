@@ -108,3 +108,125 @@ class ReceiptSummaryDTO:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+# =====================================================================
+# CUSTOMER ZERO CONTINUITY DTOs
+# =====================================================================
+
+@dataclass
+class OrganizationDTO:
+    """Sanitized Organization info."""
+    login: str
+    display_name: Optional[str] = None
+    repository_count: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class RepositoryDTO:
+    """Sanitized Repository info."""
+    full_name: str
+    name: str
+    owner: str
+    visibility: str
+    archived: bool
+    default_branch: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class MissionDTO:
+    """Sanitized Mission DTO."""
+    id: str
+    title: str
+    status: str
+    description: Optional[str] = None
+    task_count: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class TaskDTO:
+    """Sanitized Task DTO."""
+    id: str
+    name: str
+    status: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class NextActionDTO:
+    """Sanitized Next Action DTO."""
+    action: str
+    actor: str
+    target: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class BlockerDTO:
+    """Sanitized Blocker DTO."""
+    id: str
+    description: str
+    severity: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class L2WorkerSummaryDTO:
+    """Sanitized L2 Worker Summary DTO."""
+    count: int
+    registered_workers: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class CanonicalStateDTO:
+    """Sanitized Canonical State DTO."""
+    repository_name: str
+    revision: Optional[str]
+    bootstrap_contract_version: Optional[str]
+    operating_system_version: Optional[str]
+    mission: Optional[MissionDTO]
+    next_action: Optional[NextActionDTO]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class ContinuityDTO:
+    """Sanitized Continuity Status DTO for Control Plane."""
+    status: str                          # CONSISTENT, DEGRADED, CONFLICTED, UNKNOWN, BLOCKED
+    canonical_source: str                # e.g., "GRECOITALICO/ANNY-OPERATIONAL"
+    canonical_revision: Optional[str]
+    current_mission: Optional[str]
+    current_task: Optional[str]
+    next_action: Optional[str]
+    blocker_count: int
+    reconciliation_status: str
+    github_status: str
+    runtime_status: str
+    fabric_status: str = "NOT_CONFIGURED"  # MUST remain NOT_CONFIGURED
+    organizations: List[OrganizationDTO] = field(default_factory=list)
+    repositories: List[RepositoryDTO] = field(default_factory=list)
+    blockers: List[BlockerDTO] = field(default_factory=list)
+    l2_worker_summary: Optional[L2WorkerSummaryDTO] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
