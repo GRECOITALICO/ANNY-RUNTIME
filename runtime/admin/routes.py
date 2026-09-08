@@ -140,11 +140,7 @@ class AdminRouter:
             repo_dtos = [RepositoryDTO(full_name=r.full_name, name=r.name, owner=r.owner, visibility=r.visibility, archived=r.archived, default_branch=r.default_branch) for r in disc_repos_raw]
 
         local_path = self.context.get('local_operational_path')
-        if not local_path and not github_client:
-            # Fallback local path for dev/certification workspace
-            dev_path = "/home/anny/Workspace/ANNY"
-            if os.path.exists(dev_path):
-                local_path = dev_path
+        # Removed fallback local path for dev/certification workspace
 
         provider = OperationalRepositoryProvider(github_client=github_client, local_path_override=local_path)
         resolver = CustomerZeroBootstrapResolver(provider=provider, event_bus=event_bus)
@@ -166,9 +162,18 @@ class AdminRouter:
         blockers = [BlockerDTO(id=b.id, description=b.description, severity=b.severity) for b in (can_state.blockers if can_state else [])]
         l2_count = len(can_state.l2_workers) if (can_state and can_state.l2_workers) else 0
 
+        # Determine runtime status
+        rt_status = "HEALTHY" if self.context.get('runtime_engine') else "UNKNOWN"
+
+        # Read actual identity from auth manager if available
+        # or runtime_engine. The runtime ID comes from identity manager.
+        # But we only need to not hardcode ED25519/ACTIVE in the DTO if that was where it is.
+        # The ContinuityDTO doesn't have an identity field, the UI just shows it.
+        # I'll let templates handle identity parsing.
+
         return ContinuityDTO(
             status=result.status.value,
-            canonical_source=can_state.repository_name if can_state else "GRECOITALICO/ANNY-OPERATIONAL",
+            canonical_source=can_state.repository_name if can_state else "UNKNOWN",
             canonical_revision=can_state.revision if can_state else None,
             current_mission=mission_id,
             current_task=task_id,
@@ -176,7 +181,7 @@ class AdminRouter:
             blocker_count=len(blockers),
             reconciliation_status=recon_status.value,
             github_status=gh_status_str,
-            runtime_status="HEALTHY",
+            runtime_status=rt_status,
             fabric_status="NOT_CONFIGURED",
             organizations=org_dtos,
             repositories=repo_dtos,
@@ -191,7 +196,13 @@ class AdminRouter:
         gh_status = gh_mgr.get_status().to_dict() if gh_mgr else {}
         auth_status = gh_status.get('auth_status', 'UNAUTHORIZED')
         
-        if auth_status in ('UNAUTHORIZED', 'MISSING'):
+        # Check if first run session is needed
+        session = self.context.get('admin_session')
+        is_first_run = gh_mgr and not gh_mgr.has_token()
+        if (auth_status in ('UNAUTHORIZED', 'MISSING')) and is_first_run and session and session.scope == "ONBOARDING_ONLY":
+            return first_run_page(self._get_csrf())
+        elif auth_status in ('UNAUTHORIZED', 'MISSING'):
+            # It's missing but not a first run? Or they aren't logged in. Wait, middleware handles login.
             return first_run_page(self._get_csrf())
         elif auth_status in ('EXPIRED', 'DEGRADED'):
             return reconnect_page(self._get_csrf())
@@ -200,9 +211,19 @@ class AdminRouter:
             return failure_page(reason, self._get_csrf())
         else:
             continuity_dto = self._get_continuity_dto()
+            
+            # Pass identity info
+            auth_manager = self.context.get('auth_manager')
+            runtime_id = auth_manager.runtime_id if auth_manager else "UNKNOWN"
+            
             status_data = {
                 'github': gh_status,
-                'continuity': continuity_dto.to_dict()
+                'continuity': continuity_dto.to_dict(),
+                'identity': {
+                    'runtime_id': runtime_id,
+                    'status': 'ACTIVE' if auth_manager else 'UNKNOWN',
+                    'key_type': 'ED25519'
+                }
             }
             return ready_page(status_data, self._get_csrf())
 

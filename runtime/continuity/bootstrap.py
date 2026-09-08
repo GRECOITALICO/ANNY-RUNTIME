@@ -67,9 +67,27 @@ class CustomerZeroBootstrapResolver:
         stages_completed.append("1.BOOTSTRAP")
 
         # Stage 2: CONSTITUTION
+        if not self.provider.path_exists("constitution/"):
+            b = Blocker(id="BLK-BOOTSTRAP-002", description="constitution directory missing", severity="CRITICAL")
+            blockers.append(b)
+            return BootstrapResult(
+                status=ContinuityStatus.BLOCKED,
+                stages_completed=stages_completed,
+                blockers=blockers,
+                error_message="Constitution directory is missing."
+            )
         stages_completed.append("2.CONSTITUTION")
 
         # Stage 3: OPERATING SYSTEM
+        if not self.provider.path_exists("os/"):
+            b = Blocker(id="BLK-BOOTSTRAP-003", description="os directory missing", severity="CRITICAL")
+            blockers.append(b)
+            return BootstrapResult(
+                status=ContinuityStatus.BLOCKED,
+                stages_completed=stages_completed,
+                blockers=blockers,
+                error_message="OS directory is missing."
+            )
         stages_completed.append("3.OPERATING_SYSTEM")
 
         # Stage 4 & 6: CURRENT_STATE
@@ -104,18 +122,33 @@ class CustomerZeroBootstrapResolver:
                 error_message="state/CURRENT_MISSION.yaml is missing or invalid."
             )
 
-        mission_id = current_mission_dict.get("mission_id", "UNKNOWN_MISSION")
-        mission_title = current_mission_dict.get("title", mission_id)
-        mission_status = current_mission_dict.get("status", "ACTIVE")
+        mission_id = current_mission_dict.get("mission_id")
+        mission_title = current_mission_dict.get("title")
+        mission_status = current_mission_dict.get("status")
         mission_desc = current_mission_dict.get("objective") or current_mission_dict.get("description")
         raw_content = current_mission_dict.get("_raw_content")
+
+        if not mission_id or not mission_status:
+            b = Blocker(id="BLK-BOOTSTRAP-007a", description="SCHEMA_MISMATCH: CURRENT_MISSION missing mission_id or status", severity="CRITICAL")
+            blockers.append(b)
+            return BootstrapResult(
+                status=ContinuityStatus.BLOCKED,
+                stages_completed=stages_completed,
+                blockers=blockers,
+                error_message="CURRENT_MISSION SCHEMA_MISMATCH."
+            )
 
         parsed_tasks = []
         raw_tasks = current_mission_dict.get("scope") or []
         if isinstance(raw_tasks, list):
             for idx, task_item in enumerate(raw_tasks):
-                task_str = str(task_item)
-                parsed_tasks.append(CurrentTask(id=f"TASK-{idx+1}", name=task_str, status="IN_PROGRESS"))
+                if isinstance(task_item, dict):
+                    t_id = task_item.get("id", f"TASK-{idx+1}")
+                    t_name = task_item.get("name", str(task_item))
+                    t_status = task_item.get("status", "UNKNOWN")
+                    parsed_tasks.append(CurrentTask(id=t_id, name=t_name, status=t_status))
+                else:
+                    parsed_tasks.append(CurrentTask(id=f"TASK-{idx+1}", name=str(task_item), status="UNKNOWN"))
 
         parsed_mission = CurrentMission(
             id=mission_id,
@@ -133,10 +166,24 @@ class CustomerZeroBootstrapResolver:
         parsed_blockers: List[Blocker] = []
         if blockers_dict and "blockers" in blockers_dict and isinstance(blockers_dict["blockers"], list):
             for idx, item in enumerate(blockers_dict["blockers"]):
-                parsed_blockers.append(Blocker(id=f"BLK-{idx+1}", description=str(item), severity="HIGH"))
+                if isinstance(item, dict):
+                    parsed_blockers.append(Blocker(
+                        id=item.get("id", f"BLK-{idx+1}"),
+                        description=item.get("description", str(item)),
+                        severity=item.get("severity", "UNKNOWN")
+                    ))
+                else:
+                    parsed_blockers.append(Blocker(id=f"BLK-{idx+1}", description=str(item), severity="UNKNOWN"))
         elif current_state_dict and "blockers" in current_state_dict and isinstance(current_state_dict["blockers"], list):
             for idx, item in enumerate(current_state_dict["blockers"]):
-                parsed_blockers.append(Blocker(id=f"BLK-{idx+1}", description=str(item), severity="HIGH"))
+                if isinstance(item, dict):
+                    parsed_blockers.append(Blocker(
+                        id=item.get("id", f"BLK-{idx+1}"),
+                        description=item.get("description", str(item)),
+                        severity=item.get("severity", "UNKNOWN")
+                    ))
+                else:
+                    parsed_blockers.append(Blocker(id=f"BLK-{idx+1}", description=str(item), severity="UNKNOWN"))
 
         stages_completed.append("8.BLOCKERS")
         self._emit(EventType.BLOCKERS_LOADED, {"count": len(parsed_blockers)})
@@ -173,13 +220,24 @@ class CustomerZeroBootstrapResolver:
         self._emit(EventType.NEXT_ACTION_LOADED, {"action": parsed_next_action.action})
 
         # Stages 10-14: Queues, Evidence, Domain State
-        stages_completed.extend([
-            "10.PROPOSALS",
-            "11.HANDOFFS",
-            "12.ESCALATIONS",
-            "13.REQUIRED_EVIDENCE",
-            "14.RELEVANT_DOMAIN_STATE"
-        ])
+        
+        # Verify 10-14 exist (can be empty dirs, or files, just verifying paths)
+        for stage_name, path in [
+            ("10.PROPOSALS", "proposals/"),
+            ("11.HANDOFFS", "handoffs/"),
+            ("12.ESCALATIONS", "escalations/"),
+            ("13.REQUIRED_EVIDENCE", "evidence/"),
+            ("14.RELEVANT_DOMAIN_STATE", "domain/")
+        ]:
+            if self.provider.path_exists(path):
+                stages_completed.append(stage_name)
+            else:
+                # Optionally warn or block, BOOTSTRAP.md doesn't explicitly mandate 
+                # these to block but it says "14-stage bootstrap". If they are missing,
+                # we don't append to stages_completed. Let's append if they exist.
+                # Actually, if we must strictly verify them, they should block if missing.
+                # I'll just skip adding them to stages_completed if missing.
+                pass
 
         canonical_state = AnnyCanonicalState(
             repository_name=repo_info.get("full_name", "GRECOITALICO/ANNY-OPERATIONAL"),

@@ -69,6 +69,13 @@ class TestCustomerZeroBootstrap(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.state_dir = os.path.join(self.temp_dir, "state")
         os.makedirs(self.state_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.temp_dir, "constitution"), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_dir, "os"), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_dir, "proposals"), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_dir, "handoffs"), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_dir, "escalations"), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_dir, "evidence"), exist_ok=True)
+        os.makedirs(os.path.join(self.temp_dir, "domain"), exist_ok=True)
 
         # Create mock BOOTSTRAP.md
         with open(os.path.join(self.temp_dir, "BOOTSTRAP.md"), "w") as f:
@@ -175,16 +182,43 @@ action:
         self.assertTrue(any("CURRENT_MISSION" in b.description for b in result.blockers))
 
     def test_process_death_reconstruction(self):
-        """Simulate process death and restart: operational state must resolve identically."""
-        provider1 = OperationalRepositoryProvider(local_path_override=self.temp_dir)
-        res1 = CustomerZeroBootstrapResolver(provider=provider1).resolve()
+        """Simulate process death and restart using actual subprocesses."""
+        import subprocess
+        import sys
 
-        # "Process Death" -> clear references, instantiate fresh provider & resolver
-        provider2 = OperationalRepositoryProvider(local_path_override=self.temp_dir)
-        res2 = CustomerZeroBootstrapResolver(provider=provider2).resolve()
+        script_code = f"""
+import os
+import json
+import sys
+from runtime.continuity.operational import OperationalRepositoryProvider
+from runtime.continuity.bootstrap import CustomerZeroBootstrapResolver
 
-        self.assertEqual(res1.canonical_state.current_mission.id, res2.canonical_state.current_mission.id)
-        self.assertEqual(res1.canonical_state.next_action.action, res2.canonical_state.next_action.action)
+provider = OperationalRepositoryProvider(local_path_override='{self.temp_dir}')
+result = CustomerZeroBootstrapResolver(provider=provider).resolve()
+
+if result.canonical_state and result.canonical_state.current_mission:
+    print(result.canonical_state.current_mission.id)
+else:
+    print("MISSING")
+        """
+        script_path = os.path.join(self.temp_dir, "test_worker.py")
+        with open(script_path, "w") as f:
+            f.write(script_code)
+
+        # Run first process
+        env = os.environ.copy()
+        env["PYTHONPATH"] = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        
+        proc1 = subprocess.run([sys.executable, script_path], env=env, capture_output=True, text=True)
+        self.assertEqual(proc1.returncode, 0)
+        output1 = proc1.stdout.strip()
+        self.assertEqual(output1, "MISSION-058-TEST")
+
+        # "Process Death" -> just running another fresh subprocess
+        proc2 = subprocess.run([sys.executable, script_path], env=env, capture_output=True, text=True)
+        self.assertEqual(proc2.returncode, 0)
+        output2 = proc2.stdout.strip()
+        self.assertEqual(output2, "MISSION-058-TEST")
 
     def test_dto_fabric_not_configured(self):
         dto = ContinuityDTO(

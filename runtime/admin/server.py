@@ -68,7 +68,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
 class AdminServer:
     """Manages the threaded HTTP server lifecycle."""
     
-    def __init__(self, host: str, port: int, auth_manager, audit_manager, github_manager, runtime_engine=None):
+    def __init__(self, host: str, port: int, auth_manager, audit_manager, github_manager, secret_backend=None, event_bus=None, runtime_engine=None, local_operational_path=None):
         self.host = host
         self.port = port
         self.server = None
@@ -79,11 +79,14 @@ class AdminServer:
             'auth_manager': auth_manager,
             'audit_manager': audit_manager,
             'github_manager': github_manager,
-            'runtime_engine': runtime_engine
+            'secret_backend': secret_backend,
+            'event_bus': event_bus,
+            'runtime_engine': runtime_engine,
+            'local_operational_path': local_operational_path
         }
         
         self.router = AdminRouter(self.admin_context)
-        self.middleware = AdminMiddleware(auth_manager)
+        self.middleware = AdminMiddleware(auth_manager, github_manager=github_manager)
         
     def start(self):
         """Start the server in a background thread."""
@@ -138,7 +141,11 @@ def start_admin_server(host: str, port: int):
         port=port, 
         auth_manager=auth_manager, 
         audit_manager=audit_manager, 
-        github_manager=github_manager
+        github_manager=github_manager,
+        secret_backend=secret_backend,
+        event_bus=None,
+        runtime_engine=None,
+        local_operational_path=None
     )
     
     if server.start():

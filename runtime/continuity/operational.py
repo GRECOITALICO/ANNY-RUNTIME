@@ -9,7 +9,7 @@ from runtime.github.client import GitHubClient, GitHubClientError, GitHubNotFoun
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_OPERATIONAL_OWNER = "GRECOITALICO"
+# Removed hardcoded GRECOITALICO owner
 DEFAULT_OPERATIONAL_REPOS = ["ANNY-OPERATIONAL", "ANNY"]
 
 
@@ -37,25 +37,58 @@ class OperationalRepositoryProvider:
         if not self.github_client:
             return None
 
-        # Attempt to find ANNY-OPERATIONAL first, then ANNY
-        for repo_name in DEFAULT_OPERATIONAL_REPOS:
-            try:
-                repo = self.github_client.get_repository(DEFAULT_OPERATIONAL_OWNER, repo_name)
-                if repo:
-                    self._resolved_repo = {
-                        'type': 'github',
-                        'owner': DEFAULT_OPERATIONAL_OWNER,
-                        'repo': repo_name,
-                        'full_name': f"{DEFAULT_OPERATIONAL_OWNER}/{repo_name}",
-                        'default_branch': repo.get('default_branch', 'main')
-                    }
-                    logger.info(f"Resolved operational repository: {self._resolved_repo['full_name']}")
-                    return self._resolved_repo
-            except GitHubNotFoundError:
-                continue
-            except GitHubClientError as e:
-                logger.warning(f"Error checking {DEFAULT_OPERATIONAL_OWNER}/{repo_name}: {e}")
-                continue
+        # 1. Check principal
+        try:
+            user = self.github_client.get_authenticated_principal()
+            owner = user.get('login')
+            if owner:
+                for repo_name in DEFAULT_OPERATIONAL_REPOS:
+                    try:
+                        repo = self.github_client.get_repository(owner, repo_name)
+                        if repo:
+                            self._resolved_repo = {
+                                'type': 'github',
+                                'owner': owner,
+                                'repo': repo_name,
+                                'full_name': f"{owner}/{repo_name}",
+                                'default_branch': repo.get('default_branch', 'main')
+                            }
+                            logger.info(f"Resolved operational repository: {self._resolved_repo['full_name']}")
+                            return self._resolved_repo
+                    except GitHubNotFoundError:
+                        continue
+                    except GitHubClientError as e:
+                        logger.warning(f"Error checking {owner}/{repo_name}: {e}")
+                        continue
+        except GitHubClientError as e:
+            logger.warning(f"Failed to get principal for operational resolution: {e}")
+
+        # 2. Check organizations
+        try:
+            orgs = self.github_client.list_organizations()
+            for org in orgs:
+                owner = org.get('login')
+                if not owner: continue
+                for repo_name in DEFAULT_OPERATIONAL_REPOS:
+                    try:
+                        repo = self.github_client.get_repository(owner, repo_name)
+                        if repo:
+                            self._resolved_repo = {
+                                'type': 'github',
+                                'owner': owner,
+                                'repo': repo_name,
+                                'full_name': f"{owner}/{repo_name}",
+                                'default_branch': repo.get('default_branch', 'main')
+                            }
+                            logger.info(f"Resolved operational repository: {self._resolved_repo['full_name']}")
+                            return self._resolved_repo
+                    except GitHubNotFoundError:
+                        continue
+                    except GitHubClientError as e:
+                        logger.warning(f"Error checking {owner}/{repo_name}: {e}")
+                        continue
+        except GitHubClientError as e:
+            logger.warning(f"Failed to list orgs for operational resolution: {e}")
 
         return None
 
@@ -92,6 +125,29 @@ class OperationalRepositoryProvider:
                 return None
 
         return None
+
+    def path_exists(self, relative_path: str) -> bool:
+        """Check if a path exists (file or directory)."""
+        repo_info = self.resolve_operational_repository()
+        if not repo_info:
+            return False
+
+        if repo_info['type'] == 'local':
+            return os.path.exists(os.path.join(repo_info['path'], relative_path))
+        
+        elif repo_info['type'] == 'github':
+            try:
+                # _request on contents API without getting 'content' works for files and dirs to check existence
+                self.github_client._request(
+                    f"/repos/{repo_info['owner']}/{repo_info['repo']}/contents/{relative_path}",
+                    query_params={'ref': repo_info.get('default_branch')}
+                )
+                return True
+            except GitHubNotFoundError:
+                return False
+            except GitHubClientError:
+                return False
+        return False
 
     def _parse_yaml_or_json(self, content: str) -> Optional[Any]:
         """Parse string content as YAML or JSON."""

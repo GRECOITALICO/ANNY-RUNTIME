@@ -122,12 +122,8 @@ class GitHubClient:
             endpoint = "/user/repos"
             params = {'per_page': 100, 'affiliation': 'owner,collaborator,organization_member'}
         
-        try:
-            res = self._request(endpoint, query_params=params)
-            return res if isinstance(res, list) else []
-        except GitHubClientError as e:
-            logger.warning(f"Failed listing repositories for org={org}: {e}")
-            return []
+        res = self._request(endpoint, query_params=params)
+        return res if isinstance(res, list) else []
 
     def get_repository(self, owner: str, repo: str) -> Dict[str, Any]:
         """Get repository metadata."""

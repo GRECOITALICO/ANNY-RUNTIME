@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 class AdminMiddleware:
     
-    def __init__(self, auth_manager: AdminSessionManager):
+    def __init__(self, auth_manager: AdminSessionManager, github_manager: Any = None):
         self.auth_manager = auth_manager
+        self.github_manager = github_manager
         # Paths that bypass auth
         self.public_paths = {'/login'}
 
@@ -41,6 +42,15 @@ class AdminMiddleware:
         # Store session in context for route handlers
         context['admin_session'] = session
         context['set_cookies'] = []
+
+        is_first_run = self.github_manager and not self.github_manager.has_token()
+
+        if is_first_run and not session:
+            # We are in first run state and don't have a session.
+            # Establish local first-run session restricted to onboarding.
+            session = self.auth_manager.create_first_run_session()
+            context['admin_session'] = session
+            context['new_session_id'] = session.admin_session_id
 
         # Enforce Auth
         if not session and not is_public:

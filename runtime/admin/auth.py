@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from runtime.admin.csrf import generate_csrf_token
 
@@ -94,6 +94,28 @@ class AdminSessionManager:
         self._sessions[session.admin_session_id] = session
         self._persist_session(session)
         logger.info(f"Admin session created: {session.admin_session_id}")
+        return session
+
+    def create_first_run_session(self) -> AdminSession:
+        """Create a restricted session specifically for onboarding.
+        
+        Duration: 30 minutes.
+        Scope: ONBOARDING_ONLY
+        Revocation: Occurs manually upon successful setup or naturally via TTL.
+        """
+        now = datetime.now(timezone.utc)
+        session = AdminSession(
+            admin_session_id=secrets.token_hex(16),
+            issued_at=now.isoformat(),
+            expires_at=(now + timedelta(seconds=1800)).isoformat(),
+            runtime_id=self.runtime_id,
+            scope="ONBOARDING_ONLY",
+            principal="local-first-run",
+            csrf_token=generate_csrf_token()
+        )
+        self._sessions[session.admin_session_id] = session
+        # Do not persist first run session to disk to keep it ephemeral
+        logger.info(f"First-run session created: {session.admin_session_id}")
         return session
 
     def validate(self, session_id: str) -> Optional[AdminSession]:

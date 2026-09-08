@@ -625,6 +625,9 @@ def ready_page(status, csrf_token=""):
     l2_info = cont.get('l2_worker_summary') or {}
     l2_count = l2_info.get('count', 0) if isinstance(l2_info, dict) else 0
 
+    identity = status.get('identity', {}) if isinstance(status, dict) else {}
+    id_str = f"{identity.get('key_type', 'UNKNOWN')} / {identity.get('status', 'UNKNOWN')}"
+
     return base_layout("Dashboard", f"""
         <div class="page-header">
             <h2>ANNY Control Plane</h2>
@@ -650,13 +653,13 @@ def ready_page(status, csrf_token=""):
             <div class="card" style="padding:20px;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Blockers & Workers</div>
                 <div style="font-size:18px; font-weight:600; color:var(--accent-amber);">Blockers: {blocker_count} | L2 Workers: {l2_count}</div>
-                <div style="font-size:12px; color:var(--text-secondary); margin-top:8px;">Runtime: HEALTHY</div>
+                <div style="font-size:12px; color:var(--text-secondary); margin-top:8px;">Runtime: {cont.get('runtime_status', 'UNKNOWN')}</div>
             </div>
         </div>
 
         <div class="detail-panel" style="margin-bottom: 24px;">
             <h3 style="font-size:15px; margin-bottom:16px; color:var(--accent-indigo);">Canonical State Overview</h3>
-            <div class="detail-row"><span class="detail-label">Runtime Identity</span><span class="detail-value">ED25519 / ACTIVE</span></div>
+            <div class="detail-row"><span class="detail-label">Runtime Identity</span><span class="detail-value">{id_str}</span></div>
             <div class="detail-row"><span class="detail-label">GitHub Connection</span><span class="detail-value">{gh.get('auth_status', 'CONNECTED')}</span></div>
             <div class="detail-row"><span class="detail-label">Operational State</span><span class="detail-value">{cont.get('canonical_source', 'CONNECTED')}</span></div>
             <div class="detail-row"><span class="detail-label">Current Mission</span><span class="detail-value" style="font-weight:600; color:var(--accent-emerald);">{mission}</span></div>
