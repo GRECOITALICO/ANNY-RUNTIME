@@ -108,5 +108,73 @@ class TestFreshFirstRun(unittest.TestCase):
         self.assertTrue(any("max-age=0" in c.lower() for c in cookies))
         self.assertEqual(len(auth_mgr._sessions), 0)
 
+    def test_loopback_ipv6_cookie(self):
+        """P0-2: IPv6 loopback [::1] should not have Secure flag."""
+        auth_mgr = AdminSessionManager(self.data_dir, "rt-123")
+        server = AdminServer("127.0.0.1", 0, auth_mgr, MagicMock(), MockGitHubManager(None))
+        context = {}
+        server.middleware.process_request("GET", "/", {'Host': '[::1]:3643'}, context)
+        server.middleware.process_response(context)
+        cookies = context.get('set_cookies', [])
+        self.assertTrue(any("admin_session_id" in c for c in cookies))
+        self.assertFalse(any("secure" in c.lower() for c in cookies))
+
+    def test_lookalike_host_rejected(self):
+        """P0-2: Lookalike hosts like localhost.evil.example should have Secure flag."""
+        auth_mgr = AdminSessionManager(self.data_dir, "rt-123")
+        server = AdminServer("127.0.0.1", 0, auth_mgr, MagicMock(), MockGitHubManager(None))
+        context = {}
+        server.middleware.process_request("GET", "/", {'Host': 'localhost.evil.example'}, context)
+        server.middleware.process_response(context)
+        cookies = context.get('set_cookies', [])
+        self.assertTrue(any("admin_session_id" in c for c in cookies))
+        self.assertTrue(any("secure" in c.lower() for c in cookies))
+
+    def test_session_survives_http_boundary(self):
+        """P0-3: Validate that a cookie created in request 1 survives into request 2."""
+        auth_mgr = AdminSessionManager(self.data_dir, "rt-123")
+        server = AdminServer("127.0.0.1", 0, auth_mgr, MagicMock(), MockGitHubManager(None))
+        
+        # Request 1
+        context1 = {}
+        server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context1)
+        server.middleware.process_response(context1)
+        cookies = context1.get('set_cookies', [])
+        
+        # Extract cookie value
+        cookie_val = ""
+        for c in cookies:
+            if "admin_session_id=" in c:
+                cookie_val = c.split(';')[0].split('=')[1]
+                break
+        self.assertTrue(cookie_val)
+        
+        # Request 2
+        context2 = {}
+        server.middleware.process_request("GET", "/", {'Host': '127.0.0.1', 'Cookie': f'admin_session_id={cookie_val}'}, context2)
+        
+        # Verify session is recognized
+        self.assertIn('admin_session', context2)
+        self.assertEqual(context2['admin_session'].admin_session_id, cookie_val)
+
+    def test_cookie_attributes(self):
+        """P0-3: Validate cookie attributes (HttpOnly, SameSite=Strict, Path=/)."""
+        auth_mgr = AdminSessionManager(self.data_dir, "rt-123")
+        server = AdminServer("127.0.0.1", 0, auth_mgr, MagicMock(), MockGitHubManager(None))
+        context = {}
+        server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context)
+        server.middleware.process_response(context)
+        cookies = context.get('set_cookies', [])
+        
+        found = False
+        for c in cookies:
+            if "admin_session_id=" in c:
+                found = True
+                c_lower = c.lower()
+                self.assertIn("httponly", c_lower)
+                self.assertIn("samesite=strict", c_lower)
+                self.assertIn("path=/", c_lower)
+        self.assertTrue(found)
+
 if __name__ == "__main__":
     unittest.main()

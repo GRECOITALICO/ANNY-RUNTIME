@@ -58,7 +58,7 @@ class CustomerZeroBootstrapResolver:
             else:
                 status = ContinuityStatus.BLOCKED
                 
-            b = Blocker(id="BLK-BOOTSTRAP-001", description=f"ANNY-OPERATIONAL repository inaccessible: {error_msg}", severity="CRITICAL")
+            b = Blocker(id="BLK-BOOTSTRAP-001", description=f"Operational repository inaccessible: {error_msg}", severity="CRITICAL")
             blockers.append(b)
             return BootstrapResult(
                 status=status,
@@ -68,7 +68,7 @@ class CustomerZeroBootstrapResolver:
             )
         
         if not repo_info:
-            b = Blocker(id="BLK-BOOTSTRAP-001", description="ANNY-OPERATIONAL repository unresolved", severity="CRITICAL")
+            b = Blocker(id="BLK-BOOTSTRAP-001", description="Operational repository unresolved", severity="CRITICAL")
             blockers.append(b)
             return BootstrapResult(
                 status=ContinuityStatus.BLOCKED,

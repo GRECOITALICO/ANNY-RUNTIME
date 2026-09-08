@@ -35,10 +35,13 @@ class AdminMiddleware:
         """
         parsed = urllib.parse.urlparse(path)
         is_public = parsed.path in self.public_paths
-        
         # 1. Determine Transport Security (P0-A First-Run Cookie Transport)
         host = headers.get('Host', '')
-        is_local = host.startswith('127.0.0.1') or host.startswith('localhost')
+        if host.startswith('['):
+            host_no_port = host.split(']')[0] + ']'
+        else:
+            host_no_port = host.split(':')[0]
+        is_local = host_no_port in ('127.0.0.1', 'localhost', '::1', '[::1]')
         context['secure_cookie'] = not is_local
 
         # 2. Authenticate Session

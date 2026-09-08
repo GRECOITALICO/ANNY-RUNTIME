@@ -129,6 +129,20 @@ class GitHubClient:
         """Get repository metadata."""
         return self._request(f"/repos/{owner}/{repo}")
 
+    def file_exists(self, owner: str, repo: str, path: str, ref: Optional[str] = None) -> bool:
+        """Check if a file or directory exists in the repository."""
+        endpoint = f"/repos/{owner}/{repo}/contents/{path}"
+        params = {'ref': ref} if ref else None
+        try:
+            self._request(endpoint, query_params=params)
+            return True
+        except GitHubNotFoundError:
+            return False
+        except GitHubClientError as e:
+            if getattr(e, 'status_code', None) == 404:
+                return False
+            raise
+
     def get_file(self, owner: str, repo: str, path: str, ref: Optional[str] = None) -> str:
         """Get file contents from repository as plain text."""
         endpoint = f"/repos/{owner}/{repo}/contents/{path}"

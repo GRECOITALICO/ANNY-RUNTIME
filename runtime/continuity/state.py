@@ -67,7 +67,7 @@ class NextAction:
 
 @dataclass
 class AnnyCanonicalState:
-    """Canonical state of ANNY derived from ANNY-OPERATIONAL repository."""
+    """Canonical state of ANNY derived from the resolved operational repository."""
     repository_name: str = "UNKNOWN"
     revision: Optional[str] = None
     bootstrap_contract_version: Optional[str] = None

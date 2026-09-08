@@ -1,4 +1,4 @@
-"""Operational repository provider for reading ANNY-OPERATIONAL canonical state."""
+"""Operational repository provider for reading canonical state from the resolved operational repository."""
 import logging
 import os
 import json
@@ -68,22 +68,26 @@ class OperationalRepositoryProvider:
                     })
                     continue
                 
-                # Check for explicit BOOTSTRAP.md marker
+                # Check for explicit .anny/operational.yaml marker, then BOOTSTRAP.md
                 try:
-                    self.github_client._request(
-                        f"/repos/{owner}/{repo_name}/contents/BOOTSTRAP.md",
-                        query_params={'ref': repo.get('default_branch', 'main')}
-                    )
-                    candidates.append({
-                        'type': 'github',
-                        'owner': owner,
-                        'repo': repo_name,
-                        'full_name': f"{owner}/{repo_name}",
-                        'default_branch': repo.get('default_branch', 'main')
-                    })
-                except GitHubNotFoundError:
-                    # 404 means it's not a candidate, continue safely
-                    pass
+                    if self.github_client.file_exists(owner, repo_name, ".anny/operational.yaml", ref=repo.get('default_branch', 'main')):
+                        candidates.append({
+                            'type': 'github',
+                            'owner': owner,
+                            'repo': repo_name,
+                            'full_name': f"{owner}/{repo_name}",
+                            'default_branch': repo.get('default_branch', 'main')
+                        })
+                        continue
+
+                    if self.github_client.file_exists(owner, repo_name, "BOOTSTRAP.md", ref=repo.get('default_branch', 'main')):
+                        candidates.append({
+                            'type': 'github',
+                            'owner': owner,
+                            'repo': repo_name,
+                            'full_name': f"{owner}/{repo_name}",
+                            'default_branch': repo.get('default_branch', 'main')
+                        })
                 except GitHubClientError as e:
                     # P0-C: Stop discovery on network/auth errors, do not treat as "not candidate"
                     status_code = getattr(e, 'status_code', None)
@@ -94,8 +98,6 @@ class OperationalRepositoryProvider:
                         if "rate limit" in str(e).lower():
                             raise OperationalRepositoryNotFoundError("RATE_LIMITED")
                         raise OperationalRepositoryNotFoundError("FORBIDDEN")
-                    elif status_code == 404: # Just in case it wasn't caught by GitHubNotFoundError
-                        pass
                     else:
                         raise OperationalRepositoryNotFoundError("UNKNOWN_ERROR")
 
@@ -160,20 +162,12 @@ class OperationalRepositoryProvider:
             return os.path.exists(os.path.join(repo_info['path'], relative_path))
         
         elif repo_info['type'] == 'github':
-            try:
-                # _request on contents API without getting 'content' works for files and dirs to check existence
-                self.github_client._request(
-                    f"/repos/{repo_info['owner']}/{repo_info['repo']}/contents/{relative_path}",
-                    query_params={'ref': repo_info.get('default_branch')}
-                )
-                return True
-            except GitHubNotFoundError:
-                return False
-            except GitHubClientError as e:
-                status_code = getattr(e, 'status_code', None)
-                if status_code == 404:
-                    return False
-                raise
+            return self.github_client.file_exists(
+                owner=repo_info['owner'],
+                repo=repo_info['repo'],
+                path=relative_path,
+                ref=repo_info.get('default_branch')
+            )
         return False
 
     def _parse_yaml_or_json(self, content: str) -> Optional[Any]:

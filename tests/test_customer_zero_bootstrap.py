@@ -108,8 +108,8 @@ class MockGitHubClient(GitHubClient):
             raise GitHubTimeoutError("Timeout")
         if self.fail_rate_limit:
             raise GitHubRateLimitError("Rate limited")
-        if 'BOOTSTRAP.md' in endpoint:
-            # Check if this repo should have BOOTSTRAP.md
+        if 'BOOTSTRAP.md' in endpoint or '.anny/operational.yaml' in endpoint:
+            # Check if this repo should have the marker
             if CUSTOMER_ZERO_TEST_REPO in endpoint:
                 return {"content": "", "encoding": "base64"}
             raise GitHubNotFoundError(f"Not found: {endpoint}")
@@ -202,6 +202,25 @@ class TestCustomerZeroBootstrap(unittest.TestCase):
         provider = OperationalRepositoryProvider(github_client=client)
         with self.assertRaises(OperationalRepositoryAmbiguousError):
             provider.resolve_operational_repository()
+
+    def test_operational_yaml_marker(self):
+        """P0-4: Should resolve operational repository via .anny/operational.yaml."""
+        class YamlMockClient(MockGitHubClient):
+            def _request(self, endpoint, query_params=None, headers_extra=None):
+                if '.anny/operational.yaml' in endpoint and 'yaml-repo' in endpoint:
+                    return {"content": "", "encoding": "base64"}
+                elif 'BOOTSTRAP.md' in endpoint or '.anny/operational.yaml' in endpoint:
+                    raise GitHubNotFoundError(f"Not found: {endpoint}")
+                return super()._request(endpoint, query_params, headers_extra)
+
+        client = YamlMockClient(repos=[
+            {"full_name": "org/yaml-repo", "name": "yaml-repo", "owner": {"login": "org"}, "topics": [], "default_branch": "main"},
+            {"full_name": "org/other-repo", "name": "other-repo", "owner": {"login": "org"}, "topics": [], "default_branch": "main"},
+        ])
+        provider = OperationalRepositoryProvider(github_client=client)
+        result = provider.resolve_operational_repository()
+        self.assertIsNotNone(result)
+        self.assertEqual(result['full_name'], "org/yaml-repo")
 
     # --- Blocker 2: GitHub Error Semantics Tests ---
 

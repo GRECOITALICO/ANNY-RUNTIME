@@ -6,7 +6,7 @@ ANNY manages operational continuity for organizations across three main reposito
 
 1. **ANNY Core**:
    - `ANNY-RUNTIME`: Runtime execution engine codebase.
-   - `ANNY-OPERATIONAL` / `ANNY`: Canonical operational memory, constitution, missions, and state.
+   - **Operational Repository** (e.g., `ANNY-OPERATIONAL`): Canonical operational memory, constitution, missions, and state. Resolved dynamically per installation.
 
 2. **Customer Project Universe**:
    - `CONRRAD-CORE` and department repositories (`CONRRAD-PRODUCT`, `CONRRAD-ENGINEERING`, `CONRRAD-MARKETING`, etc.).
