@@ -32,14 +32,54 @@ class ModelRegistry:
             try:
                 self._load_from_disk()
             except Exception as e:
-                # Recovery: if loading fails due to corruption or schema mismatch, 
-                # we fall back to a fresh state to ensure operability.
-                print(f"Warning: Failed to load registry from {self.storage_path}: {e}")
+                import hashlib
+                import shutil
+                from datetime import datetime, timezone
+                import logging
+                logger = logging.getLogger(__name__)
+
+                recovery_timestamp = datetime.now(timezone.utc).isoformat()
+                quarantine_path = f"{self.storage_path}.quarantine.{int(datetime.now(timezone.utc).timestamp())}"
+                
+                # compute original hash if possible
+                original_hash = "UNKNOWN"
+                try:
+                    with open(self.storage_path, "rb") as f:
+                        original_hash = hashlib.sha256(f.read()).hexdigest()
+                except Exception:
+                    pass
+
+                # quarantine it
+                try:
+                    shutil.move(self.storage_path, quarantine_path)
+                except Exception as move_err:
+                    logger.error(f"Failed to quarantine corrupted registry: {move_err}")
+
+                # recovery
                 self._models.clear()
                 self._bindings.clear()
                 self._register_initial_models()
                 self._register_initial_bindings()
                 self._save_to_disk()
+                
+                new_hash = "UNKNOWN"
+                try:
+                    with open(self.storage_path, "rb") as f:
+                        new_hash = hashlib.sha256(f.read()).hexdigest()
+                except Exception:
+                    pass
+
+                recovery_reason = f"CORRUPTED_REGISTRY: {str(e)}"
+                
+                # Emit audit event (via logger as there is no central audit bus for registry yet)
+                logger.warning(
+                    f"ModelRegistry recovery event: "
+                    f"original_hash={original_hash}, "
+                    f"quarantine_path={quarantine_path}, "
+                    f"recovery_timestamp={recovery_timestamp}, "
+                    f"recovery_reason={recovery_reason}, "
+                    f"new_registry_hash={new_hash}"
+                )
         else:
             self._register_initial_models()
             self._register_initial_bindings()

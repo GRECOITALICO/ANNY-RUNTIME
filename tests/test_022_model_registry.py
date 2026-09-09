@@ -184,17 +184,24 @@ def test_21_persistence_reload():
         os.unlink(path)
 
 def test_22_crash_recovery():
+    import glob
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(b'{"corrupted": json')
         path = f.name
         
     try:
-        # Should recover by falling back to initial state
+        # Should recover by quarantining and falling back to initial state
         reg = ModelRegistry(storage_path=path)
         assert len(reg.list_models()) == 2
         assert reg.is_available("luna") is True
+        
+        # Verify quarantine file exists
+        q_files = glob.glob(f"{path}.quarantine.*")
+        assert len(q_files) == 1
     finally:
         os.unlink(path)
+        for qf in glob.glob(f"{path}.quarantine.*"):
+            os.unlink(qf)
 
 def test_23_model_replacement_without_task_mutation(clean_registry):
     # A task requests capability 'doc.class'. Model A handles it, then Model B handles it. The task doesn't change.
@@ -216,3 +223,44 @@ def test_23_model_replacement_without_task_mutation(clean_registry):
     
     sel2 = selector.select(task, cap, policy)
     assert sel2.model_id == "luna"
+
+def test_24_process_persistence():
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        path = f.name
+        
+    try:
+        # Process A
+        regA = ModelRegistry(storage_path=path)
+        regA.get_model("luna").version = "1.5"
+        regA._save_to_disk()
+        
+        # Process B
+        regB = ModelRegistry(storage_path=path)
+        assert regB.get_model("luna").version == "1.5"
+    finally:
+        os.unlink(path)
+
+def test_25_crash_safety():
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        path = f.name
+        
+    try:
+        # Initial valid write
+        reg = ModelRegistry(storage_path=path)
+        reg.get_model("luna").version = "1.0"
+        reg._save_to_disk()
+        
+        # Simulate an interrupted write (temp file created, but not replaced)
+        fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".registry-", suffix=".tmp")
+        with os.fdopen(fd, 'w') as tf:
+            tf.write('{"corrupted_temp_write"}')
+            
+        # The main file should remain uncorrupted and valid
+        reg2 = ModelRegistry(storage_path=path)
+        assert reg2.get_model("luna").version == "1.0"
+    finally:
+        os.unlink(path)
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass

@@ -23,7 +23,9 @@ class ExecutionManager:
         self.registry = CapabilityRegistry()
         self.policy = RuntimePolicy()
         from runtime.execution.registry import ModelRegistry
-        self.model_registry = ModelRegistry()
+        from runtime.core.config import get_data_dir
+        registry_path = get_data_dir() / "registry" / "models.json"
+        self.model_registry = ModelRegistry(storage_path=str(registry_path))
         self.selector = ExecutorSelector(self.model_registry)
         self.worker_manager = WorkerManager(workspace_manager, audit_manager)
 
