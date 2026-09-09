@@ -1,0 +1,20 @@
+[
+  {
+    "import": "cryptography",
+    "python_package": "cryptography",
+    "minimum_version_if_known": "41.0.0",
+    "source_file": "runtime/identity/runtime_identity.py, runtime/secrets/backend.py, cli/main.py",
+    "runtime_required": true,
+    "test_only": false,
+    "packaging_required": true
+  },
+  {
+    "import": "yaml",
+    "python_package": "PyYAML",
+    "minimum_version_if_known": "6.0",
+    "source_file": "runtime/continuity/operational.py, runtime/core/config.py",
+    "runtime_required": true,
+    "test_only": false,
+    "packaging_required": true
+  }
+]

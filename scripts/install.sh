@@ -82,23 +82,31 @@ fi
 chmod 700 "$DATA_DIR/identity"
 chmod 700 "$DATA_DIR/secrets"
 
-# 6. Environment & Dependencies
-echo "Installing dependencies in staging..."
-if [ "$EUID" -eq 0 ] && [ "$SERVICE_USER" != "root" ]; then
-    sudo -u "$SERVICE_USER" python3 -m venv "$STAGING_DIR/venv"
-    sudo -u "$SERVICE_USER" "$STAGING_DIR/venv/bin/pip" install -q -r "$(dirname "$0")/../requirements.txt"
-else
-    python3 -m venv "$STAGING_DIR/venv"
-    "$STAGING_DIR/venv/bin/pip" install -q -r "$(dirname "$0")/../requirements.txt"
-fi
-
-# 7. Copy Source Code
+# 6. Copy Source Code (before venv to prevent cp -r from overwriting it)
 echo "Copying runtime source to staging..."
 if [ "$(dirname "$0")" != "$FINAL_INSTALL_DIR/scripts" ]; then
     cp -r "$(dirname "$0")/.."/* "$STAGING_DIR/"
     if [ "$EUID" -eq 0 ]; then
         chown -R "$SERVICE_USER:$SERVICE_USER" "$STAGING_DIR"
     fi
+fi
+
+# 7. Environment & Dependencies (after source copy so venv is never overwritten)
+echo "Installing dependencies in staging..."
+if [ "$EUID" -eq 0 ] && [ "$SERVICE_USER" != "root" ]; then
+    sudo -u "$SERVICE_USER" python3 -m venv "$STAGING_DIR/venv"
+    sudo -u "$SERVICE_USER" "$STAGING_DIR/venv/bin/pip" install -r "$STAGING_DIR/requirements.txt"
+else
+    python3 -m venv "$STAGING_DIR/venv"
+    "$STAGING_DIR/venv/bin/pip" install -r "$STAGING_DIR/requirements.txt"
+fi
+
+# 7.5. Dependency Preflight
+echo "Running dependency preflight check..."
+if [ "$EUID" -eq 0 ] && [ "$SERVICE_USER" != "root" ]; then
+    sudo -u "$SERVICE_USER" "$STAGING_DIR/venv/bin/python3" "$STAGING_DIR/scripts/preflight_check.py"
+else
+    "$STAGING_DIR/venv/bin/python3" "$STAGING_DIR/scripts/preflight_check.py"
 fi
 
 # 8. Activation (Swap staging with final)
