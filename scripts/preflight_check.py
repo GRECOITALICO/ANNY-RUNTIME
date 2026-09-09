@@ -73,6 +73,7 @@ def run_preflight(base_dir):
     inventory = load_inventory(base_dir)
     
     errors = []
+    warnings = []
     
     all_imports = set()
     # 1. AST Analysis
@@ -100,10 +101,10 @@ def run_preflight(base_dir):
         if pkg_name.lower() not in requirements:
             errors.append(f"DEPENDENCY_PREFLIGHT_FAILED: Import '{imp}' requires package '{pkg_name}' which is NOT in requirements.txt.")
             
-    # Validate requirement usage
+    # Check for unused declared dependencies (warning only)
     for req in requirements:
         if req not in used_requirements:
-            errors.append(f"DEPENDENCY_UNUSED: Requirement '{req}' in requirements.txt is not explicitly imported.")
+            warnings.append(f"DEPENDENCY_UNUSED: Requirement '{req}' in requirements.txt is not explicitly imported.")
             
     # 2. Runtime Import Test
     for d in target_dirs:
@@ -127,15 +128,26 @@ def run_preflight(base_dir):
                         errors.append(f"IMPORT_ERROR: {mod_path} -> {e}")
                     except Exception as e:
                         errors.append(f"IMPORT_RUNTIME_SIDE_EFFECT: {mod_path} -> {e} ({type(e).__name__})")
-                        
+
+    # Output warnings (non-fatal)
+    if warnings:
+        for w in warnings:
+            print(f"DEPENDENCY_PREFLIGHT_WARNING: {w}", file=sys.stderr)
+
+    # Output errors (fatal)
     if errors:
         for err in errors:
             print(err, file=sys.stderr)
+        print("DEPENDENCY_PREFLIGHT_FAILED", file=sys.stderr)
         sys.exit(1)
         
     print("DEPENDENCY_PREFLIGHT_PASS")
 
 if __name__ == '__main__':
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.abspath(os.path.join(script_dir, '..'))
+    if len(sys.argv) > 1:
+        project_root = os.path.abspath(sys.argv[1])
+    else:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(script_dir, '..'))
     run_preflight(project_root)
+

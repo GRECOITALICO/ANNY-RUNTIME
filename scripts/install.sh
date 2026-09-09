@@ -5,42 +5,104 @@ set -e
 function cleanup_on_fail {
     local exit_code=$?
     if [ $exit_code -ne 0 ]; then
+        local installation_failure=true
+        local rollback_attempted=false
+        local rollback_success=false
+        local rollback_failure=false
+
         echo ""
         echo "======================================"
         echo "INSTALLATION_FAILED (Exit code: $exit_code)"
         echo "======================================"
+
+        # Clean partial staging
         if [ -n "$STAGING_DIR" ] && [ -d "$STAGING_DIR" ]; then
-            echo "Rolling back partial installation from $STAGING_DIR..."
+            echo "Rolling back partial staging from $STAGING_DIR..."
             if [ "$EUID" -eq 0 ]; then
                 sudo rm -rf "$STAGING_DIR"
             else
                 rm -rf "$STAGING_DIR"
             fi
         fi
+
+        # Restore previous installation from .old backups
         if [ -n "$FINAL_INSTALL_DIR" ] && [ -d "${FINAL_INSTALL_DIR}.old" ]; then
+            rollback_attempted=true
             echo "Restoring previous installation from backup..."
+
             if [ "$EUID" -eq 0 ]; then
-                sudo rm -rf "$FINAL_INSTALL_DIR"
-                sudo mv "${FINAL_INSTALL_DIR}.old" "$FINAL_INSTALL_DIR"
-                if [ -f "$BIN_DIR/anny-runtime.old" ]; then
-                    sudo mv "$BIN_DIR/anny-runtime.old" "$BIN_DIR/anny-runtime"
+                if ! sudo rm -rf "$FINAL_INSTALL_DIR"; then
+                    rollback_failure=true
+                    echo "ROLLBACK_FAILED: Could not remove partial $FINAL_INSTALL_DIR"
+                elif ! sudo mv "${FINAL_INSTALL_DIR}.old" "$FINAL_INSTALL_DIR"; then
+                    rollback_failure=true
+                    echo "ROLLBACK_FAILED: Could not restore $FINAL_INSTALL_DIR from backup"
                 fi
+
+                if [ -f "$BIN_DIR/anny-runtime.old" ]; then
+                    if ! sudo mv "$BIN_DIR/anny-runtime.old" "$BIN_DIR/anny-runtime"; then
+                        rollback_failure=true
+                        echo "ROLLBACK_FAILED: Could not restore CLI wrapper"
+                    fi
+                fi
+
                 if [ -f "$SYSTEMD_DIR/anny-runtime.service.old" ]; then
-                    sudo mv "$SYSTEMD_DIR/anny-runtime.service.old" "$SYSTEMD_DIR/anny-runtime.service"
-                    sudo systemctl daemon-reload || true
+                    if ! sudo mv "$SYSTEMD_DIR/anny-runtime.service.old" "$SYSTEMD_DIR/anny-runtime.service"; then
+                        rollback_failure=true
+                        echo "ROLLBACK_FAILED: Could not restore systemd unit"
+                    fi
+                    if ! sudo systemctl daemon-reload; then
+                        rollback_failure=true
+                        echo "ROLLBACK_FAILED: systemctl daemon-reload failed during rollback"
+                    fi
                 fi
             else
-                rm -rf "$FINAL_INSTALL_DIR"
-                mv "${FINAL_INSTALL_DIR}.old" "$FINAL_INSTALL_DIR"
-                if [ -f "$BIN_DIR/anny-runtime.old" ]; then
-                    mv "$BIN_DIR/anny-runtime.old" "$BIN_DIR/anny-runtime"
+                if ! rm -rf "$FINAL_INSTALL_DIR"; then
+                    rollback_failure=true
+                    echo "ROLLBACK_FAILED: Could not remove partial $FINAL_INSTALL_DIR"
+                elif ! mv "${FINAL_INSTALL_DIR}.old" "$FINAL_INSTALL_DIR"; then
+                    rollback_failure=true
+                    echo "ROLLBACK_FAILED: Could not restore $FINAL_INSTALL_DIR from backup"
                 fi
+
+                if [ -f "$BIN_DIR/anny-runtime.old" ]; then
+                    if ! mv "$BIN_DIR/anny-runtime.old" "$BIN_DIR/anny-runtime"; then
+                        rollback_failure=true
+                        echo "ROLLBACK_FAILED: Could not restore CLI wrapper"
+                    fi
+                fi
+
                 if [ -f "$SYSTEMD_DIR/anny-runtime.service.old" ]; then
-                    mv "$SYSTEMD_DIR/anny-runtime.service.old" "$SYSTEMD_DIR/anny-runtime.service"
-                    systemctl --user daemon-reload || true
+                    if ! mv "$SYSTEMD_DIR/anny-runtime.service.old" "$SYSTEMD_DIR/anny-runtime.service"; then
+                        rollback_failure=true
+                        echo "ROLLBACK_FAILED: Could not restore systemd unit"
+                    fi
+                    if ! systemctl --user daemon-reload; then
+                        rollback_failure=true
+                        echo "ROLLBACK_FAILED: systemctl --user daemon-reload failed during rollback"
+                    fi
                 fi
             fi
+
+            if [ "$rollback_failure" = true ]; then
+                echo "======================================"
+                echo "ROLLBACK_FAILED"
+                echo "installation_failure=true"
+                echo "rollback_attempted=true"
+                echo "rollback_success=false"
+                echo "rollback_failure=true"
+                echo "======================================"
+                exit 2
+            else
+                rollback_success=true
+                echo "Rollback completed successfully."
+                echo "installation_failure=true"
+                echo "rollback_attempted=true"
+                echo "rollback_success=true"
+                echo "rollback_failure=false"
+            fi
         fi
+
         exit $exit_code
     fi
 }
@@ -155,7 +217,7 @@ fi
 STAGING_DIR="" # Staging is now moved to final
 
 # 8.5 Verify Activated Filesystem
-if ! "$FINAL_INSTALL_DIR/venv/bin/python3" -c "import runtime" 2>/dev/null; then
+if ! PYTHONPATH="$FINAL_INSTALL_DIR" "$FINAL_INSTALL_DIR/venv/bin/python3" -c "import runtime" 2>/dev/null; then
     echo "Filesystem verification failed!"
     exit 1
 fi
