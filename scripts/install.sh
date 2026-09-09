@@ -17,6 +17,16 @@ function cleanup_on_fail {
                 rm -rf "$STAGING_DIR"
             fi
         fi
+        if [ -n "$FINAL_INSTALL_DIR" ] && [ -d "${FINAL_INSTALL_DIR}.old" ]; then
+            echo "Restoring previous installation from backup..."
+            if [ "$EUID" -eq 0 ]; then
+                sudo rm -rf "$FINAL_INSTALL_DIR"
+                sudo mv "${FINAL_INSTALL_DIR}.old" "$FINAL_INSTALL_DIR"
+            else
+                rm -rf "$FINAL_INSTALL_DIR"
+                mv "${FINAL_INSTALL_DIR}.old" "$FINAL_INSTALL_DIR"
+            fi
+        fi
         exit $exit_code
     fi
 }
@@ -113,15 +123,13 @@ fi
 echo "Activating installation..."
 if [ -d "$FINAL_INSTALL_DIR" ]; then
     if [ "$EUID" -eq 0 ]; then
-        sudo rm -rf "${FINAL_INSTALL_DIR}.old" || true
+        if [ -d "${FINAL_INSTALL_DIR}.old" ]; then sudo rm -rf "${FINAL_INSTALL_DIR}.old"; fi
         sudo mv "$FINAL_INSTALL_DIR" "${FINAL_INSTALL_DIR}.old"
         sudo mv "$STAGING_DIR" "$FINAL_INSTALL_DIR"
-        sudo rm -rf "${FINAL_INSTALL_DIR}.old"
     else
-        rm -rf "${FINAL_INSTALL_DIR}.old" || true
+        if [ -d "${FINAL_INSTALL_DIR}.old" ]; then rm -rf "${FINAL_INSTALL_DIR}.old"; fi
         mv "$FINAL_INSTALL_DIR" "${FINAL_INSTALL_DIR}.old"
         mv "$STAGING_DIR" "$FINAL_INSTALL_DIR"
-        rm -rf "${FINAL_INSTALL_DIR}.old"
     fi
 else
     if [ "$EUID" -eq 0 ]; then
@@ -130,7 +138,7 @@ else
         mv "$STAGING_DIR" "$FINAL_INSTALL_DIR"
     fi
 fi
-STAGING_DIR="" # Prevent rollback after activation
+STAGING_DIR="" # Staging is now moved to final
 
 # 9. CLI Registration
 echo "Registering CLI..."
@@ -204,6 +212,16 @@ if [ "$EUID" -eq 0 ] && [ "$SERVICE_USER" != "root" ]; then
     sudo -u "$SERVICE_USER" "$BIN_DIR/anny-runtime" identity-bootstrap
 else
     "$BIN_DIR/anny-runtime" identity-bootstrap
+fi
+
+# 12. Cleanup Backup
+echo "Verifying installation and cleaning up backups..."
+if [ -d "${FINAL_INSTALL_DIR}.old" ]; then
+    if [ "$EUID" -eq 0 ]; then
+        sudo rm -rf "${FINAL_INSTALL_DIR}.old"
+    else
+        rm -rf "${FINAL_INSTALL_DIR}.old"
+    fi
 fi
 
 # Clear failure trap
