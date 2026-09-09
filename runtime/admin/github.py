@@ -1,8 +1,10 @@
-"""GitHub authorization manager using Device Flow (RFC 8628).
+"""GitHub authorization manager.
+
+Customer Zero onboarding method: GitHub Access Token (paste-based).
+Optional future auth method: Device Flow (RFC 8628).
 
 Token values are stored via SecretBackend and NEVER returned to the browser.
-Only status information (connected, principal, scopes) is exposed through DTOs.
-"""
+Only status information (connected, principal, scopes) is exposed through DTOs."""
 import json
 import logging
 import time
@@ -46,7 +48,10 @@ class GitHubCredentialState:
 
 
 class GitHubAuthManager:
-    """Manages GitHub authorization via Device Flow (RFC 8628).
+    """Manages GitHub authorization.
+
+    Current Customer Zero onboarding: GitHub Access Token (paste-based).
+    Optional future method: Device Flow (RFC 8628).
 
     Token values are stored via SecretBackend and NEVER returned to the browser.
     Only status information (connected, principal, scopes) is exposed.
@@ -241,3 +246,50 @@ class GitHubAuthManager:
     def has_token(self) -> bool:
         """Check if a token exists without exposing it."""
         return self.secret_backend.exists(self.GITHUB_TOKEN_REF)
+
+    def store_and_validate_token(self, token: str) -> dict:
+        """Store a user-supplied GitHub Access Token and validate it.
+        
+        Returns a dict with:
+          - success: bool
+          - principal: str or None
+          - scopes: list[str]
+          - error: str or None (safe message, no token content)
+        """
+        try:
+            req = urllib.request.Request(
+                GITHUB_API_USER_URL,
+                headers={
+                    'Authorization': f'token {token}',
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                user_data = json.loads(resp.read().decode('utf-8'))
+                scopes_header = resp.headers.get('X-OAuth-Scopes', '')
+
+            principal = user_data.get('login', 'unknown')
+            scopes = [s.strip() for s in scopes_header.split(',') if s.strip()]
+            
+            if 'repo' not in scopes or 'read:org' not in scopes:
+                return {'success': False, 'principal': None, 'scopes': scopes, 'error': 'GITHUB_AUTHORIZATION_INSUFFICIENT'}
+            
+            self.secret_backend.store(self.GITHUB_TOKEN_REF, token.encode('utf-8'))
+            self.state.principal = principal
+            self.state.auth_status = "AUTHORIZED"
+            self.state.token_status = "VALID"
+            self.state.scopes = scopes
+            self.state.last_validation = datetime.now(timezone.utc).isoformat()
+            self.state.last_failure = None
+            self.state.last_failure_reason = None
+            self._save_state()
+            logger.info(f"GitHub validation successful: {self.state.principal}")
+            return {'success': True, 'principal': principal, 'scopes': scopes, 'error': None}
+        
+        except urllib.error.HTTPError as e:
+            error_msg = f"HTTP {e.code}"
+            if e.code in (401, 403):
+                error_msg = "GitHub connection failed. Token may be invalid or expired."
+            return {'success': False, 'principal': None, 'scopes': [], 'error': error_msg}
+        except Exception as e:
+            return {'success': False, 'principal': None, 'scopes': [], 'error': f"Connection error: {type(e).__name__}"}

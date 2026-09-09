@@ -68,7 +68,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
 class AdminServer:
     """Manages the threaded HTTP server lifecycle."""
     
-    def __init__(self, host: str, port: int, auth_manager, audit_manager, github_manager, runtime_engine=None):
+    def __init__(self, host: str, port: int, auth_manager, audit_manager, github_manager, secret_backend=None, event_bus=None, runtime_engine=None, local_operational_path=None, bootstrap_snapshot=None):
         self.host = host
         self.port = port
         self.server = None
@@ -79,11 +79,15 @@ class AdminServer:
             'auth_manager': auth_manager,
             'audit_manager': audit_manager,
             'github_manager': github_manager,
-            'runtime_engine': runtime_engine
+            'secret_backend': secret_backend,
+            'event_bus': event_bus if event_bus else "UNKNOWN",
+            'runtime_engine': runtime_engine if runtime_engine else "UNKNOWN",
+            'local_operational_path': local_operational_path,
+            'bootstrap_snapshot': bootstrap_snapshot
         }
         
         self.router = AdminRouter(self.admin_context)
-        self.middleware = AdminMiddleware(auth_manager)
+        self.middleware = AdminMiddleware(auth_manager, github_manager=github_manager)
         
     def start(self):
         """Start the server in a background thread."""
@@ -129,16 +133,46 @@ def start_admin_server(host: str, port: int):
     audit_manager = AdminAuditLog(str(data_dir), identity_manager.runtime_id)
     secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
     github_manager = GitHubAuthManager(secret_backend)
+        
+    # P0-A & P0-B: Initialize Bootstrap once per runtime lifecycle.
+    from runtime.continuity.operational import OperationalRepositoryProvider
+    from runtime.continuity.bootstrap import CustomerZeroBootstrapResolver
+    from runtime.github.client import GitHubClient
+    from runtime.github.discovery import OrganizationDiscoveryService
+
+    github_client = GitHubClient(secret_backend=secret_backend) if github_manager.has_token() else None
     
-    if not auth_manager.load_bootstrap_token():
-        auth_manager.generate_bootstrap_token()
+    disc_repos_raw = []
+    if github_client:
+        try:
+            disc = OrganizationDiscoveryService(github_client)
+            disc_repos_raw = disc.discover_repositories()
+        except Exception as e:
+            logger.warning(f"Startup discovery failed: {e}")
+
+    # Enforce PRODUCTION environment boundary here
+    provider = OperationalRepositoryProvider(github_client=github_client, environment="PRODUCTION")
+    resolver = CustomerZeroBootstrapResolver(provider=provider, event_bus=None)
+    bootstrap_result = resolver.resolve()
     
+    bootstrap_snapshot = {
+        'result': bootstrap_result,
+        'discovered_repos': disc_repos_raw
+    }
+    
+    # Standalone CLI startup does not instantiate event_bus or runtime_engine.
+    # Passing None will be translated to UNKNOWN by AdminServer.
     server = AdminServer(
         host=host, 
         port=port, 
         auth_manager=auth_manager, 
         audit_manager=audit_manager, 
-        github_manager=github_manager
+        github_manager=github_manager,
+        secret_backend=secret_backend,
+        event_bus=None,
+        runtime_engine=None,
+        local_operational_path=None,
+        bootstrap_snapshot=bootstrap_snapshot
     )
     
     if server.start():

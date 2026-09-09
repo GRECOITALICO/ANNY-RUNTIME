@@ -1,15 +1,17 @@
 # GitHub Authorization Architecture
 
-The ANNY Runtime uses **GitHub Device Flow (RFC 8628)** for credential acquisition. This ensures that the local Runtime securely negotiates its own token without requiring the user to copy-paste sensitive Personal Access Tokens into config files.
+The ANNY Runtime uses **GitHub Access Token** (paste-based) as the **current Customer Zero onboarding method**. The user provides a single GitHub Personal Access Token through the admin panel, which is validated, encrypted, and stored securely.
 
-## Authorization Flow
+> **Device Flow (RFC 8628)** is retained internally as an **optional future authentication method**. It is NOT the primary onboarding mechanism for Customer Zero.
 
-1. **Initiation:** The Admin clicks "Connect GitHub" in the admin panel.
-2. **Device Code:** The Runtime contacts GitHub and receives a Device Code, User Code, and Verification URI.
-3. **User Action:** The browser displays the User Code and a link to GitHub. The user opens GitHub, logs in, and enters the code.
-4. **Polling:** Meanwhile, the Runtime polls GitHub (`/login/oauth/access_token`).
-5. **Acquisition:** Once the user approves the prompt on GitHub, the Runtime receives the Access Token.
-6. **Secure Storage:** The token is immediately encrypted and persisted to disk via the `SecretBackend`. **It is never returned to the browser.**
+## Authorization Flow (Current — Token-Based)
+
+1. **First Run:** The user opens the admin panel at `http://127.0.0.1:3643/`.
+2. **Token Entry:** The panel presents a single password input labeled "GITHUB ACCESS TOKEN" and a "CONNECT" button.
+3. **Validation:** The Runtime validates the token against `GET https://api.github.com/user`, checks required scopes (`repo`, `read:org`), and extracts the authenticated principal.
+4. **Secure Storage:** The token is immediately encrypted and persisted to disk via the `SecretBackend`. **It is never returned to the browser.**
+5. **Discovery:** Organizations and repositories are discovered dynamically.
+6. **Session Upgrade:** The onboarding session is revoked and a regular admin session is created.
 
 ## Credential Safety
 
