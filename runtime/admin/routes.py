@@ -72,6 +72,25 @@ class AdminRouter:
             logger.error(f"Error handling GET {path}: {e}", exc_info=True)
             self._send_html(handler, "500 Internal Server Error", status=500)
 
+    def dispatch_post(self, path: str, form_data: Dict[str, list], handler: BaseHTTPRequestHandler) -> None:
+        """Dispatch a POST request.
+        
+        POST handlers return a redirect location string (e.g. '/' or '/github?error=...').
+        """
+        parsed = urllib.parse.urlparse(path)
+        route_handler = self._post_routes.get(parsed.path)
+        if not route_handler:
+            self._send_html(handler, "404 Not Found", status=404)
+            return
+
+        try:
+            redirect_to = route_handler(form_data)
+            logger.info(f"POST {path} handler completed, redirecting to {redirect_to}")
+            self._redirect(handler, redirect_to)
+        except Exception as e:
+            logger.error(f"Error handling POST {path}: {e}", exc_info=True)
+            self._send_html(handler, "500 Internal Server Error", status=500)
+
     def _send_json(self, handler: BaseHTTPRequestHandler, data: Any, status: int = 200) -> None:
         handler.send_response(status)
         handler.send_header('Content-type', 'application/json; charset=utf-8')

@@ -20,23 +20,43 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
     server: 'AdminServer' # Type hint for the custom server instance
 
     def do_GET(self):
-        context: Dict[str, Any] = {}
+        # Single request context shared between middleware and router
+        context: Dict[str, Any] = dict(self.server.router.context)
         if not self.server.middleware.process_request('GET', self.path, self.headers, context):
+            # Process response to emit any cookies (e.g. new session)
+            self.server.middleware.process_response(context)
+            self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
             self.server.router._redirect(self, context.get('redirect_to', '/login'))
             return
-            
-        self.server.router.dispatch_get(self.path, self)
+
+        # Inject request context into router so handlers see admin_session/csrf
+        saved_context = dict(self.server.router.context)
+        self.server.router.context.update(context)
+        try:
+            self.server.middleware.process_response(context)
+            self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
+            self.server.router.dispatch_get(self.path, self)
+        finally:
+            # Restore persistent context, preserving any handler-set keys
+            for key in list(self.server.router.context.keys()):
+                if key not in saved_context and key not in ('bootstrap_snapshot',):
+                    del self.server.router.context[key]
+            self.server.router.context.update({k: v for k, v in saved_context.items()
+                                               if k not in ('admin_session', 'set_cookies', 'new_session_id', 'secure_cookie')})
 
     def do_POST(self):
-        context: Dict[str, Any] = {}
+        # Single request context: start from persistent admin_context
+        context: Dict[str, Any] = dict(self.server.router.context)
         if not self.server.middleware.process_request('POST', self.path, self.headers, context):
+            self.server.middleware.process_response(context)
+            self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
             self.server.router._redirect(self, context.get('redirect_to', '/login'))
             return
-            
+
         # Parse form data
         content_type = self.headers.get('content-type', '')
         ctype = content_type.split(';')[0].strip().lower()
-        
+
         form_data = {}
         if ctype == 'application/x-www-form-urlencoded':
             length = int(self.headers.get('content-length', 0))
@@ -44,16 +64,28 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                 body = self.rfile.read(length).decode('utf-8')
                 import urllib.parse
                 form_data = urllib.parse.parse_qs(body)
-                
+
         if not self.server.middleware.process_post_body(self.path, form_data, context):
+            self.server.middleware.process_response(context)
+            self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
             self.server.router._redirect(self, context.get('redirect_to', '/'))
             return
-            
-        # Execute POST handler
-        self.server.router.dispatch_post(self.path, form_data, self)
-        
-        # Post-process (cookies)
-        self.server.middleware.process_response(context)
+
+        # Inject request context into router so POST handlers see admin_session
+        saved_context = dict(self.server.router.context)
+        self.server.router.context.update(context)
+        try:
+            # Execute POST handler
+            self.server.router.dispatch_post(self.path, form_data, self)
+            # Post-process (cookies) — re-read context since handler may have set new_session_id
+            self.server.middleware.process_response(self.server.router.context)
+        finally:
+            # Restore persistent context
+            for key in list(self.server.router.context.keys()):
+                if key not in saved_context and key not in ('bootstrap_snapshot',):
+                    del self.server.router.context[key]
+            self.server.router.context.update({k: v for k, v in saved_context.items()
+                                               if k not in ('admin_session', 'set_cookies', 'new_session_id', 'secure_cookie', 'destroy_session')})
         
     def log_message(self, format, *args):
         """Override to use standard logger."""
