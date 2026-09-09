@@ -176,38 +176,6 @@ class TestFreshFirstRun(unittest.TestCase):
                 self.assertIn("path=/", c_lower)
         self.assertTrue(found)
 
-    def test_onboarding_session_revoked_on_github_connect(self):
-        """P0-F: Onboarding session revoked upon successful GitHub connection."""
-        auth_mgr = AdminSessionManager(self.data_dir, "rt-123")
-        gh_mgr = MockGitHubManager(None)
-        server = AdminServer("127.0.0.1", 0, auth_mgr, MagicMock(), gh_mgr, bootstrap_snapshot={})
-        
-        # 1. Create onboarding session
-        context1 = {}
-        server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context1)
-        server.middleware.process_response(context1)
-        cookies = context1.get('set_cookies', [])
-        cookie_val = ""
-        for c in cookies:
-            if "admin_session_id=" in c:
-                cookie_val = c.split(';')[0].split('=')[1]
-                break
-        self.assertTrue(cookie_val)
-        
-        # 2. Simulate POST to /github/validate
-        gh_mgr.validate = MagicMock(return_value=True) # Success
-        context2 = {}
-        # Pre-process middleware
-        server.middleware.process_request("POST", "/github/validate", {'Host': '127.0.0.1', 'Cookie': f'admin_session_id={cookie_val}'}, context2)
-        # Inject into context manually as the router would
-        server.router.context['admin_session'] = context2.get('admin_session')
-        server.router.context['auth_manager'] = auth_mgr
-        
-        server.router.handle_github_validate({})
-        
-        # Session should be destroyed
-        self.assertTrue(server.router.context.get('destroy_session'))
-        self.assertNotIn(cookie_val, auth_mgr._sessions)
 
     def test_admin_server_single_bootstrap(self):
         """P0-A, P0-B, P0-E: AdminServer receives snapshot and exposes UNKNOWN for missing dependencies."""

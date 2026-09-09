@@ -720,7 +720,6 @@ def github_page(gh_status, error=None, csrf_token=""):
         </div>
 
         <div class="btn-group">
-            <form method="POST" action="/github/validate"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-ghost" type="submit">✓ Validate</button></form>
             <form method="POST" action="/github/disconnect"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-danger" type="submit">✕ Disconnect</button></form>
         </div>
     """, "/github", csrf_token)

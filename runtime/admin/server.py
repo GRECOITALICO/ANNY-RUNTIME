@@ -133,9 +133,6 @@ def start_admin_server(host: str, port: int):
     audit_manager = AdminAuditLog(str(data_dir), identity_manager.runtime_id)
     secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
     github_manager = GitHubAuthManager(secret_backend)
-    
-    if not auth_manager.load_bootstrap_token():
-        auth_manager.generate_bootstrap_token()
         
     # P0-A & P0-B: Initialize Bootstrap once per runtime lifecycle.
     from runtime.continuity.operational import OperationalRepositoryProvider

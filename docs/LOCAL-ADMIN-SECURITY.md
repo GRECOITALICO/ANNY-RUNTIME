@@ -5,13 +5,13 @@ The ANNY Runtime Administration Panel implements a strict security model to ensu
 ## 1. Network Exposure (No-LAN)
 The server binds exclusively to `127.0.0.1` by default. It cannot be accessed by other machines on the local network (LAN) unless explicitly reconfigured via the `admin_host` setting (which requires physical file access).
 
-## 2. Bootstrap Authentication
-The panel uses a one-time, randomly generated **Bootstrap Token** printed to the secure console during startup. 
+## 2. Local Authentication
+The panel automatically grants access only to requests originating from `127.0.0.1` (or localhost). 
 - There is no default password (`admin/admin`).
-- You cannot bypass auth using `?admin=true`.
+- You cannot bypass auth using `?admin=true` if accessing via network.
 
 ## 3. Session Expiry & Cookies
-Upon successful bootstrap login, the server issues an `admin_session_id`.
+Upon successful local connection, the server issues an `admin_session_id`.
 - The cookie is marked `HttpOnly` (inaccessible to JavaScript) and `SameSite=Strict`.
 - The session has a strict TTL (default 30 minutes). Closing the browser or leaving it idle results in an expired session.
 

@@ -295,5 +295,44 @@ class TestOnboardingToken(unittest.TestCase):
         self.assertIsNotNone(context2.get('admin_session'))
         self.assertEqual(context2.get('admin_session').scope, "ONBOARDING_ONLY")
 
+    def test_github_page_has_no_validate_form(self):
+        # Fake an already onboarded state
+        self.gh_mgr.state.auth_status = "AUTHORIZED"
+        self.gh_mgr.state.principal = "testuser"
+        context = {'admin_session': MagicMock()}
+        self.server.router.context = {**self.server.admin_context, **context}
+        html = self.server.router.handle_github(urllib.parse.urlparse("/github"))
+        self.assertNotIn("/github/validate", html)
+
+    def test_github_page_uses_token_endpoint(self):
+        context = {'admin_session': MagicMock()}
+        self.server.router.context = {**self.server.admin_context, **context}
+        html = self.server.router.handle_github(urllib.parse.urlparse("/github"))
+        self.assertIn("/github/token", html)
+
+    def test_reconnect_uses_token_endpoint(self):
+        from runtime.admin.templates import reconnect_page
+        html = reconnect_page("test_csrf")
+        self.assertIn("/github/token", html)
+        self.assertNotIn("/github/connect", html)
+
+    def test_failure_uses_token_endpoint(self):
+        from runtime.admin.templates import failure_page
+        html = failure_page("reason", "test_csrf")
+        self.assertIn("/github/token", html)
+        self.assertNotIn("/github/connect", html)
+
+    def test_github_validate_route_not_required(self):
+        context = {}
+        # Ensure it's not in onboarding routes
+        allowed = self.server.middleware.process_request("POST", "/github/validate", {'Host': '127.0.0.1'}, context)
+        self.assertFalse(allowed)
+
+    def test_github_connect_route_not_required(self):
+        context = {}
+        # Ensure it's not in onboarding routes
+        allowed = self.server.middleware.process_request("POST", "/github/connect", {'Host': '127.0.0.1'}, context)
+        self.assertFalse(allowed)
+
 if __name__ == '__main__':
     unittest.main()

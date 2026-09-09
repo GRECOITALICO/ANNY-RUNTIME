@@ -33,9 +33,8 @@ The default port is `3643`. The Runtime will auto-detect if the port is busy and
 ## Accessing the Panel
 
 1. Start the Runtime (`anny-runtime start`)
-2. Look at the terminal output for the **Bootstrap Token**
-3. Open a browser on the same machine to `http://127.0.0.1:3643/`
-4. Enter the bootstrap token to initiate a secure admin session.
+2. Open a browser on the same machine to `http://127.0.0.1:3643/`
+3. A local admin session will be automatically established for connections originating from `127.0.0.1`.
 
 ## Features
 
