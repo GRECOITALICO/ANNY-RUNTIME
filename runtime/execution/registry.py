@@ -1,4 +1,8 @@
 import uuid
+import os
+import json
+import tempfile
+import dataclasses
 from typing import List, Optional, Dict, Any
 from .models import (
     ModelDefinition, ModelState, ModelCapabilityBinding,
@@ -6,7 +10,8 @@ from .models import (
 )
 
 class ModelRegistry:
-    def __init__(self):
+    def __init__(self, storage_path: Optional[str] = None):
+        self.storage_path = storage_path
         self._models: Dict[str, ModelDefinition] = {}
         self._bindings: List[ModelCapabilityBinding] = []
         self._hardware = HardwareProfile(
@@ -23,8 +28,77 @@ class ModelRegistry:
         self._performance: Dict[str, ModelPerformanceProfile] = {}
         self._evaluations: List[EvaluationRecord] = []
         
-        self._register_initial_models()
-        self._register_initial_bindings()
+        if self.storage_path and os.path.exists(self.storage_path):
+            try:
+                self._load_from_disk()
+            except Exception as e:
+                # Recovery: if loading fails due to corruption or schema mismatch, 
+                # we fall back to a fresh state to ensure operability.
+                print(f"Warning: Failed to load registry from {self.storage_path}: {e}")
+                self._models.clear()
+                self._bindings.clear()
+                self._register_initial_models()
+                self._register_initial_bindings()
+                self._save_to_disk()
+        else:
+            self._register_initial_models()
+            self._register_initial_bindings()
+            self._save_to_disk()
+
+    class _EnumEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, ModelState):
+                return obj.value
+            return super().default(obj)
+
+    def _save_to_disk(self):
+        if not self.storage_path:
+            return
+            
+        data = {
+            "version": "1.0",
+            "models": [dataclasses.asdict(m) for m in self._models.values()],
+            "bindings": [dataclasses.asdict(b) for b in self._bindings],
+            "hardware": dataclasses.asdict(self._hardware),
+            "performance": {k: dataclasses.asdict(v) for k, v in self._performance.items()},
+        }
+        
+        dir_name = os.path.dirname(self.storage_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+            
+        fd, temp_path = tempfile.mkstemp(dir=dir_name, prefix=".registry-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, 'w') as f:
+                json.dump(data, f, cls=self._EnumEncoder, indent=2)
+            os.replace(temp_path, self.storage_path)
+        except Exception:
+            os.unlink(temp_path)
+            raise
+
+    def _load_from_disk(self):
+        with open(self.storage_path, 'r') as f:
+            data = json.load(f)
+            
+        if data.get("version") != "1.0":
+            raise ValueError("Unsupported registry schema version")
+            
+        self._models.clear()
+        for m_dict in data.get("models", []):
+            m_dict["status"] = ModelState(m_dict["status"])
+            model = ModelDefinition(**m_dict)
+            self._models[model.model_id] = model
+            
+        self._bindings.clear()
+        for b_dict in data.get("bindings", []):
+            self._bindings.append(ModelCapabilityBinding(**b_dict))
+            
+        if "hardware" in data:
+            self._hardware = HardwareProfile(**data["hardware"])
+            
+        self._performance.clear()
+        for k, p_dict in data.get("performance", {}).items():
+            self._performance[k] = ModelPerformanceProfile(**p_dict)
 
     def _register_initial_models(self):
         # Phase 3, 4: Qwen3-8b Registration
@@ -130,9 +204,11 @@ class ModelRegistry:
             model_id=model.model_id,
             capability_id="*"
         )
+        self._save_to_disk()
 
     def add_binding(self, binding: ModelCapabilityBinding):
         self._bindings.append(binding)
+        self._save_to_disk()
 
     def get_model(self, model_id: str) -> Optional[ModelDefinition]:
         return self._models.get(model_id)
@@ -162,6 +238,7 @@ class ModelRegistry:
 
     def update_hardware_profile(self, profile: HardwareProfile):
         self._hardware = profile
+        self._save_to_disk()
         
     def get_hardware_profile(self) -> HardwareProfile:
         return self._hardware
