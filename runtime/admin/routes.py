@@ -7,7 +7,8 @@ from typing import Callable, Dict, Any, Optional
 import json
 from runtime.admin.templates import (
     first_run_page, reconnect_page, failure_page, ready_page, github_page, fabric_page,
-    sessions_page, operations_page, receipts_page, doctor_page
+    sessions_page, operations_page, receipts_page, doctor_page, executions_page,
+    capabilities_page, executors_page, policies_page, workers_page, worker_detail_page
 )
 from runtime.admin.dto import (
     RuntimeStatusDTO, GitHubStatusDTO, FabricStatusDTO,
@@ -36,6 +37,11 @@ class AdminRouter:
             '/sessions': self.handle_sessions,
             '/operations': self.handle_operations,
             '/receipts': self.handle_receipts,
+            '/executions': self.handle_executions,
+            '/workers': self.handle_workers,
+            '/capabilities': self.handle_capabilities,
+            '/executors': self.handle_executors,
+            '/policies': self.handle_policies,
             '/doctor': self.handle_doctor,
             '/api/v1/continuity/bootstrap': self.handle_bootstrap_api,
         }
@@ -58,6 +64,10 @@ class AdminRouter:
         
         if parsed.path == '/api/v1/continuity/bootstrap':
             self.handle_bootstrap_api(handler)
+            return
+
+        if parsed.path.startswith('/workers/'):
+            self.handle_worker_detail(parsed, handler)
             return
 
         route_handler = self._get_routes.get(parsed.path)
@@ -279,6 +289,46 @@ class AdminRouter:
 
     def handle_receipts(self, parsed) -> str:
         return receipts_page([], self._get_csrf())
+        
+    def handle_executions(self, parsed) -> str:
+        exec_mgr = self.context.get('execution_manager')
+        executions = exec_mgr.get_all_executions() if exec_mgr else []
+        return executions_page(executions, self._get_csrf())
+
+    def handle_workers(self, parsed) -> str:
+        exec_mgr = self.context.get('execution_manager')
+        workers = exec_mgr.worker_manager.list_workers() if exec_mgr else []
+        return workers_page(workers, self._get_csrf())
+        
+    def handle_worker_detail(self, parsed, handler: BaseHTTPRequestHandler) -> None:
+        parts = parsed.path.strip('/').split('/')
+        if len(parts) != 2:
+            self._send_html(handler, "404 Not Found", status=404)
+            return
+            
+        worker_id = parts[1]
+        exec_mgr = self.context.get('execution_manager')
+        worker = exec_mgr.worker_manager.get_worker(worker_id) if exec_mgr else None
+        
+        if not worker:
+            self._send_html(handler, "404 Not Found", status=404)
+            return
+            
+        html = worker_detail_page(worker, self._get_csrf())
+        self._send_html(handler, html)
+
+    def handle_capabilities(self, parsed) -> str:
+        exec_mgr = self.context.get('execution_manager')
+        caps = exec_mgr.registry.list_all() if exec_mgr else []
+        return capabilities_page(caps, self._get_csrf())
+        
+    def handle_executors(self, parsed) -> str:
+        return executors_page([], self._get_csrf())
+        
+    def handle_policies(self, parsed) -> str:
+        exec_mgr = self.context.get('execution_manager')
+        policy = exec_mgr.policy if exec_mgr else None
+        return policies_page(policy, self._get_csrf())
 
     def handle_doctor(self, parsed) -> str:
         diagnostics = {'checks': [{'name': 'Core', 'status': 'OK'}]}

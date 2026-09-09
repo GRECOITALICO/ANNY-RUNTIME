@@ -1,0 +1,9 @@
+[
+  "status: 200",
+  "route: GET /",
+  "Set-Cookie: YES",
+  "CSRF result: YES",
+  "status: 200",
+  "route: POST /github/token -> redirect -> http://127.0.0.1:3643/",
+  "session transition: ONBOARDING_ONLY revoked, NORMAL SESSION created"
+]

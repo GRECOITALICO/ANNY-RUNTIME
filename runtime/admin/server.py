@@ -165,6 +165,15 @@ def start_admin_server(host: str, port: int):
     audit_manager = AdminAuditLog(str(data_dir), identity_manager.runtime_id)
     secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
     github_manager = GitHubAuthManager(secret_backend)
+    
+    from runtime.workspace.manager import WorkspaceManager
+    from runtime.workspace.ephemeral import EphemeralWorkspaceManager
+    from runtime.execution.manager import ExecutionManager
+    
+    # We use a temp dir for workspaces for now
+    ephemeral_workspace_manager = EphemeralWorkspaceManager()
+    execution_manager = ExecutionManager(ephemeral_workspace_manager)
+
         
     # P0-A & P0-B: Initialize Bootstrap once per runtime lifecycle.
     from runtime.continuity.operational import OperationalRepositoryProvider
@@ -206,6 +215,10 @@ def start_admin_server(host: str, port: int):
         local_operational_path=None,
         bootstrap_snapshot=bootstrap_snapshot
     )
+    
+    server.admin_context['execution_manager'] = execution_manager
+    server.router.context['execution_manager'] = execution_manager
+
     
     if server.start():
         try:

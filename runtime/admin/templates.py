@@ -858,3 +858,167 @@ def doctor_page(diagnostics, csrf_token=""):
             <form method="POST" action="/admin/diagnostics"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-primary" type="submit">✚ Run Diagnostics</button></form>
         </div>
     """, "/doctor", csrf_token)
+
+
+def executions_page(executions, csrf_token=""):
+    """Render the executions control plane page."""
+    rows = ""
+    for e in executions:
+        badge_cls = 'badge-muted'
+        if e.status.value == 'SUCCEEDED': badge_cls = 'badge-success'
+        elif e.status.value in ('FAILED', 'LIMIT_EXCEEDED', 'TIMED_OUT'): badge_cls = 'badge-danger'
+        elif e.status.value == 'RUNNING': badge_cls = 'badge-info'
+        
+        rows += f"""<tr>
+            <td class="mono">{e.execution_id[:16]}...</td>
+            <td class="mono">{e.task_id[:16]}...</td>
+            <td>{e.capability_id}</td>
+            <td><span class="badge {badge_cls}">{e.status.value}</span></td>
+            <td>{e.started_at.isoformat()[:19] if e.started_at else '—'}</td>
+            <td>{e.completed_at.isoformat()[:19] if e.completed_at else '—'}</td>
+            <td>{e.duration_ms if e.duration_ms is not None else '—'}</td>
+        </tr>"""
+    if not rows:
+        rows = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">No executions</td></tr>'
+
+    return base_layout("Executions", f"""
+        <div class="page-header">
+            <h2>Workspace Executions</h2>
+            <p>Control Plane view of ephemeral workspace tasks and their states.</p>
+        </div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Execution ID</th><th>Task ID</th><th>Capability</th><th>Status</th><th>Started</th><th>Completed</th><th>Duration (ms)</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    """, "/executions", csrf_token)
+
+
+def capabilities_page(capabilities, csrf_token=""):
+    rows = ""
+    for c in capabilities:
+        badge_cls = 'badge-success' if c.enabled else 'badge-danger'
+        inf_badge = 'badge-warning' if c.inference_required else 'badge-muted'
+        rows += f"""<tr>
+            <td class="mono">{c.capability_id}</td>
+            <td>{c.name}</td>
+            <td><span class="badge {inf_badge}">{"Yes" if c.inference_required else "No"}</span></td>
+            <td>{c.preferred_executor.value if c.preferred_executor else '—'}</td>
+            <td><span class="badge {badge_cls}">{"ENABLED" if c.enabled else "DISABLED"}</span></td>
+            <td>{c.risk_level}</td>
+        </tr>"""
+    if not rows:
+        rows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px;">No capabilities registered</td></tr>'
+
+    return base_layout("Capabilities", f"""
+        <div class="page-header">
+            <h2>Capability Registry</h2>
+            <p>Formal definitions of operations authorized in this runtime.</p>
+        </div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>ID</th><th>Name</th><th>Inference Req</th><th>Pref. Executor</th><th>Status</th><th>Risk</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    """, "/capabilities", csrf_token)
+
+
+def executors_page(executors, csrf_token=""):
+    return base_layout("Executors", f"""
+        <div class="page-header">
+            <h2>Execution Engines</h2>
+            <p>Available executors and bound LLM models.</p>
+        </div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Executor ID</th><th>Type</th><th>Model Binding</th><th>Status</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td class="mono">deterministic-v1</td>
+                        <td>DETERMINISTIC</td>
+                        <td><span class="badge badge-muted">NONE</span></td>
+                        <td><span class="badge badge-success">READY</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    """, "/executors", csrf_token)
+
+
+def policies_page(policy, csrf_token=""):
+    allow_llm = policy.allow_llm if policy else False
+    isolation = policy.enforce_strict_isolation if policy else True
+    return base_layout("Policies", f"""
+        <div class="page-header">
+            <h2>Runtime Execution Policies</h2>
+            <p>Rules governing execution contexts and executor selection.</p>
+        </div>
+        <div class="detail-panel">
+            <div class="detail-row"><span class="detail-label">LLM Executors Allowed</span><span class="badge {'badge-success' if allow_llm else 'badge-danger'}">{'YES' if allow_llm else 'NO'}</span></div>
+            <div class="detail-row"><span class="detail-label">Strict Isolation Enforced</span><span class="badge {'badge-success' if isolation else 'badge-danger'}">{'YES' if isolation else 'NO'}</span></div>
+            <div class="detail-row"><span class="detail-label">Active Policy Version</span><span class="detail-value">{policy.version if policy else 'UNKNOWN'}</span></div>
+        </div>
+    """, "/policies", csrf_token)
+
+
+def workers_page(workers, csrf_token=""):
+    rows = ""
+    for w in workers:
+        state_badge = 'badge-success' if w.state.value == 'SUCCEEDED' else 'badge-danger' if w.state.value in ('FAILED', 'TIMED_OUT', 'LIMIT_EXCEEDED') else 'badge-warning'
+        rows += f"""<tr>
+            <td class="mono"><a href="/workers/{w.worker_id}">{w.worker_id}</a></td>
+            <td class="mono">{w.execution_id}</td>
+            <td class="mono">{w.capability_id}</td>
+            <td>{w.executor_type}</td>
+            <td><span class="badge {state_badge}">{w.state.value}</span></td>
+            <td>{w.created_at.isoformat()}</td>
+        </tr>"""
+    if not rows:
+        rows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px;">No active workers</td></tr>'
+
+    return base_layout("Workers", f"""
+        <div class="page-header">
+            <h2>Ephemeral Workers</h2>
+            <p>Execution units running capabilities.</p>
+        </div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Worker ID</th><th>Execution ID</th><th>Capability</th><th>Executor</th><th>State</th><th>Created</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    """, "/workers", csrf_token)
+
+def worker_detail_page(w, csrf_token=""):
+    state_badge = 'badge-success' if w.state.value == 'SUCCEEDED' else 'badge-danger' if w.state.value in ('FAILED', 'TIMED_OUT', 'LIMIT_EXCEEDED') else 'badge-warning'
+    
+    duration = "—"
+    if w.started_at and w.finished_at:
+        duration = f"{int((w.finished_at - w.started_at).total_seconds() * 1000)} ms"
+
+    return base_layout(f"Worker {w.worker_id}", f"""
+        <div class="page-header">
+            <h2>Worker Detail: <span class="mono">{w.worker_id}</span></h2>
+        </div>
+        <div class="detail-panel">
+            <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{w.state.value}</span></div>
+            <div class="detail-row"><span class="detail-label">Execution ID</span><span class="mono">{w.execution_id}</span></div>
+            <div class="detail-row"><span class="detail-label">Task ID</span><span class="mono">{w.task_id}</span></div>
+            <div class="detail-row"><span class="detail-label">Capability</span><span class="mono">{w.capability_id}</span></div>
+            <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{w.executor_type}</span></div>
+            <div class="detail-row"><span class="detail-label">Executor ID</span><span class="detail-value">{w.executor_id}</span></div>
+            <div class="detail-row"><span class="detail-label">Model ID</span><span class="detail-value">{w.model_id or '—'}</span></div>
+            <div class="detail-row"><span class="detail-label">Created At</span><span class="detail-value">{w.created_at.isoformat()}</span></div>
+            <div class="detail-row"><span class="detail-label">Started At</span><span class="detail-value">{w.started_at.isoformat() if w.started_at else '—'}</span></div>
+            <div class="detail-row"><span class="detail-label">Finished At</span><span class="detail-value">{w.finished_at.isoformat() if w.finished_at else '—'}</span></div>
+            <div class="detail-row"><span class="detail-label">Duration</span><span class="detail-value">{duration}</span></div>
+            <div class="detail-row"><span class="detail-label">Workspace ID</span><span class="mono">{w.workspace_id}</span></div>
+            <div class="detail-row"><span class="detail-label">Network Policy</span><span class="detail-value">{w.network_policy}</span></div>
+            <div class="detail-row"><span class="detail-label">Filesystem Policy</span><span class="detail-value">{w.filesystem_policy}</span></div>
+            <div class="detail-row"><span class="detail-label">Resource Limits</span><span class="detail-value">{w.resource_limits}</span></div>
+        </div>
+    """, "/workers", csrf_token)
+
+
