@@ -35,16 +35,17 @@ class CapabilityRegistry:
 
     def _register_initial(self):
         caps = [
-            ("filesystem.inspect", "Filesystem Inspect", "Inspects file metadata.", False),
-            ("filesystem.list", "Filesystem List", "Lists directory contents.", False),
-            ("filesystem.hash", "Filesystem Hash", "Hashes file contents.", False),
-            ("repository.inspect", "Repository Inspect", "Inspects repo metadata.", False),
-            ("repository.search", "Repository Search", "Searches repo.", False),
-            ("repository.diff", "Repository Diff", "Diffs repo.", False),
-            ("artifact.metadata", "Artifact Metadata", "Gets artifact metadata.", False),
-            ("schema.validate", "Schema Validate", "Validates JSON schemas.", False),
+            ("document.classify", "Document Classify", "Classifies a document.", True, ExecutorType.LOCAL_MODEL),
+            ("filesystem.inspect", "Filesystem Inspect", "Inspects file metadata.", False, ExecutorType.DETERMINISTIC),
+            ("filesystem.list", "Filesystem List", "Lists directory contents.", False, ExecutorType.DETERMINISTIC),
+            ("filesystem.hash", "Filesystem Hash", "Hashes file contents.", False, ExecutorType.DETERMINISTIC),
+            ("repository.inspect", "Repository Inspect", "Inspects repo metadata.", False, ExecutorType.DETERMINISTIC),
+            ("repository.search", "Repository Search", "Searches repo.", False, ExecutorType.DETERMINISTIC),
+            ("repository.diff", "Repository Diff", "Diffs repo.", False, ExecutorType.DETERMINISTIC),
+            ("artifact.metadata", "Artifact Metadata", "Gets artifact metadata.", False, ExecutorType.DETERMINISTIC),
+            ("schema.validate", "Schema Validate", "Validates JSON schemas.", False, ExecutorType.DETERMINISTIC),
         ]
-        for cap_id, name, desc, inf_req in caps:
+        for cap_id, name, desc, inf_req, pref_exec in caps:
             self.register(CapabilityDefinition(
                 capability_id=cap_id,
                 name=name,
@@ -59,7 +60,7 @@ class CapabilityRegistry:
                 max_runtime=60,
                 max_output=1024 * 1024,
                 evidence_required=True,
-                preferred_executor=ExecutorType.DETERMINISTIC,
+                preferred_executor=pref_exec,
                 fallback_executor=None,
                 enabled=True
             ))

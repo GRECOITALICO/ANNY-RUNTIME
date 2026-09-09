@@ -124,6 +124,7 @@ class ModelDefinition:
     context_window: int
     quantization: str
     artifact_uri: str
+    artifact_sha256: str
     runtime_interface: str
     max_concurrency: int
     max_runtime: int

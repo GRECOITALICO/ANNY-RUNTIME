@@ -1,6 +1,7 @@
 import uuid
 import logging
 from datetime import datetime, timezone
+import os
 from typing import Dict, List, Optional, Any
 
 from runtime.execution.models import (
@@ -100,8 +101,7 @@ class WorkerManager:
             if worker.executor_type == "DETERMINISTIC":
                 # Deterministic executor gets full context for now
                 self.deterministic_executor.execute(task, context)
-            else:
-                # Stub for model abstraction (Phase 6, 7)
+            elif worker.executor_type == "LOCAL_MODEL":
                 context_package = ContextPackage(
                     task=task,
                     capability=capability,
@@ -110,7 +110,23 @@ class WorkerManager:
                     constraints=task.constraints,
                     evidence_policy=task.evidence_policy
                 )
-                raise NotImplementedError("LLM Execution not yet implemented")
+                from runtime.execution.qwen_executor import QwenModelExecutor
+                dummy_artifact_path = os.path.join(self.workspace_manager.base_dir, "qwen_mock.json")
+                if not os.path.exists(dummy_artifact_path):
+                    with open(dummy_artifact_path, "w") as f:
+                        f.write("{}")
+                
+                executor = QwenModelExecutor(artifact_path=dummy_artifact_path)
+                result = executor.execute(context_package)
+                
+                context.status = ExecutionStatus.SUCCEEDED
+                context.result = result.result_data
+                context.result_hash = result.evidence.get("telemetry", {}).get("result_hash")
+                
+                self._emit_telemetry("inference_completed", worker, result.evidence.get("telemetry", {}))
+                
+            else:
+                raise NotImplementedError(f"Execution for {worker.executor_type} not yet implemented")
                 
             # Map ExecutionStatus to WorkerState
             if context.status == ExecutionStatus.SUCCEEDED:
