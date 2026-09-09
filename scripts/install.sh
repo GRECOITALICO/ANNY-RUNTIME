@@ -22,9 +22,23 @@ function cleanup_on_fail {
             if [ "$EUID" -eq 0 ]; then
                 sudo rm -rf "$FINAL_INSTALL_DIR"
                 sudo mv "${FINAL_INSTALL_DIR}.old" "$FINAL_INSTALL_DIR"
+                if [ -f "$BIN_DIR/anny-runtime.old" ]; then
+                    sudo mv "$BIN_DIR/anny-runtime.old" "$BIN_DIR/anny-runtime"
+                fi
+                if [ -f "$SYSTEMD_DIR/anny-runtime.service.old" ]; then
+                    sudo mv "$SYSTEMD_DIR/anny-runtime.service.old" "$SYSTEMD_DIR/anny-runtime.service"
+                    sudo systemctl daemon-reload || true
+                fi
             else
                 rm -rf "$FINAL_INSTALL_DIR"
                 mv "${FINAL_INSTALL_DIR}.old" "$FINAL_INSTALL_DIR"
+                if [ -f "$BIN_DIR/anny-runtime.old" ]; then
+                    mv "$BIN_DIR/anny-runtime.old" "$BIN_DIR/anny-runtime"
+                fi
+                if [ -f "$SYSTEMD_DIR/anny-runtime.service.old" ]; then
+                    mv "$SYSTEMD_DIR/anny-runtime.service.old" "$SYSTEMD_DIR/anny-runtime.service"
+                    systemctl --user daemon-reload || true
+                fi
             fi
         fi
         exit $exit_code
@@ -140,9 +154,22 @@ else
 fi
 STAGING_DIR="" # Staging is now moved to final
 
+# 8.5 Verify Activated Filesystem
+if ! "$FINAL_INSTALL_DIR/venv/bin/python3" -c "import runtime" 2>/dev/null; then
+    echo "Filesystem verification failed!"
+    exit 1
+fi
+
 # 9. CLI Registration
 echo "Registering CLI..."
 mkdir -p "$BIN_DIR"
+if [ -f "$BIN_DIR/anny-runtime" ]; then
+    if [ "$EUID" -eq 0 ]; then
+        sudo mv "$BIN_DIR/anny-runtime" "$BIN_DIR/anny-runtime.old"
+    else
+        mv "$BIN_DIR/anny-runtime" "$BIN_DIR/anny-runtime.old"
+    fi
+fi
 cat << EOF > "$BIN_DIR/anny-runtime"
 #!/bin/bash
 export ANNY_INSTALL_MODE="$INSTALL_MODE"
@@ -155,6 +182,13 @@ chmod +x "$BIN_DIR/anny-runtime"
 # 10. Systemd Registration
 echo "Configuring Systemd..."
 mkdir -p "$SYSTEMD_DIR"
+if [ -f "$SYSTEMD_DIR/anny-runtime.service" ]; then
+    if [ "$EUID" -eq 0 ]; then
+        sudo mv "$SYSTEMD_DIR/anny-runtime.service" "$SYSTEMD_DIR/anny-runtime.service.old"
+    else
+        mv "$SYSTEMD_DIR/anny-runtime.service" "$SYSTEMD_DIR/anny-runtime.service.old"
+    fi
+fi
 
 if [ "$EUID" -eq 0 ]; then
     cat << EOF > "$SYSTEMD_DIR/anny-runtime.service"
@@ -182,6 +216,7 @@ RestrictSUIDSGID=yes
 [Install]
 WantedBy=multi-user.target
 EOF
+    echo "Reloading systemd... (REGISTERED != HEALTHY)"
     systemctl daemon-reload
     systemctl enable anny-runtime.service
 else
@@ -202,6 +237,7 @@ Environment=ANNY_DATA_DIR=$DATA_DIR
 [Install]
 WantedBy=default.target
 EOF
+    echo "Reloading systemd... (REGISTERED != HEALTHY)"
     systemctl --user daemon-reload
     systemctl --user enable anny-runtime.service
 fi
@@ -216,12 +252,14 @@ fi
 
 # 12. Cleanup Backup
 echo "Verifying installation and cleaning up backups..."
-if [ -d "${FINAL_INSTALL_DIR}.old" ]; then
-    if [ "$EUID" -eq 0 ]; then
-        sudo rm -rf "${FINAL_INSTALL_DIR}.old"
-    else
-        rm -rf "${FINAL_INSTALL_DIR}.old"
-    fi
+if [ "$EUID" -eq 0 ]; then
+    if [ -d "${FINAL_INSTALL_DIR}.old" ]; then sudo rm -rf "${FINAL_INSTALL_DIR}.old"; fi
+    if [ -f "$BIN_DIR/anny-runtime.old" ]; then sudo rm -f "$BIN_DIR/anny-runtime.old"; fi
+    if [ -f "$SYSTEMD_DIR/anny-runtime.service.old" ]; then sudo rm -f "$SYSTEMD_DIR/anny-runtime.service.old"; fi
+else
+    if [ -d "${FINAL_INSTALL_DIR}.old" ]; then rm -rf "${FINAL_INSTALL_DIR}.old"; fi
+    if [ -f "$BIN_DIR/anny-runtime.old" ]; then rm -f "$BIN_DIR/anny-runtime.old"; fi
+    if [ -f "$SYSTEMD_DIR/anny-runtime.service.old" ]; then rm -f "$SYSTEMD_DIR/anny-runtime.service.old"; fi
 fi
 
 # Clear failure trap

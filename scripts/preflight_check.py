@@ -26,7 +26,12 @@ def parse_requirements(base_dir):
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):
-                    pkg = line.split('==')[0].split('>=')[0].split('<=')[0].split('~=')[0].split('<')[0].split('>')[0].strip()
+                    import re
+                    match = re.match(r'^([a-zA-Z0-9_\-]+)(?:\[[a-zA-Z0-9_\-,]+\])?(?:[=><~]+.*)?$', line)
+                    if not match:
+                        print(f"REQUIREMENT_PARSE_UNKNOWN: {line}", file=sys.stderr)
+                        sys.exit(1)
+                    pkg = match.group(1).strip()
                     reqs.add(pkg.lower())
     return reqs
 
@@ -52,8 +57,10 @@ def find_imports_in_file(filepath):
             elif isinstance(node, ast.ImportFrom):
                 if node.module and node.level == 0:
                     imports.add(node.module.split('.')[0])
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"STATIC_PARSE_ERROR in {filepath}: {e}", file=sys.stderr)
+        print("DEPENDENCY_PREFLIGHT_FAILED", file=sys.stderr)
+        sys.exit(1)
     return imports
 
 def run_preflight(base_dir):
@@ -80,13 +87,23 @@ def run_preflight(base_dir):
                     all_imports.update(find_imports_in_file(filepath))
                     
     # Validate imports against requirements
+    used_requirements = set()
     for imp in all_imports:
         if imp in stdlib or imp in local_packages:
             continue
-        # Map import name to package name if in inventory
-        pkg_name = inventory.get(imp, imp)
+        # Map import name to package name explicitly
+        if imp not in inventory:
+            errors.append(f"DEPENDENCY_MAPPING_MISSING: Import '{imp}' is not in DEPENDENCY-INVENTORY.json")
+            continue
+        pkg_name = inventory[imp]
+        used_requirements.add(pkg_name.lower())
         if pkg_name.lower() not in requirements:
             errors.append(f"DEPENDENCY_PREFLIGHT_FAILED: Import '{imp}' requires package '{pkg_name}' which is NOT in requirements.txt.")
+            
+    # Validate requirement usage
+    for req in requirements:
+        if req not in used_requirements:
+            errors.append(f"DEPENDENCY_UNUSED: Requirement '{req}' in requirements.txt is not explicitly imported.")
             
     # 2. Runtime Import Test
     for d in target_dirs:
