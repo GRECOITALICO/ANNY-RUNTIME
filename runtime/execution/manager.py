@@ -22,7 +22,9 @@ class ExecutionManager:
         
         self.registry = CapabilityRegistry()
         self.policy = RuntimePolicy()
-        self.selector = ExecutorSelector()
+        from runtime.execution.registry import ModelRegistry
+        self.model_registry = ModelRegistry()
+        self.selector = ExecutorSelector(self.model_registry)
         self.worker_manager = WorkerManager(workspace_manager, audit_manager)
 
     def submit_task(self, task: Task) -> TaskExecutionContext:
@@ -57,7 +59,9 @@ class ExecutionManager:
         )
         context.executor_type = selection.executor_type.value
         context.executor_id = selection.executor_id
+        context.executor_version = selection.executor_version
         context.model_id = selection.model_id
+        context.model_version = selection.model_version
         context.policy_version = selection.policy_version
         
         self._tasks[execution_id] = task

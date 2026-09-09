@@ -484,6 +484,7 @@ def base_layout(title, content, active_path="/", csrf_token=""):
         </div>
         <div class="nav-section">
             <div class="nav-section-label">Runtime</div>
+            {_nav_link('/models', '⬡', 'Models', active_path)}
             {_nav_link('/sessions', '◉', 'Sessions', active_path)}
             {_nav_link('/operations', '▶', 'Operations', active_path)}
             {_nav_link('/receipts', '☰', 'Receipts', active_path)}
@@ -1022,3 +1023,96 @@ def worker_detail_page(w, csrf_token=""):
     """, "/workers", csrf_token)
 
 
+def models_page(models, csrf_token=""):
+    rows = ""
+    for m in models:
+        badge_cls = 'badge-success' if m.state.value in ('AVAILABLE', 'REGISTERED') else 'badge-danger'
+        rows += f"""<tr>
+            <td class="mono"><a href="/models/{m.model_id}">{m.model_id}</a></td>
+            <td>{m.model_name}</td>
+            <td>{m.provider}</td>
+            <td>{m.version}</td>
+            <td><span class="badge {badge_cls}">{m.state.value}</span></td>
+        </tr>"""
+    if not rows:
+        rows = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:32px;">No models registered</td></tr>'
+
+    return base_layout("Models", f"""
+        <div class="page-header">
+            <h2>Model Registry</h2>
+            <p>Control plane view of registered models, capabilities, and availability.</p>
+        </div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Model ID</th><th>Name</th><th>Provider</th><th>Version</th><th>State</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    """, "/models", csrf_token)
+
+def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
+    state_badge = 'badge-success' if model.state.value in ('AVAILABLE', 'REGISTERED') else 'badge-danger'
+    
+    bindings_rows = ""
+    for b in bindings:
+        pref = 'badge-info' if b.preferred else 'badge-muted'
+        bindings_rows += f"""<tr>
+            <td class="mono">{b.capability_id}</td>
+            <td><span class="badge {pref}">{"Yes" if b.preferred else "No"}</span></td>
+            <td>{b.authorization}</td>
+        </tr>"""
+    if not bindings_rows:
+        bindings_rows = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:16px;">No capabilities bound</td></tr>'
+
+    hw_info = ""
+    if hw_profile:
+        hw_info = f"""
+            <div class="detail-row"><span class="detail-label">Hardware Type</span><span class="detail-value">{hw_profile.hardware_type}</span></div>
+            <div class="detail-row"><span class="detail-label">VRAM MB</span><span class="detail-value">{hw_profile.vram_mb}</span></div>
+            <div class="detail-row"><span class="detail-label">RAM MB</span><span class="detail-value">{hw_profile.ram_mb}</span></div>
+            <div class="detail-row"><span class="detail-label">Compute Class</span><span class="detail-value">{hw_profile.compute_class}</span></div>
+        """
+        
+    perf_info = ""
+    if perf_profile:
+        perf_info = f"""
+            <div class="detail-row"><span class="detail-label">Context Window Size</span><span class="detail-value">{perf_profile.context_window_size}</span></div>
+            <div class="detail-row"><span class="detail-label">Max Output Tokens</span><span class="detail-value">{perf_profile.max_output_tokens}</span></div>
+            <div class="detail-row"><span class="detail-label">Avg Tokens/s</span><span class="detail-value">{perf_profile.avg_tokens_per_second}</span></div>
+            <div class="detail-row"><span class="detail-label">Cold Start Time (ms)</span><span class="detail-value">{perf_profile.cold_start_time_ms}</span></div>
+            <div class="detail-row"><span class="detail-label">Cost per 1k</span><span class="detail-value">{perf_profile.cost_per_1k}</span></div>
+        """
+
+    return base_layout(f"Model {model.model_id}", f"""
+        <div class="page-header">
+            <h2>Model Detail: <span class="mono">{model.model_id}</span></h2>
+        </div>
+        <div class="detail-panel">
+            <h3 style="font-size:14px; margin-bottom:12px; color:var(--text-primary);">Definition</h3>
+            <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{model.state.value}</span></div>
+            <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">{model.model_name}</span></div>
+            <div class="detail-row"><span class="detail-label">Provider</span><span class="detail-value">{model.provider}</span></div>
+            <div class="detail-row"><span class="detail-label">Version</span><span class="detail-value">{model.version}</span></div>
+            <div class="detail-row"><span class="detail-label">Location Type</span><span class="detail-value">{model.location_type}</span></div>
+            <div class="detail-row"><span class="detail-label">Path/URI</span><span class="mono">{model.path_or_uri}</span></div>
+            <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{model.executor_type}</span></div>
+        </div>
+        
+        <div class="detail-panel">
+            <h3 style="font-size:14px; margin-bottom:12px; color:var(--text-primary);">Hardware Constraints</h3>
+            {hw_info or '<div class="detail-row"><span class="detail-label">No hardware profile</span><span class="detail-value">—</span></div>'}
+        </div>
+        
+        <div class="detail-panel">
+            <h3 style="font-size:14px; margin-bottom:12px; color:var(--text-primary);">Performance Profile</h3>
+            {perf_info or '<div class="detail-row"><span class="detail-label">No performance profile</span><span class="detail-value">—</span></div>'}
+        </div>
+
+        <div class="detail-panel">
+            <h3 style="font-size:14px; margin-bottom:12px; color:var(--text-primary);">Capability Bindings</h3>
+            <table class="data-table" style="margin-top:0;">
+                <thead><tr><th>Capability</th><th>Preferred</th><th>Authorization</th></tr></thead>
+                <tbody>{bindings_rows}</tbody>
+            </table>
+        </div>
+    """, "/models", csrf_token)

@@ -8,7 +8,8 @@ import json
 from runtime.admin.templates import (
     first_run_page, reconnect_page, failure_page, ready_page, github_page, fabric_page,
     sessions_page, operations_page, receipts_page, doctor_page, executions_page,
-    capabilities_page, executors_page, policies_page, workers_page, worker_detail_page
+    capabilities_page, executors_page, policies_page, workers_page, worker_detail_page,
+    models_page, model_detail_page
 )
 from runtime.admin.dto import (
     RuntimeStatusDTO, GitHubStatusDTO, FabricStatusDTO,
@@ -40,6 +41,7 @@ class AdminRouter:
             '/executions': self.handle_executions,
             '/workers': self.handle_workers,
             '/capabilities': self.handle_capabilities,
+            '/models': self.handle_models,
             '/executors': self.handle_executors,
             '/policies': self.handle_policies,
             '/doctor': self.handle_doctor,
@@ -68,6 +70,10 @@ class AdminRouter:
 
         if parsed.path.startswith('/workers/'):
             self.handle_worker_detail(parsed, handler)
+            return
+            
+        if parsed.path.startswith('/models/'):
+            self.handle_model_detail(parsed, handler)
             return
 
         route_handler = self._get_routes.get(parsed.path)
@@ -321,6 +327,33 @@ class AdminRouter:
         exec_mgr = self.context.get('execution_manager')
         caps = exec_mgr.registry.list_all() if exec_mgr else []
         return capabilities_page(caps, self._get_csrf())
+        
+    def handle_models(self, parsed) -> str:
+        exec_mgr = self.context.get('execution_manager')
+        models = exec_mgr.model_registry.list_models() if exec_mgr else []
+        return models_page(models, self._get_csrf())
+
+    def handle_model_detail(self, parsed, handler: BaseHTTPRequestHandler) -> None:
+        parts = parsed.path.strip('/').split('/')
+        if len(parts) != 2:
+            self._send_html(handler, "404 Not Found", status=404)
+            return
+            
+        model_id = parts[1]
+        exec_mgr = self.context.get('execution_manager')
+        
+        model_def = exec_mgr.model_registry.get_model(model_id) if exec_mgr else None
+        if not model_def:
+            self._send_html(handler, "404 Not Found", status=404)
+            return
+            
+        bindings = exec_mgr.model_registry._bindings if exec_mgr else []
+        model_bindings = [b for b in bindings if b.model_id == model_id]
+        hw_profile = exec_mgr.model_registry.get_hardware_profile() if exec_mgr else None
+        perf_profile = exec_mgr.model_registry.get_performance_profile(model_id) if exec_mgr else None
+        
+        html = model_detail_page(model_def, model_bindings, hw_profile, perf_profile, self._get_csrf())
+        self._send_html(handler, html)
         
     def handle_executors(self, parsed) -> str:
         return executors_page([], self._get_csrf())
