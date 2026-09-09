@@ -1,0 +1,5 @@
+{
+  "route_restriction": "Strictly limited to / and /github/token",
+  "device_flow": "removed_from_ui",
+  "status": "PASS"
+}

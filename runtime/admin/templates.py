@@ -430,28 +430,7 @@ body {
     border: 1px solid rgba(251, 113, 133, 0.2);
 }
 
-/* Device Flow */
-.device-flow-panel {
-    background: var(--bg-card);
-    border: 1px solid var(--border-glow);
-    border-radius: var(--radius);
-    padding: 32px;
-    text-align: center;
-    margin: 24px 0;
-}
-
-.device-code {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 32px;
-    font-weight: 700;
-    letter-spacing: 4px;
-    color: var(--accent-indigo);
-    margin: 16px 0;
-    padding: 16px;
-    background: rgba(99, 102, 241, 0.08);
-    border-radius: var(--radius-sm);
-    display: inline-block;
-}
+/* Device Flow (reserved for optional future auth method) */
 
 /* Animations */
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -525,7 +504,8 @@ def base_layout(title, content, active_path="/", csrf_token=""):
 </html>"""
 
 
-def first_run_page(csrf_token=""):
+def first_run_page(error=None, csrf_token=""):
+    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px;">{error}</div>' if error else ''
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -542,9 +522,14 @@ def first_run_page(csrf_token=""):
         <p style="color:var(--text-primary);font-weight:600;margin-bottom:8px;">Runtime installed</p>
         <p style="color:var(--text-primary);font-weight:600;margin-bottom:24px;">Runtime active</p>
         <p style="color:var(--text-secondary);margin-bottom:32px;">Connect GitHub to begin.</p>
-        <form method="POST" action="/github/connect">
+        {error_html}
+        <form method="POST" action="/github/token">
             <input type="hidden" name="csrf_token" value="{csrf_token}">
-            <button type="submit" class="btn btn-primary login-btn">CONNECT GITHUB</button>
+            <div style="margin-bottom: 24px; text-align: left;">
+                <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">GITHUB ACCESS TOKEN</label>
+                <input type="password" name="github_token" id="github_token_input" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
+            </div>
+            <button type="submit" class="btn btn-primary login-btn">CONNECT</button>
         </form>
     </div>
 </div>
@@ -566,10 +551,15 @@ def reconnect_page(csrf_token=""):
 <div class="login-container">
     <div class="login-card animate-fade-in" style="text-align:center;">
         <h1>ANNY</h1>
-        <p style="color:var(--text-primary);font-weight:600;margin-bottom:32px;">GitHub authorization expired</p>
-        <form method="POST" action="/github/connect">
+        <p style="color:var(--text-primary);font-weight:600;margin-bottom:8px;">GitHub authorization expired</p>
+        <p style="color:var(--text-secondary);margin-bottom:32px;">Please provide a new GitHub Access Token to reconnect.</p>
+        <form method="POST" action="/github/token">
             <input type="hidden" name="csrf_token" value="{csrf_token}">
-            <button type="submit" class="btn btn-primary login-btn">RECONNECT GITHUB</button>
+            <div style="margin-bottom: 24px; text-align: left;">
+                <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">GITHUB ACCESS TOKEN</label>
+                <input type="password" name="github_token" id="github_token_input" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
+            </div>
+            <button type="submit" class="btn btn-primary login-btn">RECONNECT</button>
         </form>
     </div>
 </div>
@@ -593,8 +583,12 @@ def failure_page(reason, csrf_token=""):
         <h1>ANNY</h1>
         <p style="color:var(--text-primary);font-weight:600;margin-bottom:16px;">GitHub connection failed.</p>
         <p style="color:var(--text-secondary);margin-bottom:32px;">Reason:<br>{reason}</p>
-        <form method="POST" action="/github/connect">
+        <form method="POST" action="/github/token">
             <input type="hidden" name="csrf_token" value="{csrf_token}">
+            <div style="margin-bottom: 24px; text-align: left;">
+                <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">GITHUB ACCESS TOKEN</label>
+                <input type="password" name="github_token" id="github_token_input" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
+            </div>
             <button type="submit" class="btn btn-primary login-btn">RETRY</button>
         </form>
     </div>
@@ -660,16 +654,17 @@ def ready_page(status, csrf_token=""):
         <div class="detail-panel" style="margin-bottom: 24px;">
             <h3 style="font-size:15px; margin-bottom:16px; color:var(--accent-indigo);">Canonical State Overview</h3>
             <div class="detail-row"><span class="detail-label">Runtime Identity</span><span class="detail-value">{id_str}</span></div>
-            <div class="detail-row"><span class="detail-label">GitHub Connection</span><span class="detail-value">{gh.get('auth_status', 'CONNECTED')}</span></div>
+            <div class="detail-row"><span class="detail-label">GitHub</span><span class="detail-value">{gh.get('auth_status', 'CONNECTED')}</span></div>
+            <div class="detail-row"><span class="detail-label">Principal</span><span class="detail-value">{gh.get('principal', '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Organizations</span><span class="detail-value">{org_name}</span></div>
+            <div class="detail-row"><span class="detail-label">Repositories</span><span class="detail-value">{repo_count} discovered</span></div>
             <div class="detail-row"><span class="detail-label">Operational State</span><span class="detail-value">{cont.get('canonical_source', 'CONNECTED')}</span></div>
             <div class="detail-row"><span class="detail-label">Current Mission</span><span class="detail-value" style="font-weight:600; color:var(--accent-emerald);">{mission}</span></div>
-            <div class="detail-row"><span class="detail-label">Current Task</span><span class="detail-value">{task}</span></div>
-            <div class="detail-row"><span class="detail-label">Next Action</span><span class="detail-value" style="color:var(--accent-cyan);">{next_action}</span></div>
-            <div class="detail-row"><span class="detail-label">Repository Fabric</span><span class="detail-value" style="color:var(--text-muted);">NOT CONFIGURED</span></div>
+            <div class="detail-row"><span class="detail-label">Fabric</span><span class="detail-value" style="color:var(--text-muted);">NOT CONFIGURED</span></div>
         </div>
 
         <div class="card" style="text-align:center; padding:32px 24px;">
-            <h2 style="color:var(--accent-emerald);margin-bottom:16px;font-weight:700;letter-spacing:1px;font-size:24px;">ANNY READY FOR WORK</h2>
+            <h2 style="color:var(--accent-emerald);margin-bottom:16px;font-weight:700;letter-spacing:1px;font-size:24px;">ANNY: INITIALIZING</h2>
             <p style="font-size:13px; color:var(--text-secondary); max-width:500px; margin:0 auto 24px;">ANNY Runtime Customer Zero bootstrap complete. Node is listening and ready for authorized mission work.</p>
             <form method="POST" action="/github/disconnect">
                 <input type="hidden" name="csrf_token" value="{csrf_token}">
@@ -680,20 +675,28 @@ def ready_page(status, csrf_token=""):
 
 
 
-def github_page(gh_status, csrf_token="", device_flow=None):
+def github_page(gh_status, error=None, csrf_token=""):
     """Render the GitHub status page."""
     badge_class = 'badge-success' if gh_status.get('connected') else 'badge-danger'
     status_text = gh_status.get('auth_status', 'UNKNOWN')
     scopes = ', '.join(gh_status.get('scopes', [])) or '—'
 
-    device_flow_html = ""
-    if device_flow:
-        device_flow_html = f"""
-        <div class="device-flow-panel">
-            <p style="color:var(--text-secondary);margin-bottom:8px;">Enter this code at GitHub:</p>
-            <div class="device-code">{device_flow.get('user_code', '')}</div>
-            <p style="margin-top:12px;"><a href="{device_flow.get('verification_uri', '')}" target="_blank" class="btn btn-primary">Open GitHub →</a></p>
-            <p style="color:var(--text-muted);font-size:12px;margin-top:12px;">Code expires in {device_flow.get('expires_in', '?')} seconds</p>
+    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px; border: 1px solid rgba(235,87,87,0.3);">{error}</div>' if error else ''
+
+    input_form_html = ""
+    if not gh_status.get('connected'):
+        input_form_html = f"""
+        <div class="detail-panel" style="margin-bottom: 24px;">
+            <h3 style="margin-top:0; margin-bottom:16px; font-size:14px; color:var(--text-primary);">Connect GitHub</h3>
+            {error_html}
+            <form method="POST" action="/github/token">
+                <input type="hidden" name="csrf_token" value="{csrf_token}">
+                <div style="margin-bottom: 16px;">
+                    <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">GITHUB ACCESS TOKEN</label>
+                    <input type="password" name="github_token" id="github_token_input" style="width:100%; max-width:400px; padding:10px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
+                </div>
+                <button type="submit" class="btn btn-primary">Connect</button>
+            </form>
         </div>
         """
 
@@ -703,7 +706,7 @@ def github_page(gh_status, csrf_token="", device_flow=None):
             <p>Manage the GitHub authorization for this ANNY Runtime instance.</p>
         </div>
 
-        {device_flow_html}
+        {input_form_html}
 
         <div class="detail-panel">
             <div class="detail-row"><span class="detail-label">Status</span><span class="badge {badge_class}">{status_text}</span></div>
@@ -717,7 +720,6 @@ def github_page(gh_status, csrf_token="", device_flow=None):
         </div>
 
         <div class="btn-group">
-            <form method="POST" action="/github/connect"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-primary" type="submit">⊙ Connect GitHub</button></form>
             <form method="POST" action="/github/validate"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-ghost" type="submit">✓ Validate</button></form>
             <form method="POST" action="/github/disconnect"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-danger" type="submit">✕ Disconnect</button></form>
         </div>

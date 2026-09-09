@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 # Routes explicitly permitted during onboarding (first-run session)
 ONBOARDING_ROUTES = {
     '/',                 # Dashboard (renders first-run page when no token)
-    '/github/connect',   # POST: initiate device flow
-    '/github',           # GET: GitHub status/device flow polling
-    '/github/validate',  # POST: validate GitHub token
+    '/github/token',     # POST: submit GitHub token
 }
 
 class AdminMiddleware:
@@ -26,7 +24,7 @@ class AdminMiddleware:
         self.auth_manager = auth_manager
         self.github_manager = github_manager
         # Paths that bypass auth entirely
-        self.public_paths = {'/login'}
+        self.public_paths = set()
 
     def process_request(self, method: str, path: str, headers, context: Dict[str, Any]) -> bool:
         """
@@ -78,13 +76,13 @@ class AdminMiddleware:
                 context['redirect_to'] = '/'
                 return False
 
+        if not is_first_run and not session and is_local:
+            session = self.auth_manager.create_session("local-admin")
+            context['admin_session'] = session
+            context['new_session_id'] = session.admin_session_id
+
         # Enforce Auth
         if not session and not is_public:
-            context['redirect_to'] = '/login'
-            return False
-
-        if session and parsed.path == '/login':
-            # Already logged in
             context['redirect_to'] = '/'
             return False
 
@@ -106,7 +104,7 @@ class AdminMiddleware:
         """Validate CSRF on mutating requests."""
         parsed = urllib.parse.urlparse(path)
         if parsed.path in self.public_paths:
-            return True # No CSRF on login submit (it has its own bootstrap token check)
+            return True # No CSRF on public routes
 
         session = context.get('admin_session')
         if not session:

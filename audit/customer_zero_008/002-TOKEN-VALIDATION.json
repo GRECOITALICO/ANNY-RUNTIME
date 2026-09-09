@@ -1,0 +1,8 @@
+{
+  "scopes_checked": [
+    "repo",
+    "read:org"
+  ],
+  "error_handling": "safe_dto_no_leak",
+  "status": "PASS"
+}

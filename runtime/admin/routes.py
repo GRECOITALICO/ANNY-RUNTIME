@@ -41,9 +41,8 @@ class AdminRouter:
         }
         self._post_routes = {
             '/logout': self.handle_logout,
-            '/github/connect': self.handle_github_connect,
+            '/github/token': self.handle_github_token,
             '/github/disconnect': self.handle_github_disconnect,
-            '/github/validate': self.handle_github_validate,
             '/admin/restart': self.handle_admin_restart,
             '/admin/diagnostics': self.handle_admin_diagnostics,
             '/admin/update-check': self.handle_admin_update_check,
@@ -186,18 +185,21 @@ class AdminRouter:
     # --- GET Handlers ---
 
     def handle_dashboard(self, parsed) -> str:
+        query_params = urllib.parse.parse_qs(parsed.query)
+        error = query_params.get('error', [''])[0] or None
+
         gh_mgr = self.context.get('github_manager')
         gh_status = gh_mgr.get_status().to_dict() if gh_mgr else {}
-        auth_status = gh_status.get('auth_status', 'UNAUTHORIZED')
+        auth_status = gh_status.get('auth_status', 'UNKNOWN')
         
-        # Check if first run session is needed
         session = self.context.get('admin_session')
+        
         is_first_run = gh_mgr and not gh_mgr.has_token()
         if (auth_status in ('UNAUTHORIZED', 'MISSING')) and is_first_run and session and session.scope == "ONBOARDING_ONLY":
-            return first_run_page(self._get_csrf())
+            return first_run_page(error=error, csrf_token=self._get_csrf())
         elif auth_status in ('UNAUTHORIZED', 'MISSING'):
             # It's missing but not a first run? Or they aren't logged in. Wait, middleware handles login.
-            return first_run_page(self._get_csrf())
+            return first_run_page(error=error, csrf_token=self._get_csrf())
         elif auth_status in ('EXPIRED', 'DEGRADED'):
             return reconnect_page(self._get_csrf())
         elif auth_status == 'FAILED':
@@ -238,29 +240,13 @@ class AdminRouter:
         gh_mgr = self.context.get('github_manager')
         if gh_mgr:
             status = gh_mgr.get_status().to_dict()
-            # If a device flow is active, pass it
-            df = None
-            if getattr(gh_mgr, '_device_flow', None):
-                df = {
-                    'user_code': gh_mgr._device_flow.user_code,
-                    'verification_uri': gh_mgr._device_flow.verification_uri,
-                    'expires_in': gh_mgr._device_flow.expires_in
-                }
-            elif parsed.query == 'poll':
-                # Quick poll trigger
-                res = gh_mgr.poll_device_flow()
-                if res and gh_mgr.has_token():
-                    # Token obtained successfully via polling
-                    session = self.context.get('admin_session')
-                    if session and session.scope == "ONBOARDING_ONLY":
-                        auth_mgr = self.context.get('auth_manager')
-                        if auth_mgr:
-                            auth_mgr.destroy(session.admin_session_id)
-                            self.context['destroy_session'] = True
         else:
             status = GitHubStatusDTO(False, None, "UNAUTHORIZED", "MISSING", None, [], None, None).to_dict()
-            df = None
-        return github_page(status, self._get_csrf(), device_flow=df)
+        
+        query_params = urllib.parse.parse_qs(parsed.query)
+        error = query_params.get('error', [''])[0] or None
+        
+        return github_page(status, error=error, csrf_token=self._get_csrf())
 
     def handle_fabric(self, parsed) -> str:
         status = FabricStatusDTO(False, None, None, None, None, None).to_dict()
@@ -292,14 +278,61 @@ class AdminRouter:
                 audit_mgr.record(session.admin_session_id, "LOGOUT", session.principal, "SUCCESS")
         
         self.context['destroy_session'] = True
-        return '/login'
+        return '/'
 
-    def handle_github_connect(self, form_data) -> str:
+    def handle_github_token(self, form_data) -> str:
+        token = form_data.get('github_token', [''])[0]
+        if not token:
+            session = self.context.get('admin_session')
+            if session and session.scope == "ONBOARDING_ONLY":
+                return '/?error=GitHub+Access+Token+is+required'
+            return '/github?error=GitHub+Access+Token+is+required'
+
         gh_mgr = self.context.get('github_manager')
-        if gh_mgr:
-            gh_mgr.initiate_device_flow()
-            self._audit("GITHUB_CONNECT", "SUCCESS", "Initiated device flow")
-        return '/github'
+        if gh_mgr and token:
+            result = gh_mgr.store_and_validate_token(token)
+            if result.get('success'):
+                self._audit("GITHUB_TOKEN_SUBMIT", "SUCCESS")
+                
+                # Perform discovery since we just got a new token
+                try:
+                    github_client = GitHubClient(secret_backend=gh_mgr.secret_backend)
+                    disc = OrganizationDiscoveryService(github_client)
+                    disc_repos_raw = disc.discover_repositories()
+                    
+                    provider = OperationalRepositoryProvider(github_client=github_client, environment="PRODUCTION")
+                    resolver = CustomerZeroBootstrapResolver(provider=provider, event_bus=None)
+                    bootstrap_result = resolver.resolve()
+                    
+                    self.context['bootstrap_snapshot'] = {
+                        'result': bootstrap_result,
+                        'discovered_repos': disc_repos_raw
+                    }
+                except Exception as e:
+                    logger.warning(f"Post-onboarding discovery failed: {e}")
+                
+                # Revoke onboarding session and issue regular session
+                session = self.context.get('admin_session')
+                if session and session.scope == "ONBOARDING_ONLY":
+                    auth_mgr = self.context.get('auth_manager')
+                    if auth_mgr:
+                        auth_mgr.destroy(session.admin_session_id)
+                        self.context['destroy_session'] = True
+                        new_session = auth_mgr.create_session("admin")
+                        self.context['new_session_id'] = new_session.admin_session_id
+                return '/'
+            else:
+                self._audit("GITHUB_TOKEN_SUBMIT", "FAILED", result.get('error'))
+                error_msg = urllib.parse.quote_plus(result.get('error', 'Validation failed'))
+                
+                # If we are on the first run page (session scope ONBOARDING_ONLY), return to /
+                # Otherwise return to /github
+                session = self.context.get('admin_session')
+                if session and session.scope == "ONBOARDING_ONLY":
+                    return f'/?error={error_msg}'
+                else:
+                    return f'/github?error={error_msg}'
+        return '/'
 
     def handle_github_disconnect(self, form_data) -> str:
         gh_mgr = self.context.get('github_manager')
@@ -308,19 +341,6 @@ class AdminRouter:
             self._audit("GITHUB_DISCONNECT", "SUCCESS")
         return '/github'
 
-    def handle_github_validate(self, form_data) -> str:
-        gh_mgr = self.context.get('github_manager')
-        if gh_mgr:
-            success = gh_mgr.validate()
-            self._audit("GITHUB_VALIDATE", "SUCCESS" if success else "FAILED")
-            if success:
-                session = self.context.get('admin_session')
-                if session and session.scope == "ONBOARDING_ONLY":
-                    auth_mgr = self.context.get('auth_manager')
-                    if auth_mgr:
-                        auth_mgr.destroy(session.admin_session_id)
-                        self.context['destroy_session'] = True
-        return '/github'
 
     def handle_admin_restart(self, form_data) -> str:
         self._audit("RUNTIME_RESTART", "SUCCESS")
