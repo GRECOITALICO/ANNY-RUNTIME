@@ -1,7 +1,6 @@
 """ChatGPT/Luna Bridge API for ANNY Runtime.
 
-Production-adapted bridge. Uses internal task tracking compatible
-with the production ExecutionOrchestrator architecture.
+Production-adapted bridge. Uses the canonical ExecutionManager architecture.
 
 Routes:
   POST /api/v1/bridge/tasks            — create and execute a task
@@ -16,6 +15,9 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
 from typing import Any, Dict, Optional
 
+from runtime.execution.models import Task, ExecutionStatus
+from runtime.core.config import get_data_dir
+from runtime.journal.journal import OperationJournal, JournalEntry
 
 class BridgeAuthError(Exception): pass
 class CapabilityNotFoundError(Exception): pass
@@ -24,8 +26,6 @@ class TaskCreationFailedError(Exception): pass
 
 
 # ── Allowed bridge capabilities ──────────────────────────────────
-# Only these capabilities may be requested through the bridge.
-# Anything not here → CAPABILITY_NOT_FOUND.
 ALLOWED_CAPABILITIES = frozenset({
     "fabric.read",
     "repository.read",
@@ -35,7 +35,6 @@ ALLOWED_CAPABILITIES = frozenset({
 })
 
 # ── Forbidden top-level fields ───────────────────────────────────
-# These fields may NOT appear in the bridge request body.
 ALLOWED_FIELDS = frozenset({
     "intent",
     "requested_capability",
@@ -49,105 +48,24 @@ FORBIDDEN_CONSTRAINTS = frozenset({
     "admin",
 })
 
-
-class BridgeTaskStore:
-    """In-memory task and execution store for the bridge.
-
-    Durability: IN_MEMORY only. Tasks are lost on restart.
-    """
-
-    def __init__(self):
-        self._tasks: Dict[str, Dict[str, Any]] = {}
-        self._executions: Dict[str, Dict[str, Any]] = {}
-
-    def create_task(self, intent: str, capability: str, input_data: dict,
-                    constraints: dict) -> Dict[str, Any]:
-        task_id = f"tsk-{uuid.uuid4().hex[:12]}"
-        exec_id = f"EX-{uuid.uuid4().hex[:12]}"
-        now = datetime.now(timezone.utc).isoformat()
-
-        task = {
-            "task_id": task_id,
-            "execution_id": exec_id,
-            "intent": intent,
-            "capability": capability,
-            "input": input_data,
-            "constraints": constraints,
-            "source": "chatgpt_luna",
-            "created_at": now,
-        }
-
-        execution = {
-            "execution_id": exec_id,
-            "task_id": task_id,
-            "capability": capability,
-            "status": "QUEUED",
-            "source": "chatgpt_luna",
-            "created_at": now,
-            "started_at": None,
-            "completed_at": None,
-            "result": None,
-            "result_hash": None,
-            "evidence_ref": None,
-            "executor_type": "bridge",
-            "executor_id": "bridge-production",
-            "durability": "IN_MEMORY",
-        }
-
-        self._tasks[task_id] = task
-        self._executions[exec_id] = execution
-        return task
-
-    def execute(self, exec_id: str) -> None:
-        """Simulate execution (bridge-level). In production this would
-        delegate to the ExecutionOrchestrator."""
-        ex = self._executions.get(exec_id)
-        if not ex:
-            return
-        now = datetime.now(timezone.utc).isoformat()
-        ex["status"] = "RUNNING"
-        ex["started_at"] = now
-
-        # Produce result
-        task = self._tasks.get(ex["task_id"], {})
-        result = {
-            "capability": ex["capability"],
-            "intent": task.get("intent", "unknown"),
-            "source": "chatgpt_luna",
-            "output": f"Production result for {ex['capability']}",
-            "timestamp": now,
-        }
-        result_json = json.dumps(result, sort_keys=True)
-        ex["result"] = result
-        ex["result_hash"] = hashlib.sha256(result_json.encode()).hexdigest()[:16]
-        ex["evidence_ref"] = f"ev-{exec_id}"
-        ex["status"] = "SUCCEEDED"
-        ex["completed_at"] = now
-
-    def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
-        return self._tasks.get(task_id)
-
-    def get_execution(self, exec_id: str) -> Optional[Dict[str, Any]]:
-        return self._executions.get(exec_id)
-
-
-# ── Singleton store (persists for runtime lifecycle) ─────────────
-_store = BridgeTaskStore()
-
-
 class BridgeRouter:
     """API Bridge for ChatGPT/Luna external interaction."""
 
     def __init__(self, admin_context: Dict[str, Any]):
         self.context = admin_context
-        self.bridge_token = self.context.get(
-            "bridge_token", "default-bridge-token-for-dev"
-        )
-        self.store = _store
 
     def _authenticate(self, handler: BaseHTTPRequestHandler):
         token = handler.headers.get("X-Bridge-Token")
-        if not token or token != self.bridge_token:
+        if not token:
+            raise BridgeAuthError("Invalid or missing X-Bridge-Token")
+            
+        secret_backend = self.context.get("secret_backend")
+        if not secret_backend:
+            raise BridgeAuthError("System misconfigured: missing secret_backend")
+            
+        expected_bytes = secret_backend.retrieve("bridge_token")
+        expected = expected_bytes.decode('utf-8') if expected_bytes else None
+        if not expected or token != expected:
             raise BridgeAuthError("Invalid or missing X-Bridge-Token")
 
     def _send_json(self, handler: BaseHTTPRequestHandler, data: Any,
@@ -196,7 +114,6 @@ class BridgeRouter:
 
     def handle_create_task(self, handler: BaseHTTPRequestHandler,
                            request_body: bytes):
-        # Parse body
         if not request_body:
             length = int(handler.headers.get('content-length', 0))
             if length > 0:
@@ -213,8 +130,6 @@ class BridgeRouter:
             self._send_error(handler, "BRIDGE_INVALID_REQUEST",
                              "Invalid JSON", 400)
             return
-
-        # ── Contract enforcement ─────────────────────────────────
 
         # 1. Reject unknown top-level fields
         extra = set(data.keys()) - ALLOWED_FIELDS
@@ -237,50 +152,99 @@ class BridgeRouter:
         forbidden = set(constraints.keys()) & FORBIDDEN_CONSTRAINTS
         if forbidden:
             self._send_error(handler, "POLICY_DENIED",
-                             f"Constraint override not permitted: "
-                             f"{sorted(forbidden)}", 403)
+                             f"Constraint override not permitted: {sorted(forbidden)}", 403)
             return
 
         # 3. Check capability exists
         if capability not in ALLOWED_CAPABILITIES:
             self._send_error(handler, "CAPABILITY_NOT_FOUND",
-                             f"Capability '{capability}' not available "
-                             f"via bridge", 404)
+                             f"Capability '{capability}' not available via bridge", 404)
             return
 
-        # ── Create and execute ───────────────────────────────────
+        # ── Execution via Canonical Architecture ───────────────────
         try:
-            task = self.store.create_task(intent, capability, input_data,
-                                          constraints)
-            self.store.execute(task["execution_id"])
+            execution_manager = self.context.get("execution_manager")
+            if not execution_manager:
+                raise RuntimeError("System misconfigured: execution_manager missing")
+
+            task_id = f"tsk-{uuid.uuid4().hex[:12]}"
+            task = Task(
+                task_id=task_id,
+                capability_id=capability,
+                input_data=input_data,
+                constraints=constraints,
+                deadline=None,
+                workspace_policy="keep"
+            )
+
+            # Submit and execute synchronously
+            exec_ctx = execution_manager.submit_task(task)
+            exec_ctx = execution_manager.execute_sync(exec_ctx.execution_id)
+
+            # Record durability
+            journal = OperationJournal(str(get_data_dir()))
+            now = datetime.now(timezone.utc).isoformat()
+            
+            entry = JournalEntry(
+                entry_id=f"ev-{exec_ctx.execution_id}",
+                operation_id=task_id,
+                execution_id=exec_ctx.execution_id,
+                session_id="bridge_session",
+                actor_id="chatgpt_luna",
+                workspace_id=exec_ctx.workspace_path,
+                tool=capability,
+                state=exec_ctx.status.name,
+                started_at=now,
+                runtime_generation=1,
+                finished_at=now,
+                metadata={"intent": intent, "source": "chatgpt_luna"}
+            )
+            journal.record(entry)
 
             self._send_json(handler, {
-                "task_id": task["task_id"],
-                "execution_id": task["execution_id"],
-                "status": "SUCCEEDED",
+                "task_id": task_id,
+                "execution_id": exec_ctx.execution_id,
+                "status": exec_ctx.status.name,
                 "source": "chatgpt_luna",
             }, status=201)
+            
         except Exception as e:
-            self._send_error(handler, "EXECUTION_FAILED",
-                             f"Execution failed: {e}", 500)
+            self._send_error(handler, "EXECUTION_FAILED", f"Execution failed: {e}", 500)
 
     # ── GET /api/v1/bridge/tasks/{task_id} ───────────────────────
 
     def handle_get_task(self, handler: BaseHTTPRequestHandler, task_id: str):
-        task = self.store.get_task(task_id)
-        if not task:
-            self._send_error(handler, "RESULT_UNAVAILABLE",
-                             f"Task {task_id} not found", 404)
+        journal = OperationJournal(str(get_data_dir()))
+        entries = journal.get_operation(task_id)
+        if not entries:
+            self._send_error(handler, "RESULT_UNAVAILABLE", f"Task {task_id} not found", 404)
             return
-        self._send_json(handler, task)
+            
+        entry = entries[0]
+        self._send_json(handler, {
+            "task_id": entry.operation_id,
+            "execution_id": entry.execution_id,
+            "capability": entry.tool,
+            "intent": entry.metadata.get("intent", "unknown"),
+            "source": entry.metadata.get("source", "chatgpt_luna")
+        })
 
     # ── GET /api/v1/bridge/executions/{execution_id} ─────────────
 
-    def handle_get_execution(self, handler: BaseHTTPRequestHandler,
-                             exec_id: str):
-        ex = self.store.get_execution(exec_id)
-        if not ex:
-            self._send_error(handler, "RESULT_UNAVAILABLE",
-                             f"Execution {exec_id} not found", 404)
+    def handle_get_execution(self, handler: BaseHTTPRequestHandler, exec_id: str):
+        journal = OperationJournal(str(get_data_dir()))
+        # We need to search entries by execution_id
+        # JournalEntry has entry_id = ev-{execution_id}
+        entry = journal.get_entry(f"ev-{exec_id}")
+        if not entry:
+            self._send_error(handler, "RESULT_UNAVAILABLE", f"Execution {exec_id} not found", 404)
             return
-        self._send_json(handler, ex)
+            
+        self._send_json(handler, {
+            "execution_id": entry.execution_id,
+            "task_id": entry.operation_id,
+            "capability": entry.tool,
+            "status": entry.state,
+            "source": entry.metadata.get("source", "chatgpt_luna"),
+            "durability": "DURABLE"
+        })
