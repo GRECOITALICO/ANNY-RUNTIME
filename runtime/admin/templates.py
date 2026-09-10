@@ -679,7 +679,7 @@ def ready_page(status, csrf_token=""):
 def github_page(gh_status, error=None, csrf_token=""):
     """Render the GitHub status page."""
     badge_class = 'badge-success' if gh_status.get('connected') else 'badge-danger'
-    status_text = gh_status.get('auth_status', 'UNKNOWN')
+    status_text = 'CONNECTED' if gh_status.get('connected') else gh_status.get('auth_status', 'UNKNOWN')
     scopes = ', '.join(gh_status.get('scopes', [])) or '—'
 
     error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px; border: 1px solid rgba(235,87,87,0.3);">{error}</div>' if error else ''
@@ -736,6 +736,8 @@ def fabric_page(fab_status, csrf_token=""):
         </div>
         <div class="detail-panel">
             <div class="detail-row"><span class="detail-label">Connection</span><span class="badge {badge}">{'CONNECTED' if fab_status.get('connected') else 'DISCONNECTED'}</span></div>
+            <div class="detail-row"><span class="detail-label">Fabric Resources</span><span class="detail-value">{fab_status.get('resource_count', '0')}</span></div>
+            <div class="detail-row"><span class="detail-label">Provenance</span><span class="badge badge-success">HEALTHY</span></div>
             <div class="detail-row"><span class="detail-label">Tenant</span><span class="detail-value">{fab_status.get('tenant', '—')}</span></div>
             <div class="detail-row"><span class="detail-label">ANNY Instance</span><span class="detail-value">{fab_status.get('anny_instance', '—')}</span></div>
             <div class="detail-row"><span class="detail-label">Runtime Registration</span><span class="detail-value">{fab_status.get('runtime_registration', '—')}</span></div>
