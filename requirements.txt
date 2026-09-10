@@ -1,3 +1,6 @@
 cryptography>=41.0.0
 PyYAML>=6.0
-llama-cpp-python\npsutil\nazure-identity\nhttpx
+llama-cpp-python
+psutil
+azure-identity
+httpx
