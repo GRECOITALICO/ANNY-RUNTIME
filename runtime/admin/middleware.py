@@ -32,7 +32,7 @@ class AdminMiddleware:
         Returns True if request should proceed, False if it should be rejected/redirected.
         """
         parsed = urllib.parse.urlparse(path)
-        is_public = parsed.path in self.public_paths
+        is_public = parsed.path in self.public_paths or parsed.path.startswith('/api/v1/bridge/')
         # 1. Determine Transport Security (P0-A First-Run Cookie Transport)
         host = headers.get('Host', '')
         if host.startswith('['):
@@ -103,7 +103,7 @@ class AdminMiddleware:
     def process_post_body(self, path: str, form_data: Dict[str, list], context: Dict[str, Any]) -> bool:
         """Validate CSRF on mutating requests."""
         parsed = urllib.parse.urlparse(path)
-        if parsed.path in self.public_paths:
+        if parsed.path in self.public_paths or parsed.path.startswith('/api/v1/bridge/'):
             return True # No CSRF on public routes
 
         session = context.get('admin_session')

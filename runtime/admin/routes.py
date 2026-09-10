@@ -86,6 +86,12 @@ class AdminRouter:
         """Dispatch a GET request."""
         parsed = urllib.parse.urlparse(path)
         
+        if parsed.path.startswith('/api/v1/bridge/'):
+            from runtime.api.bridge import BridgeRouter
+            bridge = BridgeRouter(self.context)
+            bridge.dispatch(parsed, handler)
+            return
+
         if parsed.path == '/api/v1/continuity/bootstrap':
             self.handle_bootstrap_api(handler)
             return
@@ -116,6 +122,25 @@ class AdminRouter:
         POST handlers return a redirect location string (e.g. '/' or '/github?error=...').
         """
         parsed = urllib.parse.urlparse(path)
+        if parsed.path.startswith('/api/v1/bridge/'):
+            from runtime.api.bridge import BridgeRouter
+            bridge = BridgeRouter(self.context)
+            
+            # Reconstruct request_body from form_data and handler context for the bridge
+            # The AdminServer has already consumed rfile in do_POST, so we must construct
+            # the body for the bridge from the form_data if applicable, or we have a problem.
+            # Actually, wait. In server.py, it reads rfile:
+            # body = self.rfile.read(length).decode('utf-8')
+            # But only if ctype == 'application/x-www-form-urlencoded'!
+            # Bridge uses application/json. So server.py doesn't consume the body.
+            body = b""
+            length = int(handler.headers.get('content-length', 0))
+            if length > 0:
+                body = handler.rfile.read(length)
+            
+            bridge.dispatch(parsed, handler, request_body=body)
+            return
+
         route_handler = self._post_routes.get(parsed.path)
         if not route_handler:
             self._send_html(handler, "404 Not Found", status=404)
