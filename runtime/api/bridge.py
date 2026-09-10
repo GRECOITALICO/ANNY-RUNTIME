@@ -14,7 +14,7 @@ Routes:
 import json
 import uuid
 import urllib.parse
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from http.server import BaseHTTPRequestHandler
 from typing import Any, Dict, Optional
 
@@ -197,7 +197,7 @@ class BridgeRouter:
                 capability_id=capability,
                 input=input_data,
                 constraints=constraints,
-                deadline=now,
+                deadline=now + timedelta(seconds=60),
                 workspace_policy="keep",
                 evidence_policy="journal",
                 requested_by="chatgpt_luna",
