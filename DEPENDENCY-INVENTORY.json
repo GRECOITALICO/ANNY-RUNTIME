@@ -16,5 +16,41 @@
     "runtime_required": true,
     "test_only": false,
     "packaging_required": true
+  },
+  {
+    "import": "psutil",
+    "python_package": "psutil",
+    "minimum_version_if_known": "5.9.0",
+    "source_file": "runtime/system/...",
+    "runtime_required": true,
+    "test_only": false,
+    "packaging_required": true
+  },
+  {
+    "import": "azure",
+    "python_package": "azure-identity",
+    "minimum_version_if_known": "1.0.0",
+    "source_file": "runtime/adapters/...",
+    "runtime_required": true,
+    "test_only": false,
+    "packaging_required": true
+  },
+  {
+    "import": "llama_cpp",
+    "python_package": "llama-cpp-python",
+    "minimum_version_if_known": "0.1.78",
+    "source_file": "runtime/execution/qwen_executor.py",
+    "runtime_required": true,
+    "test_only": false,
+    "packaging_required": true
+  },
+  {
+    "import": "httpx",
+    "python_package": "httpx",
+    "minimum_version_if_known": "0.24.0",
+    "source_file": "runtime/adapters/fabric_client.py",
+    "runtime_required": true,
+    "test_only": false,
+    "packaging_required": true
   }
 ]
