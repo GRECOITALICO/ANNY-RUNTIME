@@ -170,11 +170,6 @@ def start_admin_server(host: str, port: int):
     from runtime.workspace.ephemeral import EphemeralWorkspaceManager
     from runtime.execution.manager import ExecutionManager
     
-    # We use a temp dir for workspaces for now
-    ephemeral_workspace_manager = EphemeralWorkspaceManager()
-    execution_manager = ExecutionManager(ephemeral_workspace_manager)
-
-        
     # P0-A & P0-B: Initialize Bootstrap once per runtime lifecycle.
     from runtime.continuity.operational import OperationalRepositoryProvider
     from runtime.continuity.bootstrap import CustomerZeroBootstrapResolver
@@ -182,7 +177,20 @@ def start_admin_server(host: str, port: int):
     from runtime.github.discovery import OrganizationDiscoveryService
 
     github_client = GitHubClient(secret_backend=secret_backend) if github_manager.has_token() else None
+
+    from runtime.adapters.fabric_client import FabricClient
+    fabric_client = FabricClient()
     
+    # We use a temp dir for workspaces for now
+    ephemeral_workspace_manager = EphemeralWorkspaceManager()
+    execution_manager = ExecutionManager(
+        workspace_manager=ephemeral_workspace_manager, 
+        audit_manager=audit_manager,
+        github_client=github_client,
+        fabric_client=fabric_client
+    )
+
+        
     disc_repos_raw = []
     if github_client:
         try:

@@ -15,10 +15,11 @@ class ExecutionManager:
     Manages the queue and history of workspace executions for the control plane.
     In a real system this would be backed by a database.
     """
-    def __init__(self, workspace_manager: EphemeralWorkspaceManager, audit_manager=None):
+    def __init__(self, workspace_manager: EphemeralWorkspaceManager, audit_manager=None, github_client=None, fabric_client=None):
         self._executions: Dict[str, TaskExecutionContext] = {}
         self._tasks: Dict[str, Task] = {}
         self.workspace_manager = workspace_manager
+
         
         self.registry = CapabilityRegistry()
         self.policy = RuntimePolicy()
@@ -27,7 +28,26 @@ class ExecutionManager:
         registry_path = get_data_dir() / "registry" / "models.json"
         self.model_registry = ModelRegistry(storage_path=str(registry_path))
         self.selector = ExecutorSelector(self.model_registry)
-        self.worker_manager = WorkerManager(workspace_manager, audit_manager)
+        
+        from runtime.mcp.registry import ToolRegistry
+        from runtime.mcp.gateway import MCPGateway
+        self.tool_registry = ToolRegistry()
+        # Clients injected via DI — MCPGateway owns canonical client references
+        self.mcp_gateway = MCPGateway(
+            tool_registry=self.tool_registry,
+            capability_registry=self.registry,
+            audit_manager=audit_manager,
+            workspace_path="",
+            fabric_data_dir=str(get_data_dir() / "fabric"),
+            github_client=github_client,
+            fabric_client=fabric_client
+        )
+        
+        self.worker_manager = WorkerManager(
+            workspace_manager, 
+            audit_manager,
+            mcp_gateway=self.mcp_gateway
+        )
 
     def submit_task(self, task: Task) -> TaskExecutionContext:
         execution_id = str(uuid.uuid4())

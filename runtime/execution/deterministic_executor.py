@@ -36,9 +36,7 @@ class DeterministicExecutor:
         
         # Determine actual capability
         supported = (
-            "filesystem.inspect", "filesystem.hash", "repository.inspect",
-            "fabric.read", "repository.read", "repository.search",
-            "fabric.register",
+            "filesystem.inspect", "filesystem.hash", "repository.inspect"
         )
         if task.capability_id not in supported:
             context.status = ExecutionStatus.FAILED
@@ -53,12 +51,6 @@ class DeterministicExecutor:
                 self._execute_filesystem_hash(task, context)
             elif task.capability_id == "repository.inspect":
                 self._execute_repository_inspect(task, context)
-            elif task.capability_id == "fabric.read":
-                self._execute_fabric_read(task, context)
-            elif task.capability_id in ("repository.read", "repository.search"):
-                self._execute_repository_read(task, context)
-            elif task.capability_id == "fabric.register":
-                self._execute_fabric_register(task, context)
                 
             if context.status == ExecutionStatus.RUNNING:
                 context.status = ExecutionStatus.SUCCEEDED
@@ -183,48 +175,7 @@ class DeterministicExecutor:
             
         context.result = result
 
-    def _execute_fabric_read(self, task: Task, context: TaskExecutionContext):
-        """Reads operational fabric state - returns runtime metadata."""
-        from runtime.core.config import get_data_dir
-        data_dir = get_data_dir()
-        fabric_state = {
-            "data_dir": str(data_dir),
-            "runtime_exists": os.path.exists(str(data_dir)),
-            "capabilities_available": True,
-            "operational_status": "ACTIVE",
-        }
-        # Include optional path inspection if provided
-        target = task.input.get("path")
-        if target:
-            abs_target = os.path.abspath(target)
-            fabric_state["inspected_path"] = abs_target
-            fabric_state["path_exists"] = os.path.exists(abs_target)
-        context.result = fabric_state
 
-    def _execute_repository_read(self, task: Task, context: TaskExecutionContext):
-        """Reads repository state and metadata."""
-        from runtime.core.config import get_data_dir
-        data_dir = get_data_dir()
-        repo_info = {
-            "runtime_data_dir": str(data_dir),
-            "operational_status": "ACTIVE",
-        }
-        target = task.input.get("path") or task.input.get("repository")
-        if target:
-            abs_target = os.path.abspath(target)
-            repo_info["path"] = abs_target
-            repo_info["exists"] = os.path.exists(abs_target)
-            repo_info["is_git"] = os.path.exists(os.path.join(abs_target, ".git")) if os.path.exists(abs_target) else False
-        context.result = repo_info
-
-    def _execute_fabric_register(self, task: Task, context: TaskExecutionContext):
-        """Registers a fabric entry (deterministic acknowledgement)."""
-        entry = task.input.get("entry", {})
-        context.result = {
-            "registered": True,
-            "entry_id": entry.get("id", "unknown"),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
 
     def _finalize_workspace(self, task: Task, context: TaskExecutionContext):
         """

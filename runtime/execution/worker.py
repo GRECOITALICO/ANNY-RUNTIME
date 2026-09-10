@@ -15,9 +15,10 @@ from runtime.execution.deterministic_executor import DeterministicExecutor, Exec
 logger = logging.getLogger(__name__)
 
 class WorkerManager:
-    def __init__(self, workspace_manager, audit_manager=None):
+    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None):
         self.workspace_manager = workspace_manager
         self.audit_manager = audit_manager
+        self.mcp_gateway = mcp_gateway
         self.workers: Dict[str, WorkerDefinition] = {}
         
         # Executor bindings
@@ -97,10 +98,46 @@ class WorkerManager:
             if datetime.now(timezone.utc) > worker.deadline:
                 raise TimeoutError("Deadline exceeded before execution")
                 
-            # Model execution flow (currently only Deterministic implemented)
+            # Model execution flow
             if worker.executor_type == "DETERMINISTIC":
-                # Deterministic executor gets full context for now
-                self.deterministic_executor.execute(task, context)
+                # Intercept MCP Gateway external capabilities
+                external_caps = {"fabric.read", "repository.read", "repository.search", "fabric.register"}
+                if task.capability_id in external_caps:
+                    if not self.mcp_gateway:
+                        raise ValueError("MCP Gateway not configured for external capabilities")
+                    from runtime.mcp import ToolRequest
+                    
+                    req = ToolRequest.create(
+                        tool_id=task.capability_id,
+                        capability_id=task.capability_id,
+                        worker_id=worker_id,
+                        execution_id=context.execution_id,
+                        input_data=task.input,
+                        deadline=context.deadline
+                    )
+                    req.caller_context = {
+                        "workspace_path": context.workspace_path,
+                    }
+                    
+                    result = self.mcp_gateway.invoke(req)
+                    
+                    if result.succeeded:
+                        context.status = ExecutionStatus.SUCCEEDED
+                        context.result = result.output_data
+                        context.result_hash = result.evidence.get("result_hash")
+                    else:
+                        if result.status == "DENIED":
+                            raise ExecutorSecurityError(result.error_message)
+                        elif result.status == "TIMED_OUT":
+                            raise TimeoutError(result.error_message)
+                        else:
+                            raise Exception(result.error_message)
+                            
+                    # Need to explicitly call finalization to generate evidence files normally done by deterministic executor
+                    self.deterministic_executor._finalize_workspace(task, context)
+                else:
+                    # Deterministic executor gets full context for now
+                    self.deterministic_executor.execute(task, context)
             elif worker.executor_type == "LOCAL_MODEL":
                 context_package = ContextPackage(
                     task=task,
@@ -111,12 +148,16 @@ class WorkerManager:
                     evidence_policy=task.evidence_policy
                 )
                 from runtime.execution.qwen_executor import QwenModelExecutor
-                dummy_artifact_path = os.path.join(self.workspace_manager.base_dir, "qwen_mock.json")
-                if not os.path.exists(dummy_artifact_path):
-                    with open(dummy_artifact_path, "w") as f:
-                        f.write("{}")
+                real_artifact_path = os.environ.get("QWEN_MODEL_PATH")
+                if real_artifact_path and os.path.exists(real_artifact_path):
+                    artifact_path = real_artifact_path
+                else:
+                    artifact_path = os.path.join(self.workspace_manager.base_dir, "qwen_mock.json")
+                    if not os.path.exists(artifact_path):
+                        with open(artifact_path, "w") as f:
+                            f.write("{}")
                 
-                executor = QwenModelExecutor(artifact_path=dummy_artifact_path)
+                executor = QwenModelExecutor(artifact_path=artifact_path)
                 result = executor.execute(context_package)
                 
                 context.status = ExecutionStatus.SUCCEEDED

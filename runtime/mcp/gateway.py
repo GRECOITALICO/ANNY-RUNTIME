@@ -51,12 +51,15 @@ class MCPGateway:
     """
 
     def __init__(self, tool_registry: ToolRegistry, capability_registry: CapabilityRegistry,
-                 audit_manager=None, workspace_path: str = "", fabric_data_dir: str = ""):
+                 audit_manager=None, workspace_path: str = "", fabric_data_dir: str = "",
+                 github_client=None, fabric_client=None):
         self.tool_registry = tool_registry
         self.capability_registry = capability_registry
         self.audit_manager = audit_manager
         self.workspace_path = workspace_path
         self.fabric_data_dir = fabric_data_dir
+        self.github_client = github_client
+        self.fabric_client = fabric_client
 
         # Track invocation counts per execution_id per tool_id
         self._invocation_counts: Dict[str, Dict[str, int]] = {}
@@ -114,6 +117,8 @@ class MCPGateway:
                 "fabric_data_dir": self.fabric_data_dir,
                 "max_output_size": 10 * 1024 * 1024,
                 "caller_id": request.capability_id,
+                "github_client": self.github_client,
+                "fabric_client": self.fabric_client,
             }
             context.update(request.caller_context)
 

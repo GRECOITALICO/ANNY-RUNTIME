@@ -16,6 +16,51 @@ from runtime.mcp.gateway import (
 from runtime.execution.capability import CapabilityRegistry
 
 
+class MockGitHubClient:
+    def __init__(self, workspace):
+        self.workspace = workspace
+        
+    def get_file(self, owner, repo, path):
+        full_path = os.path.join(self.workspace, path)
+        with open(full_path, "r", encoding="utf-8") as f:
+            return f.read()
+            
+    def _request(self, endpoint, query_params=None):
+        return {"items": [{"path": "code.py"}]}
+
+
+class MockFabricClient:
+    def __init__(self, fabric_dir):
+        self.fabric_dir = fabric_dir
+        
+    def get_resource(self, resource_id):
+        resource_file = os.path.join(self.fabric_dir, f"{resource_id}.json")
+        if not os.path.exists(resource_file):
+            class Error(Exception):
+                error_code = "FABRIC_NOT_FOUND"
+            raise Error()
+        with open(resource_file, "r") as f:
+            return json.load(f)
+            
+    def register_resource(self, provider, external_id, name, r_type, source_revision, observed_by):
+        import uuid
+        provenance_id = f"prov-{uuid.uuid4().hex[:12]}"
+        resource_data = {
+            "resource_id": external_id,
+            "resource_type": r_type,
+            "state": "ACTIVE",
+            "provenance_id": provenance_id,
+            "metadata": {"name": name, "source_revision": source_revision},
+            "registered_at": datetime.now(timezone.utc).isoformat(),
+            "registered_by": observed_by,
+        }
+        resource_file = os.path.join(self.fabric_dir, f"{external_id}.json")
+        with open(resource_file, "w") as f:
+            json.dump(resource_data, f, indent=2)
+        return {"provenance_id": provenance_id}
+
+
+
 @pytest.fixture
 def tool_registry():
     return ToolRegistry()
@@ -58,12 +103,17 @@ def gateway(tool_registry, cap_registry, workspace, fabric_dir):
             preferred_executor=ExecutorType.DETERMINISTIC,
             fallback_executor=None, enabled=True,
         ))
+    # Clients injected via DI — gateway owns the canonical references
+    mock_gh = MockGitHubClient(workspace)
+    mock_fab = MockFabricClient(fabric_dir)
     return MCPGateway(
         tool_registry=tool_registry,
         capability_registry=cap_registry,
         audit_manager=None,
         workspace_path=workspace,
         fabric_data_dir=fabric_dir,
+        github_client=mock_gh,
+        fabric_client=mock_fab,
     )
 
 
@@ -150,14 +200,14 @@ class TestGatewayPipeline:
 
     def test_repository_read_success(self, gateway, workspace):
         req = _make_request("repository.read", "repository.inspect",
-                            {"repo_path": workspace, "file_path": "test.txt"})
+                            {"repo_path": "owner/repo", "file_path": "test.txt"})
         result = gateway.invoke(req)
         assert result.succeeded
         assert result.output_data["content"] == "hello world"
 
     def test_repository_search_success(self, gateway, workspace):
         req = _make_request("repository.search", "repository.search",
-                            {"repo_path": workspace, "pattern": "print"})
+                            {"repo_path": "owner/repo", "pattern": "print"})
         result = gateway.invoke(req)
         assert result.succeeded
         assert result.output_data["count"] >= 1
