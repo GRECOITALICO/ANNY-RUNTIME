@@ -284,8 +284,54 @@ class AdminRouter:
         return github_page(status, error=error, csrf_token=self._get_csrf())
 
     def handle_fabric(self, parsed) -> str:
-        status = FabricStatusDTO(False, None, None, None, None, None).to_dict()
-        return fabric_page(status, self._get_csrf())
+        import os
+        fabric_endpoint = os.environ.get("FABRIC_ENDPOINT", "")
+        
+        if not fabric_endpoint:
+            status = FabricStatusDTO(False, None, None, None, None, None).to_dict()
+            status["fabric_status"] = "NOT_CONFIGURED"
+            return fabric_page(status, self._get_csrf())
+        
+        try:
+            from runtime.adapters.fabric_client import FabricClient
+            client = FabricClient(endpoint=fabric_endpoint)
+            health = client.health()
+            identity = client.identity()
+            
+            resource_count = 0
+            try:
+                resources = client.list_resources()
+                resource_count = len(resources)
+            except Exception:
+                pass
+            
+            status = FabricStatusDTO(
+                connected=True,
+                tenant=identity.get("node_id", "unknown"),
+                anny_instance=identity.get("environment", "unknown"),
+                runtime_registration="REGISTERED",
+                last_heartbeat=health.get("timestamp"),
+                last_reconciliation=None
+            ).to_dict()
+            status["fabric_status"] = "CONNECTED"
+            status["resource_count"] = resource_count
+            status["node_id"] = identity.get("node_id")
+            
+            return fabric_page(status, self._get_csrf())
+            
+        except Exception as e:
+            logger.warning(f"Fabric connection failed: {e}")
+            error_type = type(e).__name__
+            fabric_status = "NETWORK_ERROR"
+            if "AUTH" in str(e).upper():
+                fabric_status = "AUTH_ERROR"
+            elif "TIMEOUT" in str(e).upper():
+                fabric_status = "DEGRADED"
+                
+            status = FabricStatusDTO(False, None, None, None, None, None).to_dict()
+            status["fabric_status"] = fabric_status
+            status["error"] = str(e)
+            return fabric_page(status, self._get_csrf())
 
     def handle_sessions(self, parsed) -> str:
         return sessions_page([], self._get_csrf())
