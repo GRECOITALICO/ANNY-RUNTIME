@@ -474,21 +474,56 @@ def base_layout(title, content, active_path="/", csrf_token=""):
             <div class="version">Administration Panel</div>
         </div>
         <div class="nav-section">
-            <div class="nav-section-label">Overview</div>
+            <div class="nav-section-label">OVERVIEW</div>
             {_nav_link('/', '⬡', 'Dashboard', active_path)}
         </div>
         <div class="nav-section">
-            <div class="nav-section-label">Integrations</div>
-            {_nav_link('/github', '⊙', 'GitHub', active_path)}
-            {_nav_link('/fabric', '◈', 'Fabric', active_path)}
+            <div class="nav-section-label">UNIVERSE</div>
+            {_nav_link('/universe/organization', '❖', 'Organization', active_path)}
+            {_nav_link('/universe/projects', '◫', 'Projects', active_path)}
+            {_nav_link('/universe/repositories', '⊙', 'Repositories', active_path)}
+            {_nav_link('/universe/resources', '◈', 'Resources', active_path)}
+            {_nav_link('/universe/dependencies', '⋈', 'Dependencies', active_path)}
         </div>
         <div class="nav-section">
-            <div class="nav-section-label">Runtime</div>
-            {_nav_link('/models', '⬡', 'Models', active_path)}
-            {_nav_link('/sessions', '◉', 'Sessions', active_path)}
-            {_nav_link('/operations', '▶', 'Operations', active_path)}
-            {_nav_link('/receipts', '☰', 'Receipts', active_path)}
-            {_nav_link('/doctor', '✚', 'Diagnostics', active_path)}
+            <div class="nav-section-label">EXECUTION</div>
+            {_nav_link('/execution/missions', '🎯', 'Missions', active_path)}
+            {_nav_link('/execution/tasks', '✓', 'Tasks', active_path)}
+            {_nav_link('/execution/workers', '⚙', 'Workers', active_path)}
+            {_nav_link('/execution/executions', '▶', 'Executions', active_path)}
+            {_nav_link('/execution/workspaces', '📁', 'Workspaces', active_path)}
+            {_nav_link('/execution/results', '📊', 'Results', active_path)}
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-label">INTELLIGENCE</div>
+            {_nav_link('/intelligence/models', '🧠', 'Models', active_path)}
+            {_nav_link('/intelligence/capabilities', '⚡', 'Capabilities', active_path)}
+            {_nav_link('/intelligence/executors', '🛠', 'Executors', active_path)}
+            {_nav_link('/intelligence/performance', '📈', 'Performance', active_path)}
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-label">INFRASTRUCTURE</div>
+            {_nav_link('/infrastructure/runtime', '🖥', 'Runtime', active_path)}
+            {_nav_link('/infrastructure/github', '🐙', 'GitHub', active_path)}
+            {_nav_link('/infrastructure/fabric', '☁', 'Fabric', active_path)}
+            {_nav_link('/infrastructure/mcp', '🔌', 'MCP', active_path)}
+            {_nav_link('/infrastructure/azure', '🔷', 'Azure', active_path)}
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-label">CONTINUITY</div>
+            {_nav_link('/continuity/state', '⏱', 'Current state', active_path)}
+            {_nav_link('/continuity/mission', '🎯', 'Mission', active_path)}
+            {_nav_link('/continuity/task', '✓', 'Task', active_path)}
+            {_nav_link('/continuity/next', '⏭', 'Next action', active_path)}
+            {_nav_link('/continuity/blockers', '🛑', 'Blockers', active_path)}
+            {_nav_link('/continuity/recovery', '⚕', 'Recovery', active_path)}
+        </div>
+        <div class="nav-section">
+            <div class="nav-section-label">AUDIT</div>
+            {_nav_link('/audit/events', '📋', 'Events', active_path)}
+            {_nav_link('/audit/provenance', '🔍', 'Provenance', active_path)}
+            {_nav_link('/audit/evidence', '🛡', 'Evidence', active_path)}
+            {_nav_link('/audit/changes', '📝', 'Changes', active_path)}
         </div>
         <div class="sidebar-footer">
             <form method="POST" action="/logout" style="display:inline;">
@@ -626,51 +661,73 @@ def ready_page(status, csrf_token=""):
     return base_layout("Dashboard", f"""
         <div class="page-header">
             <h2>ANNY Control Plane</h2>
-            <p>Operational Dashboard & Continuity Status</p>
+            <p>Operational Dashboard & Universe Status</p>
         </div>
 
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
-            <div class="card" style="padding:20px;">
-                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Continuity</div>
-                <div style="font-size:22px; font-weight:700;"><span class="badge {badge_class}">{continuity_status}</span></div>
-                <div style="font-size:12px; color:var(--text-secondary); margin-top:8px;">Source: {cont.get('canonical_source', '—')}</div>
-            </div>
-            <div class="card" style="padding:20px;">
-                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Repository Fabric</div>
-                <div style="font-size:20px; font-weight:700; color:var(--text-muted);"><span class="badge badge-muted">NOT CONFIGURED</span></div>
-                <div style="font-size:12px; color:var(--text-muted); margin-top:8px;">Fabric endpoint unavailable</div>
-            </div>
-            <div class="card" style="padding:20px;">
-                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">GitHub Principal & Org</div>
-                <div style="font-size:18px; font-weight:600; color:var(--accent-indigo);">{gh.get('principal', '—')} / {org_name}</div>
-                <div style="font-size:12px; color:var(--text-secondary); margin-top:8px;">Repos Discovered: {repo_count}</div>
-            </div>
-            <div class="card" style="padding:20px;">
-                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Blockers & Workers</div>
-                <div style="font-size:18px; font-weight:600; color:var(--accent-amber);">Blockers: {blocker_count} | L2 Workers: {l2_count}</div>
-                <div style="font-size:12px; color:var(--text-secondary); margin-top:8px;">Runtime: {cont.get('runtime_status', 'UNKNOWN')}</div>
-            </div>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <!-- INFRASTRUCTURE -->
+            <a href="/infrastructure/runtime" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Runtime</div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge badge-success">{cont.get('runtime_status', 'CONNECTED')}</span></div>
+            </a>
+            <a href="/infrastructure/github" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">GitHub</div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if gh.get('connected') else 'badge-danger' }">{gh.get('auth_status', 'ERROR')}</span></div>
+            </a>
+            <a href="/infrastructure/fabric" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Fabric</div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if status.get('fabric_connected') else 'badge-danger' }">{ 'CONNECTED' if status.get('fabric_connected') else 'ERROR' }</span></div>
+            </a>
+            <a href="/infrastructure/mcp" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">MCP Nodes</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('mcp_count', 0)}</div>
+            </a>
+
+            <!-- UNIVERSE -->
+            <a href="/universe/projects" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Projects</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('project_count', 0)}</div>
+            </a>
+            <a href="/universe/repositories" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Repositories</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{repo_count}</div>
+            </a>
+            <a href="/universe/resources" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Fabric Resources</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-emerald);">{status.get('resource_count', 0)}</div>
+            </a>
+
+            <!-- INTELLIGENCE -->
+            <a href="/intelligence/models" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Models</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('model_count', 0)}</div>
+            </a>
+            <a href="/intelligence/capabilities" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Capabilities</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('capability_count', 0)}</div>
+            </a>
+
+            <!-- EXECUTION -->
+            <a href="/execution/workers" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Workers</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('worker_count', 0)}</div>
+            </a>
+            <a href="/execution/tasks" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Pending Tasks</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('task_count', 0)}</div>
+            </a>
+            <a href="/continuity/blockers" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+                <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Blockers</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-amber);">{blocker_count}</div>
+            </a>
         </div>
 
         <div class="detail-panel" style="margin-bottom: 24px;">
             <h3 style="font-size:15px; margin-bottom:16px; color:var(--accent-indigo);">Canonical State Overview</h3>
             <div class="detail-row"><span class="detail-label">Runtime Identity</span><span class="detail-value">{id_str}</span></div>
-            <div class="detail-row"><span class="detail-label">GitHub</span><span class="detail-value">{gh.get('auth_status', 'CONNECTED')}</span></div>
-            <div class="detail-row"><span class="detail-label">Principal</span><span class="detail-value">{gh.get('principal', '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">GitHub Principal</span><span class="detail-value">{gh.get('principal', '—')}</span></div>
             <div class="detail-row"><span class="detail-label">Organizations</span><span class="detail-value">{org_name}</span></div>
-            <div class="detail-row"><span class="detail-label">Repositories</span><span class="detail-value">{repo_count} discovered</span></div>
-            <div class="detail-row"><span class="detail-label">Operational State</span><span class="detail-value">{cont.get('canonical_source', 'CONNECTED')}</span></div>
             <div class="detail-row"><span class="detail-label">Current Mission</span><span class="detail-value" style="font-weight:600; color:var(--accent-emerald);">{mission}</span></div>
-            <div class="detail-row"><span class="detail-label">Fabric</span><span class="detail-value" style="color:var(--text-muted);">NOT CONFIGURED</span></div>
-        </div>
-
-        <div class="card" style="text-align:center; padding:32px 24px;">
-            <h2 style="color:var(--accent-emerald);margin-bottom:16px;font-weight:700;letter-spacing:1px;font-size:24px;">ANNY: INITIALIZING</h2>
-            <p style="font-size:13px; color:var(--text-secondary); max-width:500px; margin:0 auto 24px;">ANNY Runtime Customer Zero bootstrap complete. Node is listening and ready for authorized mission work.</p>
-            <form method="POST" action="/github/disconnect">
-                <input type="hidden" name="csrf_token" value="{csrf_token}">
-                <button type="submit" class="btn btn-ghost">Disconnect GitHub</button>
-            </form>
         </div>
     """, "/", csrf_token)
 
@@ -1118,3 +1175,192 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
             </table>
         </div>
     """, "/models", csrf_token)
+
+
+# New Templates for Control Plane Universe 001
+
+def _render_empty_state(message="No data available."):
+    return f'<div style="padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px;">{message}</div>'
+
+def universe_organization_page(orgs, csrf_token=""):
+    rows = ""
+    for org in orgs:
+        rows += f'<tr><td>{org.get("login", "—")}</td><td>{org.get("id", "—")}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
+    content = f"""
+        <div class="page-header"><h2>Organization Map</h2><p>Discovered Github Organizations</p></div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Organization</th><th>ID</th><th>State</th></tr></thead>
+                <tbody>{rows if rows else '<tr><td colspan="3" style="text-align:center;">No organizations discovered</td></tr>'}</tbody>
+            </table>
+        </div>
+    """
+    return base_layout("Organization Map", content, "/universe/organization", csrf_token)
+
+def universe_projects_page(projects, csrf_token=""):
+    content = f"""
+        <div class="page-header"><h2>Project Map</h2><p>Logical Groupings</p></div>
+        {_render_empty_state('No projects configured.')}
+    """
+    return base_layout("Project Map", content, "/universe/projects", csrf_token)
+
+def universe_repositories_page(repos, csrf_token=""):
+    rows = ""
+    for r in repos:
+        name = r.get('name', '—')
+        owner = r.get('owner', '—')
+        vis = r.get('visibility', '—')
+        rows += f'<tr><td class="mono">{owner}/{name}</td><td>{vis}</td><td>GitHub</td><td><a href="/universe/resources">View in Fabric</a></td></tr>'
+    content = f"""
+        <div class="page-header"><h2>Repository Map</h2><p>Discovered Code Repositories</p></div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Name</th><th>Visibility</th><th>Provider</th><th>Links</th></tr></thead>
+                <tbody>{rows if rows else '<tr><td colspan="4" style="text-align:center;">No repositories discovered</td></tr>'}</tbody>
+            </table>
+        </div>
+    """
+    return base_layout("Repository Map", content, "/universe/repositories", csrf_token)
+
+def universe_resources_page(resources, csrf_token=""):
+    rows = ""
+    for res in resources:
+        res_id = getattr(res, 'resource_id', res.get('resource_id', '—') if isinstance(res, dict) else '—')
+        prov_id = getattr(res, 'provenance_id', res.get('provenance_id', '—') if isinstance(res, dict) else '—')
+        state = getattr(res, 'state', res.get('state', 'UNKNOWN') if isinstance(res, dict) else 'UNKNOWN')
+        badge = 'badge-success' if state == 'ACTIVE' else 'badge-muted'
+        rows += f'<tr><td class="mono">{res_id}</td><td><span class="badge {badge}">{state}</span></td><td><a href="/audit/provenance?id={prov_id}" class="mono">{prov_id}</a></td></tr>'
+    
+    content = f"""
+        <div class="page-header"><h2>Fabric Resources</h2><p>Canonical domain entities registered in Fabric</p></div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Resource ID</th><th>State</th><th>Provenance ID</th></tr></thead>
+                <tbody>{rows if rows else '<tr><td colspan="3" style="text-align:center;">No Fabric resources registered.</td></tr>'}</tbody>
+            </table>
+        </div>
+    """
+    return base_layout("Fabric Resources", content, "/universe/resources", csrf_token)
+
+def execution_tasks_page(tasks, csrf_token=""):
+    rows = ""
+    for t_id, task in tasks.items():
+        rows += f'<tr><td class="mono">{t_id}</td><td>{task.capability_id}</td><td><span class="badge badge-info">QUEUED</span></td></tr>'
+    content = f"""
+        <div class="page-header"><h2>Pending Tasks</h2><p>Tasks waiting for execution</p></div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Task ID</th><th>Capability</th><th>Status</th></tr></thead>
+                <tbody>{rows if rows else '<tr><td colspan="3" style="text-align:center;">No pending tasks.</td></tr>'}</tbody>
+            </table>
+        </div>
+    """
+    return base_layout("Pending Tasks", content, "/execution/tasks", csrf_token)
+
+def execution_workers_page(workers, csrf_token=""):
+    rows = ""
+    for w_id, worker in workers.items():
+        state = worker.state.value if hasattr(worker.state, 'value') else str(worker.state)
+        badge = 'badge-success' if state == 'SUCCEEDED' else ('badge-info' if state == 'RUNNING' else 'badge-muted')
+        rows += f'<tr><td class="mono">{w_id}</td><td>{worker.capability_id}</td><td>{worker.model_id}</td><td><span class="badge {badge}">{state}</span></td></tr>'
+    content = f"""
+        <div class="page-header"><h2>Worker Topology</h2><p>Active and historical workers</p></div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Worker ID</th><th>Capability</th><th>Model</th><th>State</th></tr></thead>
+                <tbody>{rows if rows else '<tr><td colspan="4" style="text-align:center;">No workers present.</td></tr>'}</tbody>
+            </table>
+        </div>
+    """
+    return base_layout("Worker Topology", content, "/execution/workers", csrf_token)
+
+def intelligence_capabilities_page(caps, bindings, csrf_token=""):
+    rows = ""
+    for cap in caps:
+        c_id = cap.capability_id
+        # Find preferred model
+        pref_model = "—"
+        for b in bindings:
+            if b.capability_id == c_id and b.preferred:
+                pref_model = b.model_id
+                break
+        rows += f'<tr><td class="mono">{c_id}</td><td>{cap.name}</td><td class="mono">{pref_model}</td></tr>'
+    
+    content = f"""
+        <div class="page-header"><h2>Capability Map</h2><p>Registered capabilities and preferred models</p></div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Capability ID</th><th>Name</th><th>Preferred Model</th></tr></thead>
+                <tbody>{rows if rows else '<tr><td colspan="3" style="text-align:center;">No capabilities found.</td></tr>'}</tbody>
+            </table>
+        </div>
+    """
+    return base_layout("Capabilities", content, "/intelligence/capabilities", csrf_token)
+
+def infrastructure_topology_page(gh_status, fabric_status, mcp_status, csrf_token=""):
+    gh_badge = 'badge-success' if gh_status else 'badge-danger'
+    fab_badge = 'badge-success' if fabric_status else 'badge-danger'
+    content = f"""
+        <div class="page-header"><h2>Infrastructure Topology</h2><p>System boundaries</p></div>
+        <div style="font-family: var(--font-mono); font-size: 14px; background: var(--bg-secondary); padding: 24px; border-radius: var(--radius-md); text-align:center; line-height:2;">
+            <div>[ GitHub <span class="badge {gh_badge}">{"UP" if gh_status else "DOWN"}</span> ]</div>
+            <div>│</div>
+            <div>▼</div>
+            <div>[ ANNY-RUNTIME <span class="badge badge-success">UP</span> ]</div>
+            <div>│</div>
+            <div style="display:flex; justify-content:center; gap: 40px;">
+                <div>▼<br>[ MCP <span class="badge badge-muted">0 Nodes</span> ]</div>
+                <div>▼<br>[ Workers ]</div>
+                <div>▼<br>[ Fabric <span class="badge {fab_badge}">{"UP" if fabric_status else "DOWN"}</span> ]</div>
+            </div>
+            <div style="display:flex; justify-content:center; gap: 40px;">
+                <div>▼<br>[ Tools ]</div>
+                <div>▼<br>[ Models ]</div>
+                <div>▼<br>[ Azure ]</div>
+            </div>
+        </div>
+    """
+    return base_layout("Infrastructure Topology", content, "/infrastructure/runtime", csrf_token)
+
+def audit_events_page(events, csrf_token=""):
+    rows = ""
+    for ev in events:
+        # Event fields: id, timestamp, level, category, module, event_type, status, message, data, instance_id, runtime_id
+        timestamp = ev[1]
+        cat = ev[3]
+        mod = ev[4]
+        typ = ev[5]
+        status = ev[6]
+        msg = ev[7]
+        badge = 'badge-success' if status == 'SUCCESS' else ('badge-danger' if status == 'ERROR' else 'badge-info')
+        rows += f'<tr><td>{timestamp}</td><td>{mod}</td><td>{typ}</td><td><span class="badge {badge}">{status}</span></td><td class="mono">{msg}</td></tr>'
+        
+    content = f"""
+        <div class="page-header"><h2>Audit Events</h2><p>Chronological system logs</p></div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Time</th><th>Module</th><th>Type</th><th>Status</th><th>Message</th></tr></thead>
+                <tbody>{rows if rows else '<tr><td colspan="5" style="text-align:center;">No events.</td></tr>'}</tbody>
+            </table>
+        </div>
+    """
+    return base_layout("Audit Events", content, "/audit/events", csrf_token)
+
+def audit_provenance_page(prov_data, csrf_token=""):
+    content = f"""
+        <div class="page-header"><h2>Provenance & Evidence</h2><p>Cryptographic traces</p></div>
+        <pre style="background:var(--bg-secondary); padding: 16px; border-radius: var(--radius-sm); font-size:12px;">{prov_data if prov_data else 'No provenance data selected or available.'}</pre>
+    """
+    return base_layout("Provenance", content, "/audit/provenance", csrf_token)
+
+def search_page(query, csrf_token=""):
+    content = f"""
+        <div class="page-header"><h2>Global Search</h2><p>Results for: {query}</p></div>
+        {_render_empty_state('Search returned 0 results. Indexing is lazy.')}
+    """
+    return base_layout("Search", content, "/search", csrf_token)
+
+def generic_placeholder_page(title, path, csrf_token=""):
+    return base_layout(title, f'<div class="page-header"><h2>{title}</h2></div>{_render_empty_state("No instances found.")}', path, csrf_token)
+
+

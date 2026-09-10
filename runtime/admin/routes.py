@@ -9,7 +9,11 @@ from runtime.admin.templates import (
     first_run_page, reconnect_page, failure_page, ready_page, github_page, fabric_page,
     sessions_page, operations_page, receipts_page, doctor_page, executions_page,
     capabilities_page, executors_page, policies_page, workers_page, worker_detail_page,
-    models_page, model_detail_page
+    models_page, model_detail_page,
+    universe_organization_page, universe_projects_page, universe_repositories_page,
+    universe_resources_page, execution_tasks_page, execution_workers_page,
+    intelligence_capabilities_page, infrastructure_topology_page, audit_events_page,
+    audit_provenance_page, search_page, generic_placeholder_page
 )
 from runtime.admin.dto import (
     RuntimeStatusDTO, GitHubStatusDTO, FabricStatusDTO,
@@ -45,6 +49,24 @@ class AdminRouter:
             '/executors': self.handle_executors,
             '/policies': self.handle_policies,
             '/doctor': self.handle_doctor,
+            '/universe/organization': self.handle_universe_organization,
+            '/universe/projects': self.handle_universe_projects,
+            '/universe/repositories': self.handle_universe_repositories,
+            '/universe/resources': self.handle_universe_resources,
+            '/execution/missions': self.handle_execution_missions,
+            '/execution/tasks': self.handle_execution_tasks,
+            '/execution/workers': self.handle_execution_workers,
+            '/execution/executions': self.handle_execution_executions,
+            '/execution/workspaces': self.handle_execution_workspaces,
+            '/intelligence/capabilities': self.handle_intelligence_capabilities,
+            '/intelligence/executors': self.handle_intelligence_executors,
+            '/intelligence/performance': self.handle_intelligence_performance,
+            '/infrastructure/runtime': self.handle_infrastructure_topology,
+            '/continuity/timeline': self.handle_continuity_timeline,
+            '/audit/events': self.handle_audit_events,
+            '/audit/provenance': self.handle_audit_provenance,
+            '/audit/evidence': self.handle_audit_evidence,
+            '/search': self.handle_search,
             '/api/v1/continuity/bootstrap': self.handle_bootstrap_api,
         }
         self._post_routes = {
@@ -150,6 +172,19 @@ class AdminRouter:
             error_class = type(e).__name__
             safe_msg = f"Bootstrap API error: {error_class}"
             self._send_json(handler, {"error": safe_msg, "status": "ERROR"}, status=500)
+
+    def _get_fabric_client(self):
+        gh_mgr = self.context.get('github_manager')
+        secret_backend = self.context.get('secret_backend')
+        if not gh_mgr or not gh_mgr.has_token():
+            return None
+        try:
+            from runtime.github.client import GitHubClient
+            from runtime.fabric.client import FabricClient
+            gh_client = GitHubClient(secret_backend=secret_backend)
+            return FabricClient(github_client=gh_client)
+        except Exception:
+            return None
 
     def _get_continuity_dto(self) -> ContinuityDTO:
         gh_mgr = self.context.get('github_manager')
@@ -259,9 +294,37 @@ class AdminRouter:
             else:
                 id_status = "UNKNOWN"
             
+            # --- Universe Overview Counts ---
+            exec_mgr = self.context.get('execution_manager')
+            model_count = len(exec_mgr.model_registry.models) if exec_mgr else 0
+            capability_count = len(exec_mgr.registry.capabilities) if exec_mgr else 0
+            worker_count = len(exec_mgr.worker_manager.workers) if exec_mgr else 0
+            task_count = len(exec_mgr._tasks) if exec_mgr else 0
+            
+            # Provide an instance method to get fabric client or default to None
+            fabric_connected = False
+            resource_count = 0
+            if hasattr(self, '_get_fabric_client'):
+                fabric_client = self._get_fabric_client()
+                if fabric_client:
+                    try:
+                        resources = fabric_client.list_resources()
+                        resource_count = len(resources)
+                        fabric_connected = True
+                    except Exception:
+                        pass
+            
             status_data = {
                 'github': gh_status,
                 'continuity': continuity_dto.to_dict(),
+                'fabric_connected': fabric_connected,
+                'resource_count': resource_count,
+                'model_count': model_count,
+                'capability_count': capability_count,
+                'worker_count': worker_count,
+                'task_count': task_count,
+                'project_count': 0, # To be implemented via org discovery / metadata
+                'mcp_count': 0, # To be implemented via MCP integration
                 'identity': {
                     'runtime_id': runtime_id,
                     'status': id_status,
@@ -507,3 +570,147 @@ class AdminRouter:
         audit_mgr = self.context.get('audit_manager')
         if session and audit_mgr:
             audit_mgr.record(session.admin_session_id, action, session.principal, result, details)
+
+    def handle_universe_organization(self, parsed) -> str:
+        gh_mgr = self.context.get('github_manager')
+        orgs = []
+        if gh_mgr and gh_mgr.has_token():
+            try:
+                from runtime.github.client import GitHubClient
+                secret_backend = self.context.get('secret_backend')
+                gh_client = GitHubClient(secret_backend=secret_backend)
+                from runtime.github.discovery import OrganizationDiscoveryService
+                disc = OrganizationDiscoveryService(gh_client)
+                
+                # Fetch principal first to use as default org
+                status = gh_mgr.get_status().to_dict()
+                principal = status.get('principal')
+                if principal:
+                    orgs.append({"login": principal, "id": "user", "type": "User"})
+                    
+                # Fetch real orgs
+                try:
+                    gh_orgs = gh_client.get("/user/orgs").json()
+                    if isinstance(gh_orgs, list):
+                        orgs.extend(gh_orgs)
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(f"Org discovery error: {e}")
+        return universe_organization_page(orgs, self._get_csrf())
+
+    def handle_universe_projects(self, parsed) -> str:
+        return universe_projects_page([], self._get_csrf())
+
+    def handle_universe_repositories(self, parsed) -> str:
+        repos = []
+        try:
+            snapshot = self.context.get('bootstrap_snapshot')
+            if snapshot and 'discovered_repos' in snapshot:
+                for r in snapshot['discovered_repos']:
+                    repos.append({"name": r.name, "owner": r.owner, "visibility": r.visibility.value})
+        except Exception:
+            pass
+        return universe_repositories_page(repos, self._get_csrf())
+
+    def handle_universe_resources(self, parsed) -> str:
+        resources = []
+        if hasattr(self, '_get_fabric_client'):
+            fc = self._get_fabric_client()
+            if fc:
+                try:
+                    resources = fc.list_resources()
+                except Exception:
+                    pass
+        return universe_resources_page(resources, self._get_csrf())
+
+    def handle_execution_missions(self, parsed) -> str:
+        return generic_placeholder_page("Missions", "/execution/missions", self._get_csrf())
+
+    def handle_execution_tasks(self, parsed) -> str:
+        tasks = {}
+        exec_mgr = self.context.get('execution_manager')
+        if exec_mgr:
+            tasks = exec_mgr._tasks
+        return execution_tasks_page(tasks, self._get_csrf())
+
+    def handle_execution_workers(self, parsed) -> str:
+        workers = {}
+        exec_mgr = self.context.get('execution_manager')
+        if exec_mgr:
+            workers = exec_mgr.worker_manager.workers
+        return execution_workers_page(workers, self._get_csrf())
+
+    def handle_execution_executions(self, parsed) -> str:
+        return generic_placeholder_page("Executions", "/execution/executions", self._get_csrf())
+
+    def handle_execution_workspaces(self, parsed) -> str:
+        return generic_placeholder_page("Workspaces", "/execution/workspaces", self._get_csrf())
+
+    def handle_intelligence_capabilities(self, parsed) -> str:
+        caps = []
+        bindings = []
+        exec_mgr = self.context.get('execution_manager')
+        if exec_mgr:
+            caps = list(exec_mgr.registry.capabilities.values())
+            for c in caps:
+                bindings.extend(c.model_bindings)
+        return intelligence_capabilities_page(caps, bindings, self._get_csrf())
+
+    def handle_intelligence_executors(self, parsed) -> str:
+        return generic_placeholder_page("Executors", "/intelligence/executors", self._get_csrf())
+
+    def handle_intelligence_performance(self, parsed) -> str:
+        return generic_placeholder_page("Performance", "/intelligence/performance", self._get_csrf())
+
+    def handle_infrastructure_topology(self, parsed) -> str:
+        gh_mgr = self.context.get('github_manager')
+        gh_up = gh_mgr.get_status().connected if gh_mgr else False
+        
+        fab_up = False
+        if hasattr(self, '_get_fabric_client'):
+            fc = self._get_fabric_client()
+            if fc:
+                try:
+                    fc.list_resources()
+                    fab_up = True
+                except Exception:
+                    pass
+        return infrastructure_topology_page(gh_up, fab_up, False, self._get_csrf())
+
+    def handle_continuity_timeline(self, parsed) -> str:
+        return generic_placeholder_page("Continuity Timeline", "/continuity/timeline", self._get_csrf())
+
+    def handle_audit_events(self, parsed) -> str:
+        events = []
+        audit_mgr = self.context.get('audit_manager')
+        if audit_mgr and hasattr(audit_mgr, 'get_events'):
+            try:
+                events = audit_mgr.get_events(limit=50)
+            except Exception:
+                pass
+        return audit_events_page(events, self._get_csrf())
+
+    def handle_audit_provenance(self, parsed) -> str:
+        prov_data = ""
+        query_params = urllib.parse.parse_qs(parsed.query)
+        p_id = query_params.get('id', [''])[0]
+        if p_id and hasattr(self, '_get_fabric_client'):
+            fc = self._get_fabric_client()
+            if fc:
+                try:
+                    import json
+                    data = fc.get_provenance(p_id)
+                    prov_data = json.dumps(data, indent=2)
+                except Exception:
+                    prov_data = "Failed to load provenance data."
+        return audit_provenance_page(prov_data, self._get_csrf())
+
+    def handle_audit_evidence(self, parsed) -> str:
+        return generic_placeholder_page("Evidence", "/audit/evidence", self._get_csrf())
+
+    def handle_search(self, parsed) -> str:
+        query_params = urllib.parse.parse_qs(parsed.query)
+        q = query_params.get('q', [''])[0]
+        return search_page(q, self._get_csrf())
+
