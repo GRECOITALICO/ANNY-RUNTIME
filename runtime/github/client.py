@@ -160,3 +160,10 @@ class GitHubClient:
             return res
         else:
             raise GitHubClientError(f"Unexpected response format for file {path}")
+
+    def search_code(self, repo: str, query: str) -> Dict[str, Any]:
+        """Search code in a repository."""
+        q = f"repo:{repo} {query}"
+        endpoint = "/search/code"
+        params = {'q': q}
+        return self._request(endpoint, query_params=params)

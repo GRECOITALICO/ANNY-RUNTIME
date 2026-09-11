@@ -28,6 +28,9 @@ class MockGitHubClient:
     def _request(self, endpoint, query_params=None):
         return {"items": [{"path": "code.py"}]}
 
+    def search_code(self, repo: str, query: str):
+        return {"items": [{"path": "code.py"}]}
+
 
 class MockFabricClient:
     def __init__(self, fabric_dir):

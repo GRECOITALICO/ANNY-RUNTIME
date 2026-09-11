@@ -96,8 +96,7 @@ def repository_search(input_data: Dict[str, Any], context: Dict[str, Any]) -> Di
 
     try:
         # Use canonical GitHubClient search API
-        q = f"{pattern} repo:{owner}/{repo}"
-        res = github_client._request("/search/code", query_params={"q": q})
+        res = github_client.search_code(f"{owner}/{repo}", pattern)
         items = res.get("items", [])
         matches = [item["path"] for item in items]
     except Exception as e:

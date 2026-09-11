@@ -12,6 +12,12 @@ from runtime.execution.registry import ModelRegistry
 from runtime.workspace.ephemeral import EphemeralWorkspaceManager
 from runtime.execution.qwen_executor import QwenModelExecutor
 
+try:
+    from huggingface_hub import hf_hub_download
+    path = hf_hub_download(repo_id="Qwen/Qwen2.5-0.5B-Instruct-GGUF", filename="qwen2.5-0.5b-instruct-q4_k_m.gguf")
+    os.environ["QWEN_MODEL_PATH"] = path
+except Exception:
+    pass
 
 def _make_task(task_id, text, constraints=None):
     """Helper to create a Task with all required fields."""

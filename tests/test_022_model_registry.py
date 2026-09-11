@@ -27,7 +27,7 @@ def test_02_duplicate_rejection(clean_registry):
             model_id="qwen3-8b", display_name="", provider="", executor_type="", version="",
             status=ModelState.AVAILABLE, capabilities_supported=[], capabilities_forbidden=[],
             hardware_requirements={}, memory_requirements={}, context_window=0, quantization="",
-            artifact_uri="", runtime_interface="", max_concurrency=0, max_runtime=0,
+            artifact_uri="", artifact_sha256="", runtime_interface="", max_concurrency=0, max_runtime=0,
             max_input_size=0, max_output_size=0, network_policy="", evidence_policy=""
         ))
 

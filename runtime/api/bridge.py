@@ -35,7 +35,6 @@ ALLOWED_CAPABILITIES = frozenset({
     "fabric.read",
     "repository.read",
     "repository.search",
-    "filesystem.inspect",
     "fabric.register",
 })
 
@@ -296,11 +295,7 @@ class BridgeRouter:
         try:
             journal = OperationJournal(str(get_data_dir()))
             # Search all entries for this execution_id, return latest state
-            matched = []
-            with journal._lock:
-                for e in journal._entries:
-                    if e.execution_id == exec_id:
-                        matched.append(e)
+            matched = journal.get_execution(exec_id)
 
             if not matched:
                 self._send_error(handler, ERROR_RESULT_UNAVAIL,

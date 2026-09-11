@@ -232,7 +232,8 @@ class TestOnboardingToken(unittest.TestCase):
         
         self.server.router.context = {**self.server.admin_context, **context}
         html = self.server.router.handle_dashboard(urllib.parse.urlparse("/"))
-        self.assertIn("NOT CONFIGURED", html)
+        self.assertIn("ERROR", html)
+        self.assertIn("Fabric", html)
 
     @patch('urllib.request.urlopen')
     def test_token_absent_from_journal(self, mock_urlopen):

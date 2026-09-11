@@ -62,6 +62,10 @@ class OperationJournal:
         with self._lock:
             return [e for e in self._entries if e.operation_id == operation_id]
 
+    def get_execution(self, execution_id: str) -> List[JournalEntry]:
+        with self._lock:
+            return [e for e in self._entries if e.execution_id == execution_id]
+
     def get_interrupted(self, generation: int) -> List[JournalEntry]:
         with self._lock:
             interrupted = []
