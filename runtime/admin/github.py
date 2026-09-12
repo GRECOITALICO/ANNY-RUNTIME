@@ -1,7 +1,7 @@
 """GitHub authorization manager.
 
-Customer Zero onboarding method: GitHub Access Token (paste-based).
-Optional future auth method: Device Flow (RFC 8628).
+Primary onboarding method: GitHub Device Flow (RFC 8628).
+Recovery/migration method: GitHub Access Token (manual).
 
 Token values are stored via SecretBackend and NEVER returned to the browser.
 Only status information (connected, principal, scopes) is exposed through DTOs."""
@@ -14,6 +14,8 @@ import urllib.error
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
+from runtime.telemetry.telemetry import TelemetryEnvelope
+from runtime.telemetry.context import TraceContext
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +52,8 @@ class GitHubCredentialState:
 class GitHubAuthManager:
     """Manages GitHub authorization.
 
-    Current Customer Zero onboarding: GitHub Access Token (paste-based).
-    Optional future method: Device Flow (RFC 8628).
+    Primary onboarding method: GitHub Device Flow (RFC 8628).
+    Recovery/migration method: GitHub Access Token (manual).
 
     Token values are stored via SecretBackend and NEVER returned to the browser.
     Only status information (connected, principal, scopes) is exposed.
@@ -60,9 +62,10 @@ class GitHubAuthManager:
     GITHUB_TOKEN_REF = "github-access-token"
     GITHUB_STATE_REF = "github-state"
 
-    def __init__(self, secret_backend, client_id: str = ""):
+    def __init__(self, secret_backend, client_id: str = "", telemetry_collector=None):
         self.secret_backend = secret_backend
         self.client_id = client_id
+        self.telemetry_collector = telemetry_collector
         self.state = GitHubCredentialState()
         self._device_flow: Optional[GitHubDeviceFlowState] = None
         self._load_state()
@@ -100,8 +103,8 @@ class GitHubAuthManager:
             last_failure_reason=self.state.last_failure_reason
         )
 
-    def initiate_device_flow(self) -> Optional[Dict[str, str]]:
-        """Start the GitHub Device Flow. Returns user_code and verification_uri."""
+    def initiate_device_flow(self) -> Optional[GitHubDeviceFlowState]:
+        """Start the GitHub Device Flow. Returns GitHubDeviceFlowState or None."""
         if not self.client_id:
             logger.warning("GitHub client_id not configured")
             return None
@@ -124,11 +127,7 @@ class GitHubAuthManager:
                 expires_in=result.get('expires_in', 900),
                 interval=result.get('interval', 5)
             )
-            return {
-                'user_code': result['user_code'],
-                'verification_uri': result['verification_uri'],
-                'expires_in': str(result.get('expires_in', 900))
-            }
+            return self._device_flow
         except Exception as e:
             logger.error(f"Failed to initiate device flow: {e}")
             self.state.last_failure = datetime.now(timezone.utc).isoformat()
@@ -136,14 +135,14 @@ class GitHubAuthManager:
             self._save_state()
             return None
 
-    def poll_device_flow(self) -> Optional[str]:
-        """Poll GitHub for device flow completion. Returns status string."""
+    def poll_device_flow(self) -> dict:
+        """Poll GitHub for device flow completion. Returns dict with 'status' key."""
         if not self._device_flow:
-            return "NO_ACTIVE_FLOW"
+            return {'status': 'NO_ACTIVE_FLOW'}
         elapsed = time.time() - self._device_flow.started_at
         if elapsed > self._device_flow.expires_in:
             self._device_flow = None
-            return "EXPIRED"
+            return {'status': 'EXPIRED'}
         try:
             data = urllib.parse.urlencode({
                 'client_id': self.client_id,
@@ -154,8 +153,34 @@ class GitHubAuthManager:
                 GITHUB_ACCESS_TOKEN_URL, data=data,
                 headers={'Accept': 'application/json'}
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                result = json.loads(resp.read().decode('utf-8'))
+            if self.telemetry_collector:
+                self.telemetry_collector.emit(TelemetryEnvelope.create(
+                    component="github_auth",
+                    event_type="github.request.started",
+                    metadata={"operation": "poll_device_flow"}
+                ))
+            start_time = time.time()
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    result = json.loads(resp.read().decode('utf-8'))
+                duration = int((time.time() - start_time) * 1000)
+                if self.telemetry_collector:
+                    self.telemetry_collector.emit(TelemetryEnvelope.create(
+                        component="github_auth",
+                        event_type="github.request.completed",
+                        duration_ms=duration,
+                        metadata={"operation": "poll_device_flow", "status_code": resp.getcode()}
+                    ))
+            except Exception as e:
+                duration = int((time.time() - start_time) * 1000)
+                if self.telemetry_collector:
+                    self.telemetry_collector.emit(TelemetryEnvelope.create(
+                        component="github_auth",
+                        event_type="github.request.failed",
+                        duration_ms=duration,
+                        metadata={"operation": "poll_device_flow", "error": type(e).__name__}
+                    ))
+                raise e
 
             if 'access_token' in result:
                 token = result['access_token']
@@ -163,26 +188,26 @@ class GitHubAuthManager:
                     self.GITHUB_TOKEN_REF, token.encode('utf-8'))
                 self._device_flow = None
                 self.validate()
-                return "AUTHORIZED"
+                return {'status': 'AUTHORIZED'}
 
             error = result.get('error', 'unknown')
             if error == 'authorization_pending':
-                return "PENDING"
+                return {'status': 'PENDING'}
             elif error == 'slow_down':
                 if self._device_flow:
                     self._device_flow.interval += 5
-                return "SLOW_DOWN"
+                return {'status': 'SLOW_DOWN'}
             elif error == 'expired_token':
                 self._device_flow = None
-                return "EXPIRED"
+                return {'status': 'EXPIRED'}
             elif error == 'access_denied':
                 self._device_flow = None
-                return "DENIED"
+                return {'status': 'DENIED'}
             else:
-                return f"ERROR:{error}"
+                return {'status': 'ERROR', 'error': error}
         except Exception as e:
             logger.error(f"Device flow poll failed: {e}")
-            return f"ERROR:{e}"
+            return {'status': 'ERROR', 'error': str(e)}
 
     def validate(self) -> bool:
         """Validate the current GitHub token by calling the GitHub API."""
@@ -204,9 +229,35 @@ class GitHubAuthManager:
                     'Accept': 'application/vnd.github.v3+json'
                 }
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                user_data = json.loads(resp.read().decode('utf-8'))
-                scopes_header = resp.headers.get('X-OAuth-Scopes', '')
+            if self.telemetry_collector:
+                self.telemetry_collector.emit(TelemetryEnvelope.create(
+                    component="github_auth",
+                    event_type="github.request.started",
+                    metadata={"operation": "validate"}
+                ))
+            start_time = time.time()
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    user_data = json.loads(resp.read().decode('utf-8'))
+                    scopes_header = resp.headers.get('X-OAuth-Scopes', '')
+                duration = int((time.time() - start_time) * 1000)
+                if self.telemetry_collector:
+                    self.telemetry_collector.emit(TelemetryEnvelope.create(
+                        component="github_auth",
+                        event_type="github.request.completed",
+                        duration_ms=duration,
+                        metadata={"operation": "validate", "status_code": resp.getcode()}
+                    ))
+            except Exception as e:
+                duration = int((time.time() - start_time) * 1000)
+                if self.telemetry_collector:
+                    self.telemetry_collector.emit(TelemetryEnvelope.create(
+                        component="github_auth",
+                        event_type="github.request.failed",
+                        duration_ms=duration,
+                        metadata={"operation": "validate", "error": type(e).__name__}
+                    ))
+                raise e
 
             self.state.principal = user_data.get('login', 'unknown')
             self.state.auth_status = "AUTHORIZED"
@@ -248,7 +299,7 @@ class GitHubAuthManager:
         return self.secret_backend.exists(self.GITHUB_TOKEN_REF)
 
     def store_and_validate_token(self, token: str) -> dict:
-        """Store a user-supplied GitHub Access Token and validate it.
+        """Store a GitHub token (recovery/migration) and validate it.
         
         Returns a dict with:
           - success: bool
@@ -264,15 +315,42 @@ class GitHubAuthManager:
                     'Accept': 'application/vnd.github.v3+json'
                 }
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                user_data = json.loads(resp.read().decode('utf-8'))
-                scopes_header = resp.headers.get('X-OAuth-Scopes', '')
+            if self.telemetry_collector:
+                self.telemetry_collector.emit(TelemetryEnvelope.create(
+                    component="github_auth",
+                    event_type="github.request.started",
+                    metadata={"operation": "store_and_validate_token"}
+                ))
+            start_time = time.time()
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    user_data = json.loads(resp.read().decode('utf-8'))
+                    scopes_header = resp.headers.get('X-OAuth-Scopes', '')
+                duration = int((time.time() - start_time) * 1000)
+                if self.telemetry_collector:
+                    self.telemetry_collector.emit(TelemetryEnvelope.create(
+                        component="github_auth",
+                        event_type="github.request.completed",
+                        duration_ms=duration,
+                        metadata={"operation": "store_and_validate_token", "status_code": resp.getcode()}
+                    ))
+            except Exception as e:
+                duration = int((time.time() - start_time) * 1000)
+                if self.telemetry_collector:
+                    self.telemetry_collector.emit(TelemetryEnvelope.create(
+                        component="github_auth",
+                        event_type="github.request.failed",
+                        duration_ms=duration,
+                        metadata={"operation": "store_and_validate_token", "error": type(e).__name__}
+                    ))
+                raise e
 
             principal = user_data.get('login', 'unknown')
             scopes = [s.strip() for s in scopes_header.split(',') if s.strip()]
             
             if 'repo' not in scopes or 'read:org' not in scopes:
-                return {'success': False, 'principal': None, 'scopes': scopes, 'error': 'GITHUB_AUTHORIZATION_INSUFFICIENT'}
+                missing = [s for s in ('repo', 'read:org') if s not in scopes]
+                return {'success': False, 'principal': principal, 'scopes': scopes, 'error': f'Missing required scopes: {", ".join(missing)}'}
             
             self.secret_backend.store(self.GITHUB_TOKEN_REF, token.encode('utf-8'))
             self.state.principal = principal

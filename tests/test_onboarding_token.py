@@ -21,22 +21,15 @@ class TestOnboardingToken(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.data_dir)
 
-    def test_first_run_shows_only_github_token_input(self):
+    def test_first_run_shows_device_flow_button(self):
         context = {}
         self.server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context)
         self.server.router.context = {**self.server.admin_context, **context}
         html = self.server.router.handle_dashboard(urllib.parse.urlparse("/"))
-        self.assertIn('name="github_token"', html)
-        self.assertIn('type="password"', html)
-        self.assertNotIn('bootstrap_token', html)
-
-    def test_no_device_flow_ui(self):
-        context = {}
-        self.server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context)
-        self.server.router.context = {**self.server.admin_context, **context}
-        html = self.server.router.handle_dashboard(urllib.parse.urlparse("/"))
-        self.assertNotIn('>Device Flow<', html)
-        self.assertNotIn('name="device_code"', html)
+        self.assertIn('CONNECT GITHUB', html)
+        self.assertIn('action="/github/device/init"', html)
+        self.assertNotIn('name="github_token"', html)
+        self.assertNotIn('type="password"', html)
 
     @patch('urllib.request.urlopen')
     def test_valid_github_token_succeeds(self, mock_urlopen):
@@ -76,7 +69,7 @@ class TestOnboardingToken(unittest.TestCase):
 
         result = self.gh_mgr.store_and_validate_token("ghp_valid_token")
         self.assertFalse(result['success'])
-        self.assertIn("GITHUB_AUTHORIZATION_INSUFFICIENT", result['error'])
+        self.assertIn("Missing required scopes", result['error'])
 
     @patch('urllib.request.urlopen')
     def test_token_stored_only_in_secret_backend(self, mock_urlopen):

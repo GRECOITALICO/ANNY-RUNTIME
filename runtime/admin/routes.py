@@ -13,7 +13,8 @@ from runtime.admin.templates import (
     universe_organization_page, universe_projects_page, universe_repositories_page,
     universe_resources_page, execution_tasks_page, execution_workers_page,
     intelligence_capabilities_page, infrastructure_topology_page, audit_events_page,
-    audit_provenance_page, search_page, generic_placeholder_page
+    audit_provenance_page, search_page, generic_placeholder_page,
+    telemetry_live_page, telemetry_timeline_page
 )
 from runtime.admin.dto import (
     RuntimeStatusDTO, GitHubStatusDTO, FabricStatusDTO,
@@ -38,6 +39,7 @@ class AdminRouter:
         self._get_routes = {
             '/': self.handle_dashboard,
             '/github': self.handle_github,
+            '/github/device/poll': self.handle_github_device_poll,
             '/fabric': self.handle_fabric,
             '/sessions': self.handle_sessions,
             '/operations': self.handle_operations,
@@ -68,10 +70,14 @@ class AdminRouter:
             '/audit/evidence': self.handle_audit_evidence,
             '/search': self.handle_search,
             '/api/v1/continuity/bootstrap': self.handle_bootstrap_api,
+            '/telemetry/live': self.handle_telemetry_live,
+            '/telemetry/timeline': self.handle_telemetry_timeline,
+            '/browser': self.handle_browser_dashboard,
         }
         self._post_routes = {
             '/logout': self.handle_logout,
             '/github/token': self.handle_github_token,
+            '/github/device/init': self.handle_github_device_init,
             '/github/disconnect': self.handle_github_disconnect,
             '/admin/restart': self.handle_admin_restart,
             '/admin/diagnostics': self.handle_admin_diagnostics,
@@ -96,6 +102,12 @@ class AdminRouter:
             self.handle_bootstrap_api(handler)
             return
 
+        if parsed.path == '/api/v1/telemetry/stream':
+            from runtime.telemetry.stream import handle_telemetry_stream
+            telemetry_collector = self.context.get('telemetry_collector')
+            handle_telemetry_stream(handler, telemetry_collector)
+            return
+
         if parsed.path.startswith('/workers/'):
             self.handle_worker_detail(parsed, handler)
             return
@@ -104,14 +116,24 @@ class AdminRouter:
             self.handle_model_detail(parsed, handler)
             return
 
+        if parsed.path.startswith('/browser/'):
+            self.handle_browser_session_detail(parsed, handler)
+            return
+
         route_handler = self._get_routes.get(parsed.path)
         if not route_handler:
             self._send_html(handler, "404 Not Found", status=404)
             return
             
         try:
-            html = route_handler(parsed)
-            self._send_html(handler, html)
+            result = route_handler(parsed)
+            # Check if handler set a JSON response
+            json_resp = self.context.get('direct_json_response')
+            if json_resp is not None:
+                self._send_json(handler, json_resp)
+                del self.context['direct_json_response']
+            else:
+                self._send_html(handler, result)
         except Exception as e:
             logger.error(f"Error handling GET {path}: {e}", exc_info=True)
             self._send_html(handler, "500 Internal Server Error", status=500)
@@ -148,8 +170,14 @@ class AdminRouter:
 
         try:
             redirect_to = route_handler(form_data)
-            logger.info(f"POST {path} handler completed, redirecting to {redirect_to}")
-            self._redirect(handler, redirect_to)
+            # Check if handler set a direct HTML response
+            direct_html = self.context.get('direct_html_response')
+            if direct_html is not None:
+                self._send_html(handler, direct_html)
+                del self.context['direct_html_response']
+            else:
+                logger.info(f"POST {path} handler completed, redirecting to {redirect_to}")
+                self._redirect(handler, redirect_to)
         except Exception as e:
             logger.error(f"Error handling POST {path}: {e}", exc_info=True)
             self._send_html(handler, "500 Internal Server Error", status=500)
@@ -173,6 +201,18 @@ class AdminRouter:
         handler.end_headers()
         handler.wfile.write(html.encode('utf-8'))
 
+    def _send_json(self, handler: BaseHTTPRequestHandler, data: dict, status: int = 200) -> None:
+        import json as json_module
+        body = json_module.dumps(data).encode('utf-8')
+        handler.send_response(status)
+        handler.send_header('Content-Type', 'application/json')
+        self._set_security_headers(handler)
+        for cookie in self.context.get('set_cookies', []):
+            handler.send_header('Set-Cookie', cookie)
+        handler.send_header('Content-Length', str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
+
     def _redirect(self, handler: BaseHTTPRequestHandler, location: str) -> None:
         handler.send_response(303)
         handler.send_header('Location', location)
@@ -184,7 +224,7 @@ class AdminRouter:
     def _set_security_headers(self, handler: BaseHTTPRequestHandler) -> None:
         handler.send_header('X-Content-Type-Options', 'nosniff')
         handler.send_header('X-Frame-Options', 'DENY')
-        handler.send_header('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com;")
+        handler.send_header('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; connect-src 'self';")
 
 
     def handle_bootstrap_api(self, handler: BaseHTTPRequestHandler) -> None:
@@ -321,10 +361,19 @@ class AdminRouter:
             
             # --- Universe Overview Counts ---
             exec_mgr = self.context.get('execution_manager')
-            model_count = len(exec_mgr.model_registry.models) if exec_mgr else 0
-            capability_count = len(exec_mgr.registry.capabilities) if exec_mgr else 0
+            model_count = len(exec_mgr.model_registry.list_models()) if exec_mgr else 0
+            capability_count = len(exec_mgr.registry.list_all()) if exec_mgr else 0
             worker_count = len(exec_mgr.worker_manager.workers) if exec_mgr else 0
             task_count = len(exec_mgr._tasks) if exec_mgr else 0
+            
+            project_count = 0
+            bootstrap_snapshot = self.context.get('bootstrap_snapshot')
+            if bootstrap_snapshot and 'discovered_repos' in bootstrap_snapshot:
+                project_count = len(bootstrap_snapshot['discovered_repos'])
+            
+            mcp_count = 0
+            if exec_mgr and hasattr(exec_mgr, 'mcp_gateway'):
+                mcp_count = len(exec_mgr.mcp_gateway.tool_registry.list_tools())
             
             # Provide an instance method to get fabric client or default to None
             fabric_connected = False
@@ -348,8 +397,8 @@ class AdminRouter:
                 'capability_count': capability_count,
                 'worker_count': worker_count,
                 'task_count': task_count,
-                'project_count': 0, # To be implemented via org discovery / metadata
-                'mcp_count': 0, # To be implemented via MCP integration
+                'project_count': project_count,
+                'mcp_count': mcp_count,
                 'identity': {
                     'runtime_id': runtime_id,
                     'status': id_status,
@@ -570,6 +619,71 @@ class AdminRouter:
                     return f'/github?error={error_msg}'
         return '/'
 
+    def handle_github_device_init(self, form_data) -> str:
+        gh_mgr = self.context.get('github_manager')
+        if not gh_mgr:
+            return '/?error=GitHub+Auth+Manager+not+available'
+        
+        try:
+            device_flow = gh_mgr.initiate_device_flow()
+            from runtime.admin.templates import device_flow_page
+            html = device_flow_page(
+                user_code=device_flow.user_code,
+                verification_uri=device_flow.verification_uri,
+                csrf_token=self._get_csrf()
+            )
+            self.context['direct_html_response'] = html
+            return '/'
+        except Exception as e:
+            error_msg = urllib.parse.quote_plus(f"Failed to initiate device flow: {e}")
+            return f'/?error={error_msg}'
+
+    def handle_github_device_poll(self, parsed) -> str:
+        gh_mgr = self.context.get('github_manager')
+        if not gh_mgr:
+            self.context['direct_json_response'] = {'status': 'FAILED', 'error': 'GitHub Auth Manager not available'}
+            return '/'
+        
+        try:
+            result = gh_mgr.poll_device_flow()
+            if result.get('status') == 'AUTHORIZED':
+                self._audit("GITHUB_DEVICE_AUTH", "SUCCESS")
+                
+                # Perform discovery since we just got a new token
+                try:
+                    github_client = GitHubClient(secret_backend=gh_mgr.secret_backend)
+                    disc = OrganizationDiscoveryService(github_client)
+                    disc_repos_raw = disc.discover_repositories()
+                    
+                    provider = OperationalRepositoryProvider(github_client=github_client, environment="PRODUCTION")
+                    resolver = CustomerZeroBootstrapResolver(provider=provider, event_bus=None)
+                    bootstrap_result = resolver.resolve()
+                    
+                    self.context['bootstrap_snapshot'] = {
+                        'result': bootstrap_result,
+                        'discovered_repos': disc_repos_raw
+                    }
+                except Exception as e:
+                    logger.warning(f"Post-onboarding discovery failed: {e}")
+                
+                # Revoke onboarding session and issue regular session
+                session = self.context.get('admin_session')
+                if session and session.scope == "ONBOARDING_ONLY":
+                    auth_mgr = self.context.get('auth_manager')
+                    if auth_mgr:
+                        auth_mgr.destroy(session.admin_session_id)
+                        self.context['destroy_session'] = True
+                        new_session = auth_mgr.create_session("admin")
+                        self.context['new_session_id'] = new_session.admin_session_id
+            
+            self.context['direct_json_response'] = result
+            return '/'
+        except Exception as e:
+            self.context['direct_json_response'] = {'status': 'FAILED', 'error': str(e)}
+            return '/'
+
+
+
     def handle_github_disconnect(self, form_data) -> str:
         gh_mgr = self.context.get('github_manager')
         if gh_mgr:
@@ -677,7 +791,7 @@ class AdminRouter:
         bindings = []
         exec_mgr = self.context.get('execution_manager')
         if exec_mgr:
-            caps = list(exec_mgr.registry.capabilities.values())
+            caps = exec_mgr.registry.list_all()
             for c in caps:
                 bindings.extend(c.model_bindings)
         return intelligence_capabilities_page(caps, bindings, self._get_csrf())
@@ -738,4 +852,46 @@ class AdminRouter:
         query_params = urllib.parse.parse_qs(parsed.query)
         q = query_params.get('q', [''])[0]
         return search_page(q, self._get_csrf())
+
+    def handle_telemetry_live(self, parsed) -> str:
+        return telemetry_live_page(self._get_csrf())
+
+    def handle_telemetry_timeline(self, parsed) -> str:
+        events = []
+        telemetry_collector = self.context.get('telemetry_collector')
+        if telemetry_collector:
+            events = telemetry_collector.get_timeline(limit=100)
+        return telemetry_timeline_page(events, self._get_csrf())
+
+    def handle_browser_dashboard(self, parsed) -> str:
+        sessions = []
+        exec_mgr = self.context.get('execution_manager')
+        if exec_mgr and exec_mgr.worker_manager.browser_adapter:
+            sessions = list(exec_mgr.worker_manager.browser_adapter._sessions.values())
+        
+        from runtime.admin.templates import browser_dashboard_page
+        return browser_dashboard_page(sessions, self._get_csrf())
+
+    def handle_browser_session_detail(self, parsed, handler: BaseHTTPRequestHandler) -> None:
+        parts = parsed.path.strip('/').split('/')
+        if len(parts) != 2:
+            self._send_html(handler, "404 Not Found", status=404)
+            return
+            
+        session_id = parts[1]
+        exec_mgr = self.context.get('execution_manager')
+        
+        if not exec_mgr or not exec_mgr.worker_manager.browser_adapter:
+            self._send_html(handler, "404 Not Found", status=404)
+            return
+            
+        session_data = exec_mgr.worker_manager.browser_adapter._sessions.get(session_id)
+        if not session_data:
+            self._send_html(handler, "404 Not Found", status=404)
+            return
+            
+        from runtime.admin.templates import browser_session_page
+        html = browser_session_page(session_data[0], self._get_csrf())
+        self._send_html(handler, html)
+
 
