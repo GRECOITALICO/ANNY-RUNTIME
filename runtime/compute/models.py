@@ -58,12 +58,12 @@ class RemoteComputeResourceProfile:
 
 @dataclass
 class RemoteComputeLease:
-    lease_id: str
-    session_id: str
-    issued_at: datetime
     expires_at: datetime
-    max_runtime: int # seconds
-    renewable: bool
+    lease_id: Optional[str] = None
+    session_id: Optional[str] = None
+    issued_at: Optional[datetime] = None
+    max_runtime: Optional[int] = None  # seconds
+    renewable: bool = True
     renewal_policy: Optional[str] = None
 
 @dataclass
@@ -100,3 +100,10 @@ class RemoteComputeSession:
     classification: ExecutionClassification
     lease: Optional[RemoteComputeLease] = None
     profile: Optional[RemoteComputeResourceProfile] = None
+    # Extended fields used by ColabComputeProvider and transports
+    requested_accelerator: Optional[str] = None
+    assigned_accelerator: Optional[str] = None
+    observed_accelerator: Optional[str] = None
+    created_at: Optional[datetime] = None
+    error: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)

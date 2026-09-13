@@ -47,6 +47,15 @@ REAL SESSION SMOKE:
   Executed: print("ANNY_REMOTE_SMOKE_OK")
   Result:   ANNY_REMOTE_SMOKE_OK  (REAL_REMOTE confirmed 2026-09-13)
 
+TRANSPORT ARCHITECTURE (001C-A)
+===============================
+ColabTransport (ABC)
+  ├── CliColabTransport     — CLI-managed sessions (primary)
+  └── BrowserColabTransport — Browser-assisted auth UX (secondary)
+
+ColabComputeProvider routes to the appropriate transport based on
+context['transport_type'] ('cli' default, or 'browser').
+
 FABRICATION POLICY
 ==================
 No hardware values (CPU, RAM, GPU, cores) may be hardcoded.
@@ -58,6 +67,12 @@ SECURITY
 Credentials must never be passed through provision() context.
 provision() raises ValueError if 'credentials', 'token', or 'private_keys'
 are present in the context dict.
+
+Browser transport:
+  - Google password never enters ANNY
+  - Google token never enters Worker
+  - Browser cookies never enter evidence
+  - Browser profile is not copied into remote session
 """
 
 import shutil
@@ -66,7 +81,9 @@ import re
 import logging
 import tempfile
 import os
+import webbrowser
 from enum import Enum
+from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
 
@@ -90,6 +107,20 @@ class ProviderAvailability(Enum):
     AVAILABLE = "AVAILABLE"
     UNAVAILABLE = "UNAVAILABLE"
     UNKNOWN = "UNKNOWN"
+
+
+class BrowserSessionState(Enum):
+    """Browser-assisted session lifecycle states."""
+    BROWSER_OPENING = "BROWSER_OPENING"
+    LOGIN_REQUIRED = "LOGIN_REQUIRED"
+    AUTH_IN_PROGRESS = "AUTH_IN_PROGRESS"
+    AUTHENTICATED = "AUTHENTICATED"
+    COLAB_LOADING = "COLAB_LOADING"
+    SESSION_DISCOVERY = "SESSION_DISCOVERY"
+    ATTACHING = "ATTACHING"
+    ATTACHED = "ATTACHED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
 
 
 class ColabCLIError(Exception):
@@ -139,26 +170,83 @@ def _parse_session_status_line(line: str) -> Dict[str, Any]:
     }
 
 
-class ColabComputeProvider(RemoteComputeProvider):
+# =============================================================================
+# TRANSPORT ABSTRACTION
+# =============================================================================
+
+class ColabTransport(ABC):
     """
-    Provider adapter for Google Colab runtime.
+    Abstract transport for acquiring and communicating with Google Colab sessions.
 
-    Targets the `colab` CLI (google-colab-cli 0.6.0).
-    CLI command surface verified 2026-09-13 via ANNY-REMOTE-COMPUTE-001B-S.
+    Implementations:
+      - CliColabTransport:     CLI-managed sessions via google-colab-cli
+      - BrowserColabTransport: Browser-assisted auth UX
+    """
+
+    @abstractmethod
+    def provision(self, context: Dict[str, Any]) -> RemoteComputeSession:
+        """Create or acquire a Colab session."""
+
+    @abstractmethod
+    def inspect(self, session: RemoteComputeSession) -> RemoteComputeResourceProfile:
+        """Query resource profile of an active session."""
+
+    @abstractmethod
+    def health(self, session: RemoteComputeSession) -> RemoteSessionState:
+        """Poll session health."""
+
+    @abstractmethod
+    def execute(self, session: RemoteComputeSession, job: RemoteComputeJob) -> RemoteComputeJob:
+        """Execute a job on the session."""
+
+    @abstractmethod
+    def collect(self, session: RemoteComputeSession, job: RemoteComputeJob) -> List[RemoteComputeArtifact]:
+        """Collect artifacts from a completed job."""
+
+    @abstractmethod
+    def terminate(self, session: RemoteComputeSession) -> None:
+        """Terminate the session."""
+
+
+# =============================================================================
+# SECURITY HELPERS
+# =============================================================================
+
+_FORBIDDEN_CONTEXT_KEYS = frozenset({
+    "credentials", "token", "private_keys", "secret", "api_key",
+    "password", "cookie", "session_cookie", "browser_cookie",
+})
+
+
+def _assert_no_credentials(context: Dict[str, Any]) -> None:
+    """Reject any context dict that smuggles credentials."""
+    found = _FORBIDDEN_CONTEXT_KEYS & set(context.keys())
+    if found:
+        raise ValueError(
+            f"Security violation: forbidden keys in provision() context: {found}"
+        )
+
+
+def _check_lease(session: RemoteComputeSession) -> None:
+    """Force EXPIRED state if lease deadline has passed."""
+    if session.lease and datetime.now(timezone.utc) > session.lease.expires_at:
+        session.state = RemoteSessionState.EXPIRED
+
+
+# =============================================================================
+# CLI TRANSPORT
+# =============================================================================
+
+class CliColabTransport(ColabTransport):
+    """
+    CLI-based transport for Google Colab, leveraging google-colab-cli 0.6.0.
+
+    All command surface verified 2026-09-13 via ANNY-REMOTE-COMPUTE-001B-S.
     Session smoke test confirmed (REAL_REMOTE).
-
-    When the CLI is absent, availability is UNAVAILABLE and all operations
-    that require real backend contact are rejected.
     """
 
     def __init__(self, cli_path: Optional[str] = None):
-        """
-        Args:
-            cli_path: Explicit path to the colab CLI. If None, searches PATH
-                      for 'colab' then 'google-colab-cli'.
-        """
         self.cli_path = cli_path or self._find_cli()
-        self._sessions: Dict[str, RemoteComputeSession] = {}
         self._availability: Optional[ProviderAvailability] = None
         self._cli_version: Optional[str] = None
         self._cli_help: Optional[str] = None
@@ -172,27 +260,17 @@ class ColabComputeProvider(RemoteComputeProvider):
                 return found
         return None
 
-    @property
-    def provider_id(self) -> str:
-        return "google-colab"
-
-    # -------------------------------------------------------------------------
-    # AVAILABILITY
-    # -------------------------------------------------------------------------
+    # ── Availability ──────────────────────────────────────────────────────────
 
     def probe_availability(self) -> ProviderAvailability:
         """
         Determines whether the CLI is present and responsive.
-
         Uses `colab version` subcommand (--version flag NOT supported in 0.6.0).
-        Does NOT perform authentication.
-        Does NOT create a session.
         """
         if self.cli_path is None:
             self._availability = ProviderAvailability.UNAVAILABLE
             return self._availability
 
-        # Use verified `colab version` subcommand
         try:
             r = subprocess.run(
                 [self.cli_path, _CMD_VERSION],
@@ -204,7 +282,6 @@ class ColabComputeProvider(RemoteComputeProvider):
             logger.warning(f"Colab CLI not found at {self.cli_path}: {e}")
             return self._availability
 
-        # Capture --help for audit record
         try:
             r = subprocess.run(
                 [self.cli_path, "--help"],
@@ -227,71 +304,32 @@ class ColabComputeProvider(RemoteComputeProvider):
                 "Install google-colab-cli and re-run probe_availability()."
             )
 
-    # -------------------------------------------------------------------------
-    # CLASSIFICATION
-    # -------------------------------------------------------------------------
+    # ── Classification ────────────────────────────────────────────────────────
 
     def _determine_classification(self, session_confirmed: bool = False) -> ExecutionClassification:
-        """
-        Returns REAL_REMOTE only when:
-          - CLI is installed and AVAILABLE
-          - A real authenticated backend session was confirmed
-
-        Returns TEST otherwise.
-        """
+        """Returns REAL_REMOTE only when CLI is AVAILABLE and session confirmed."""
         if self._availability != ProviderAvailability.AVAILABLE:
             return ExecutionClassification.TEST
         if session_confirmed:
             return ExecutionClassification.REAL_REMOTE
         return ExecutionClassification.TEST
 
-    # -------------------------------------------------------------------------
-    # CLI EXECUTION HELPERS
-    # -------------------------------------------------------------------------
+    # ── CLI Execution ─────────────────────────────────────────────────────────
 
     def _run_cli_raw(self, args: List[str], timeout: int = 60) -> subprocess.CompletedProcess:
-        """
-        Executes the CLI binary and returns the raw CompletedProcess.
-        Raises ColabCLINotFoundError if binary absent.
-        """
+        """Executes the CLI binary and returns the raw CompletedProcess."""
         self._assert_available()
         try:
             return subprocess.run(
                 [self.cli_path] + args,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
+                capture_output=True, text=True, timeout=timeout,
             )
         except FileNotFoundError:
             raise ColabCLINotFoundError(f"CLI binary not found: {self.cli_path}")
         except subprocess.TimeoutExpired:
             raise ColabCLIError("CLI command timed out")
 
-    # -------------------------------------------------------------------------
-    # SECURITY
-    # -------------------------------------------------------------------------
-
-    @staticmethod
-    def _assert_no_credentials(context: Dict[str, Any]) -> None:
-        forbidden = {"credentials", "token", "private_keys", "secret", "api_key"}
-        found = forbidden & set(context.keys())
-        if found:
-            raise ValueError(
-                f"Security violation: forbidden keys in provision() context: {found}"
-            )
-
-    # -------------------------------------------------------------------------
-    # LEASE
-    # -------------------------------------------------------------------------
-
-    def _check_lease(self, session: RemoteComputeSession) -> None:
-        """Force EXPIRED state if lease deadline has passed."""
-        if session.lease and datetime.now(timezone.utc) > session.lease.expires_at:
-            session.state = RemoteSessionState.EXPIRED
-
-    # -------------------------------------------------------------------------
-    # PROVIDER CONTRACT IMPLEMENTATION
-    # -------------------------------------------------------------------------
+    # ── Transport Contract ────────────────────────────────────────────────────
 
     def provision(self, context: Dict[str, Any]) -> RemoteComputeSession:
         """
@@ -301,13 +339,8 @@ class ColabComputeProvider(RemoteComputeProvider):
         Observed output:
           [colab] Creating session '<name>'...
           [colab] Session READY.
-
-        Context keys:
-          session_name   (str, optional)      : Session name. Auto-generated if absent.
-          accelerator    (str, optional)      : GPU variant (T4/L4/G4/H100/A100).
-          lease_duration (timedelta, optional): Default 1 hour.
         """
-        self._assert_no_credentials(context)
+        _assert_no_credentials(context)
         self._assert_available()
 
         import uuid
@@ -315,12 +348,11 @@ class ColabComputeProvider(RemoteComputeProvider):
         requested_accelerator = context.get("accelerator")
         lease_duration = context.get("lease_duration", timedelta(hours=1))
 
-        # Build verified CLI command
         args = [_CMD_NEW, "--session", session_name]
         if requested_accelerator:
             args += ["--gpu", requested_accelerator]
 
-        logger.info(f"Provisioning colab session: {session_name}")
+        logger.info(f"Provisioning colab session via CLI: {session_name}")
         result = self._run_cli_raw(args, timeout=120)
 
         if result.returncode != 0:
@@ -329,7 +361,6 @@ class ColabComputeProvider(RemoteComputeProvider):
                 f"{(result.stderr or result.stdout).strip()}"
             )
 
-        # Verify "Session READY" in output (observed from 0.6.0)
         output = result.stdout + result.stderr
         if "Session READY" not in output:
             raise ColabCLIError(
@@ -339,30 +370,29 @@ class ColabComputeProvider(RemoteComputeProvider):
         now = datetime.now(timezone.utc)
         session = RemoteComputeSession(
             session_id=session_name,
-            provider_id=self.provider_id,
+            provider_id="google-colab",
             state=RemoteSessionState.CONNECTED,
             requested_accelerator=requested_accelerator,
-            assigned_accelerator=None,   # not yet observed from status
+            assigned_accelerator=None,
             observed_accelerator=None,
             classification=self._determine_classification(session_confirmed=True),
             created_at=now,
             lease=RemoteComputeLease(
-                granted_at=now,
+                issued_at=now,
                 expires_at=now + lease_duration,
             ),
         )
-        self._sessions[session_name] = session
         return session
 
     def inspect(self, session: RemoteComputeSession) -> RemoteComputeResourceProfile:
         """
-        Returns observed resource profile for a session via `colab status`.
+        Returns observed resource profile via `colab status`.
 
         Verified command: colab status --session <name>
         Observed output:
           [<name>] <backend_id> | Hardware: CPU | Variant: DEFAULT | Status: IDLE
         """
-        self._check_lease(session)
+        _check_lease(session)
         if session.state in (RemoteSessionState.EXPIRED, RemoteSessionState.TERMINATED):
             raise RuntimeError(f"Cannot inspect session in state {session.state.value}")
 
@@ -380,19 +410,16 @@ class ColabComputeProvider(RemoteComputeProvider):
                     parsed = p
                     break
 
-        # Map observed hardware string -> fields; default UNKNOWN
-        hardware = parsed.get("hardware")   # e.g. "CPU", "T4"
+        hardware = parsed.get("hardware")
         gpu_present = (hardware not in (None, "CPU")) if hardware else None
-
-        # Populate session observed accelerator from status
         session.observed_accelerator = hardware
 
         return RemoteComputeResourceProfile(
-            cpu=None,               # not reported by colab status
+            cpu=None,
             cores=None,
             ram=None,
             gpu_present=gpu_present,
-            gpu_vendor=None,        # not reported by colab status
+            gpu_vendor=None,
             gpu_model=hardware if gpu_present else None,
             vram=None,
             accelerator_type=hardware,
@@ -406,12 +433,10 @@ class ColabComputeProvider(RemoteComputeProvider):
 
     def health(self, session: RemoteComputeSession) -> RemoteSessionState:
         """
-        Polls the actual session health via `colab status --session <name>`.
-
-        Verified command: colab status --session <name>
-        Interprets Status field: IDLE -> CONNECTED (alive), absent session -> TERMINATED.
+        Polls session health via `colab status --session <name>`.
+        Interprets Status field: IDLE -> CONNECTED (alive), absent -> TERMINATED.
         """
-        self._check_lease(session)
+        _check_lease(session)
         if session.state in (
             RemoteSessionState.EXPIRED,
             RemoteSessionState.TERMINATED,
@@ -450,11 +475,9 @@ class ColabComputeProvider(RemoteComputeProvider):
     def execute(self, session: RemoteComputeSession, job: RemoteComputeJob) -> RemoteComputeJob:
         """
         Executes code via `colab exec --session <name> --file <path>`.
-
-        Verified command: colab exec --session <name> --file <path> [--timeout <float>]
         CONNECTED != READY: only READY sessions may accept workloads.
         """
-        self._check_lease(session)
+        _check_lease(session)
 
         if session.state == RemoteSessionState.TERMINATED:
             raise RuntimeError("Cannot execute on TERMINATED session.")
@@ -469,7 +492,6 @@ class ColabComputeProvider(RemoteComputeProvider):
         if not code:
             raise ValueError("RemoteComputeJob has no executable code payload.")
 
-        # Write code to a temp file for colab exec --file
         with tempfile.NamedTemporaryFile(
             suffix=".py", mode="w", delete=False, prefix="anny_job_"
         ) as tf:
@@ -497,26 +519,17 @@ class ColabComputeProvider(RemoteComputeProvider):
     def collect(self, session: RemoteComputeSession, job: RemoteComputeJob) -> List[RemoteComputeArtifact]:
         """
         Collect artifacts from a completed job.
-
-        colab 0.6.0 does not have a dedicated artifact-listing command;
-        `colab download` and `colab ls` are available for file transfer.
+        colab 0.6.0 does not have a dedicated artifact-listing command.
         Returns an empty list until a higher-level workflow specifies artifact paths.
         """
-        self._check_lease(session)
+        _check_lease(session)
         self._assert_available()
         return []
 
     def terminate(self, session: RemoteComputeSession) -> None:
         """
         Terminates the session via `colab stop --session <name>`.
-
-        Verified command: colab stop --session <name>
-        Observed output:
-          [colab] Stopping session '<name>'...
-          [colab] Session terminated.
-
-        Forces TERMINATED state locally even if the CLI call fails,
-        to prevent zombie sessions from being reused.
+        Forces TERMINATED state locally even if the CLI call fails.
         """
         try:
             self._assert_available()
@@ -532,3 +545,223 @@ class ColabComputeProvider(RemoteComputeProvider):
             logger.warning(f"terminate(): CLI error ignored, forcing TERMINATED: {e}")
         finally:
             session.state = RemoteSessionState.TERMINATED
+
+
+# =============================================================================
+# BROWSER TRANSPORT
+# =============================================================================
+
+class BrowserColabTransport(ColabTransport):
+    """
+    Browser-assisted transport for Google Colab.
+
+    Opens a local browser for the user to authenticate to Google directly.
+    The browser is a temporary authentication UX — ANNY never captures
+    passwords, cookies, or Google tokens.
+
+    ATTACH STATUS:
+    As of 2026-09-13, there is NO official, stable mechanism to attach an
+    external tool to a browser-created Colab session without exploiting
+    unsupported workarounds. The `colab-mcp` PyPI package is an unrelated
+    context-sharing tool, not an official Google Colab control plane.
+
+    Therefore this transport records BROWSER_SESSION_ATTACH_UNSUPPORTED
+    and does not fabricate attachment.
+    """
+
+    def __init__(self, browser_opener=None):
+        """
+        Args:
+            browser_opener: Callable to open a URL. Defaults to webbrowser.open.
+                            Injected for testing.
+        """
+        self._open_browser = browser_opener or webbrowser.open
+
+    def provision(self, context: Dict[str, Any]) -> RemoteComputeSession:
+        """
+        Opens the browser for Colab auth UX, then attempts session attachment.
+
+        Since no supported attach mechanism exists, the session transitions:
+          BROWSER_OPENING -> AUTHENTICATED -> ATTACHING -> FAILED
+
+        The error field records BROWSER_SESSION_ATTACH_UNSUPPORTED.
+        """
+        _assert_no_credentials(context)
+
+        import uuid
+        session_name = context.get("session_name") or f"anny-browser-{uuid.uuid4().hex[:8]}"
+        requested_accelerator = context.get("accelerator")
+        lease_duration = context.get("lease_duration", timedelta(hours=1))
+
+        now = datetime.now(timezone.utc)
+
+        # ── BROWSER_OPENING ──────────────────────────────────────────────
+        browser_state = BrowserSessionState.BROWSER_OPENING
+        logger.info(f"Opening browser for Colab auth UX: {session_name}")
+
+        try:
+            self._open_browser("https://colab.research.google.com/")
+            browser_state = BrowserSessionState.AUTHENTICATED
+        except Exception as e:
+            logger.error(f"Failed to open browser: {e}")
+            return RemoteComputeSession(
+                session_id=session_name,
+                provider_id="google-colab",
+                state=RemoteSessionState.FAILED,
+                requested_accelerator=requested_accelerator,
+                assigned_accelerator=None,
+                observed_accelerator=None,
+                classification=ExecutionClassification.TEST,
+                created_at=now,
+                lease=RemoteComputeLease(issued_at=now, expires_at=now + lease_duration),
+                metadata={
+                    "transport": "browser",
+                    "browser_state": BrowserSessionState.FAILED.value,
+                    "error": f"Browser open failed: {e}",
+                },
+            )
+
+        # ── ATTACHING ────────────────────────────────────────────────────
+        # There is NO official stable attach mechanism.
+        # colab-mcp on PyPI is a context-sharing tool, NOT a Colab control plane.
+        # We do not fabricate attachment.
+        browser_state = BrowserSessionState.ATTACHING
+
+        return RemoteComputeSession(
+            session_id=session_name,
+            provider_id="google-colab",
+            state=RemoteSessionState.FAILED,
+            requested_accelerator=requested_accelerator,
+            assigned_accelerator=None,
+            observed_accelerator=None,
+            classification=ExecutionClassification.TEST,
+            created_at=now,
+            lease=RemoteComputeLease(issued_at=now, expires_at=now + lease_duration),
+            metadata={
+                "transport": "browser",
+                "browser_state": BrowserSessionState.ATTACHING.value,
+                "attach_error": "BROWSER_SESSION_ATTACH_UNSUPPORTED",
+                "colab_mcp_evaluation": (
+                    "colab-mcp (PyPI) is a context-sharing MCP server for AI coding "
+                    "tools. It does NOT provide a control channel to browser Colab "
+                    "sessions. No official Google Colab MCP for session control exists."
+                ),
+                "termination_limitation": (
+                    "Cannot terminate unattached browser session programmatically."
+                ),
+            },
+        )
+
+    def inspect(self, session: RemoteComputeSession) -> RemoteComputeResourceProfile:
+        """Cannot inspect — browser session was never attached."""
+        _check_lease(session)
+        raise RuntimeError(
+            f"Cannot inspect browser session: "
+            f"{session.metadata.get('attach_error', 'UNATTACHED')}"
+        )
+
+    def health(self, session: RemoteComputeSession) -> RemoteSessionState:
+        """Returns the stored state — no live polling for unattached sessions."""
+        _check_lease(session)
+        return session.state
+
+    def execute(self, session: RemoteComputeSession, job: RemoteComputeJob) -> RemoteComputeJob:
+        """Cannot execute — browser session was never attached."""
+        _check_lease(session)
+        raise RuntimeError(
+            f"Cannot execute on browser session: "
+            f"{session.metadata.get('attach_error', 'UNATTACHED')}"
+        )
+
+    def collect(self, session: RemoteComputeSession, job: RemoteComputeJob) -> List[RemoteComputeArtifact]:
+        """Cannot collect — browser session was never attached."""
+        _check_lease(session)
+        return []
+
+    def terminate(self, session: RemoteComputeSession) -> None:
+        """
+        Marks session as TERMINATED locally.
+        Cannot programmatically terminate an unattached browser session.
+        """
+        session.state = RemoteSessionState.TERMINATED
+        logger.info(
+            "Browser session marked TERMINATED locally. "
+            "Cannot programmatically terminate unattached browser session."
+        )
+
+
+# =============================================================================
+# PROVIDER (ROUTER)
+# =============================================================================
+
+class ColabComputeProvider(RemoteComputeProvider):
+    """
+    Provider adapter for Google Colab runtime.
+
+    Routes to the appropriate ColabTransport based on context['transport_type']:
+      'cli'     -> CliColabTransport  (default)
+      'browser' -> BrowserColabTransport
+
+    Both transports produce RemoteComputeSession with provider_id='google-colab'.
+    CLI and Browser accounts may differ — identities are recorded separately.
+    """
+
+    def __init__(self, cli_path: Optional[str] = None, browser_opener=None):
+        """
+        Args:
+            cli_path:       Explicit path to the colab CLI binary.
+            browser_opener: Callable for opening browser URLs (testing hook).
+        """
+        self._cli_transport = CliColabTransport(cli_path)
+        self._browser_transport = BrowserColabTransport(browser_opener)
+        self._sessions: Dict[str, RemoteComputeSession] = {}
+
+    @property
+    def provider_id(self) -> str:
+        return "google-colab"
+
+    # ── Transport selection ───────────────────────────────────────────────────
+
+    def _get_transport(self, context_or_session) -> ColabTransport:
+        """
+        Determine the transport from either a context dict or a session object.
+        """
+        if isinstance(context_or_session, RemoteComputeSession):
+            transport_type = (context_or_session.metadata or {}).get("transport", "cli")
+        elif isinstance(context_or_session, dict):
+            transport_type = context_or_session.get("transport_type", "cli")
+        else:
+            transport_type = "cli"
+
+        if transport_type == "browser":
+            return self._browser_transport
+        return self._cli_transport
+
+    # ── Availability (CLI only) ───────────────────────────────────────────────
+
+    def probe_availability(self) -> ProviderAvailability:
+        """Probes CLI transport availability."""
+        return self._cli_transport.probe_availability()
+
+    # ── Provider Contract ─────────────────────────────────────────────────────
+
+    def provision(self, context: Dict[str, Any]) -> RemoteComputeSession:
+        transport = self._get_transport(context)
+        session = transport.provision(context)
+        self._sessions[session.session_id] = session
+        return session
+
+    def inspect(self, session: RemoteComputeSession) -> RemoteComputeResourceProfile:
+        return self._get_transport(session).inspect(session)
+
+    def health(self, session: RemoteComputeSession) -> RemoteSessionState:
+        return self._get_transport(session).health(session)
+
+    def execute(self, session: RemoteComputeSession, job: RemoteComputeJob) -> RemoteComputeJob:
+        return self._get_transport(session).execute(session, job)
+
+    def collect(self, session: RemoteComputeSession, job: RemoteComputeJob) -> List[RemoteComputeArtifact]:
+        return self._get_transport(session).collect(session, job)
+
+    def terminate(self, session: RemoteComputeSession) -> None:
+        self._get_transport(session).terminate(session)
