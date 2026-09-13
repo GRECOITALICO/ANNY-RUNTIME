@@ -16,10 +16,12 @@ class ExecutorSelection:
     reason: str
     policy_version: str
     risk_class: str
+    execution_mode: Optional[str] = None
 
 class ExecutorSelector:
-    def __init__(self, registry: Optional[ModelRegistry] = None):
+    def __init__(self, registry: Optional[ModelRegistry] = None, intelligence_layer=None):
         self.registry = registry or ModelRegistry()
+        self.intelligence_layer = intelligence_layer
 
     def select(self, task: Task, capability: CapabilityDefinition, policy: RuntimePolicy) -> ExecutorSelection:
         if not capability.enabled:
@@ -43,30 +45,60 @@ class ExecutorSelector:
         if not policy.allow_llm:
             raise ValueError("LLM capabilities are disabled by runtime policy")
             
-        bindings = self.registry.get_bindings_for_capability(capability.capability_id)
-        if not bindings:
-            raise ValueError(f"No models bound to capability {capability.capability_id}")
+        from runtime.intelligence.layer import LocalIntelligenceLayer
+        from runtime.intelligence.models import CapabilityAssessmentRequest, DelegationDecision
+        
+        # If no intelligence layer injected, create one
+        layer = self.intelligence_layer
+        if layer is None:
+            layer = LocalIntelligenceLayer()
+        
+        # Construct the request
+        req = CapabilityAssessmentRequest(
+            capability_id=capability.capability_id,
+            quality_required=0.85, # Default acceptable threshold
+            latency_requirement=None,
+            resource_constraints=getattr(task, 'constraints', None),
+            policy_constraints={"network": capability.network_policy}
+        )
+        
+        # Get implementations available in the registry
+        # We find what implementations are registered and available
+        # In a cleaner architecture, ModelRegistry would be replaced or merged with IntelligenceLayer,
+        # but we preserve ModelRegistry for backward compatibility.
+        available_impls = [
+            m.model_id for m in self.registry.list_models() 
+            if self.registry.is_available(m.model_id)
+        ]
+        
+        assessment = layer.assess_capability(req, available_implementations=available_impls)
+        
+        if assessment.decision != DelegationDecision.DELEGATE or not assessment.selected_implementation:
+            # Escalation / Self-execution path
+            return ExecutorSelection(
+                executor_type=ExecutorType.REMOTE_MODEL if capability.fallback_executor == ExecutorType.REMOTE_MODEL else ExecutorType.DETERMINISTIC,
+                executor_id="anny-self-executor",
+                executor_version="1.0.0",
+                model_id=None,
+                model_version=None,
+                reason=assessment.reason,
+                policy_version=policy.version,
+                risk_class=capability.risk_level,
+                execution_mode="ANNY_SELF",
+            )
             
-        selected_model_id = None
-        for b in sorted(bindings, key=lambda x: (not x.preferred, not x.fallback)):
-            if b.authorization == "forbidden":
-                continue
-            if self.registry.is_available(b.model_id):
-                selected_model_id = b.model_id
-                break
-                
-        if not selected_model_id:
-            raise ValueError(f"No available models found for capability {capability.capability_id}")
-            
-        model_def = self.registry.get_model(selected_model_id)
+        # Delegation path (Local/Remote Inference based on Candidate)
+        candidate = assessment.selected_implementation
+        exec_type = ExecutorType(candidate.execution_class)
         
         return ExecutorSelection(
-            executor_type=ExecutorType(model_def.executor_type),
-            executor_id=f"worker-compatible-{model_def.executor_type.lower()}",
+            executor_type=exec_type,
+            executor_id=f"{exec_type.value.lower()}-executor",
             executor_version="1.0.0",
-            model_id=selected_model_id,
-            model_version=model_def.version,
-            reason=f"Selected model {selected_model_id} via binding",
+            model_id=candidate.implementation_id, # Use implementation_id instead of legacy model_id guessing
+            model_version="1.0.0",
+            reason=assessment.reason,
             policy_version=policy.version,
-            risk_class=capability.risk_level
+            risk_class=capability.risk_level,
+            execution_mode=exec_type.value,
         )
