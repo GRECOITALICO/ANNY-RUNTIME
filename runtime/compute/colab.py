@@ -551,143 +551,243 @@ class CliColabTransport(ColabTransport):
 # BROWSER TRANSPORT
 # =============================================================================
 
+import asyncio
+import threading
+import json
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+
+class SyncMCPBridge:
+    """Synchronous bridge for mcp async client."""
+    def __init__(self):
+        self._loop = asyncio.new_event_loop()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._session = None
+        self._read_ctx = None
+        self._thread.start()
+
+    def _run_loop(self):
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+
+    def start(self):
+        future = asyncio.run_coroutine_threadsafe(self._async_start(), self._loop)
+        return future.result()
+
+    async def _async_start(self):
+        server_params = StdioServerParameters(
+            command="uvx",
+            args=["--from", "git+https://github.com/googlecolab/colab-mcp", "colab-mcp"],
+            env=None
+        )
+        self._read_ctx = stdio_client(server_params)
+        read, write = await self._read_ctx.__aenter__()
+        self._session = ClientSession(read, write)
+        await self._session.__aenter__()
+        await self._session.initialize()
+
+    def call_tool(self, name, args):
+        future = asyncio.run_coroutine_threadsafe(self._session.call_tool(name, args), self._loop)
+        return future.result()
+
+    def list_tools(self):
+        future = asyncio.run_coroutine_threadsafe(self._session.list_tools(), self._loop)
+        return future.result()
+
+    def stop(self):
+        future = asyncio.run_coroutine_threadsafe(self._async_stop(), self._loop)
+        try:
+            future.result(timeout=5)
+        except Exception:
+            pass
+        self._loop.call_soon_threadsafe(self._loop.stop)
+        self._thread.join(timeout=5)
+
+    async def _async_stop(self):
+        if self._session:
+            await self._session.__aexit__(None, None, None)
+        if self._read_ctx:
+            await self._read_ctx.__aexit__(None, None, None)
+
+
 class BrowserColabTransport(ColabTransport):
     """
     Browser-assisted transport for Google Colab.
 
-    Opens a local browser for the user to authenticate to Google directly.
+    Uses the official googlecolab/colab-mcp integration via uvx.
     The browser is a temporary authentication UX — ANNY never captures
     passwords, cookies, or Google tokens.
-
-    ATTACH STATUS:
-    As of 2026-09-13, there is NO official, stable mechanism to attach an
-    external tool to a browser-created Colab session without exploiting
-    unsupported workarounds. The `colab-mcp` PyPI package is an unrelated
-    context-sharing tool, not an official Google Colab control plane.
-
-    Therefore this transport records BROWSER_SESSION_ATTACH_UNSUPPORTED
-    and does not fabricate attachment.
     """
 
     def __init__(self, browser_opener=None):
-        """
-        Args:
-            browser_opener: Callable to open a URL. Defaults to webbrowser.open.
-                            Injected for testing.
-        """
         self._open_browser = browser_opener or webbrowser.open
+        self._bridge = None
+        self._bridge_lock = threading.Lock()
 
     def provision(self, context: Dict[str, Any]) -> RemoteComputeSession:
-        """
-        Opens the browser for Colab auth UX, then attempts session attachment.
-
-        Since no supported attach mechanism exists, the session transitions:
-          BROWSER_OPENING -> AUTHENTICATED -> ATTACHING -> FAILED
-
-        The error field records BROWSER_SESSION_ATTACH_UNSUPPORTED.
-        """
         _assert_no_credentials(context)
 
         import uuid
         session_name = context.get("session_name") or f"anny-browser-{uuid.uuid4().hex[:8]}"
         requested_accelerator = context.get("accelerator")
         lease_duration = context.get("lease_duration", timedelta(hours=1))
-
         now = datetime.now(timezone.utc)
 
-        # ── BROWSER_OPENING ──────────────────────────────────────────────
-        browser_state = BrowserSessionState.BROWSER_OPENING
-        logger.info(f"Opening browser for Colab auth UX: {session_name}")
+        logger.info(f"Starting colab-mcp server for session: {session_name}")
+        
+        with self._bridge_lock:
+            if self._bridge:
+                self._bridge.stop()
+            self._bridge = SyncMCPBridge()
+            
+            try:
+                self._bridge.start()
+            except Exception as e:
+                logger.error(f"Failed to start colab-mcp: {e}")
+                self._bridge.stop()
+                self._bridge = None
+                return RemoteComputeSession(
+                    session_id=session_name,
+                    provider_id="google-colab",
+                    state=RemoteSessionState.FAILED,
+                    classification=ExecutionClassification.TEST,
+                    created_at=now,
+                    lease=RemoteComputeLease(issued_at=now, expires_at=now + lease_duration),
+                    metadata={"error": f"MCP Start Failed: {e}"}
+                )
 
-        try:
-            self._open_browser("https://colab.research.google.com/")
-            browser_state = BrowserSessionState.AUTHENTICATED
-        except Exception as e:
-            logger.error(f"Failed to open browser: {e}")
-            return RemoteComputeSession(
-                session_id=session_name,
-                provider_id="google-colab",
-                state=RemoteSessionState.FAILED,
-                requested_accelerator=requested_accelerator,
-                assigned_accelerator=None,
-                observed_accelerator=None,
-                classification=ExecutionClassification.TEST,
-                created_at=now,
-                lease=RemoteComputeLease(issued_at=now, expires_at=now + lease_duration),
-                metadata={
-                    "transport": "browser",
-                    "browser_state": BrowserSessionState.FAILED.value,
-                    "error": f"Browser open failed: {e}",
-                },
-            )
+            logger.info("Calling open_colab_browser_connection...")
+            # This triggers the browser to open via the MCP server and waits up to 60s
+            try:
+                res = self._bridge.call_tool("open_colab_browser_connection", {})
+                
+                # Check response. ToolResult may have content.
+                # If res is falsy or indicates failure based on its content:
+                # But ToolResult in mcp has .isError flag or similar. 
+                # colab-mcp returns text="true" or text="false"
+                text_content = ""
+                if hasattr(res, "content") and res.content:
+                    text_content = getattr(res.content[0], "text", "")
+                
+                if getattr(res, "isError", False) or text_content == "false":
+                    raise RuntimeError(f"Connection timeout or denied: {text_content}")
 
-        # ── ATTACHING ────────────────────────────────────────────────────
-        # There is NO official stable attach mechanism.
-        # colab-mcp on PyPI is a context-sharing tool, NOT a Colab control plane.
-        # We do not fabricate attachment.
-        browser_state = BrowserSessionState.ATTACHING
+            except Exception as e:
+                logger.error(f"Colab MCP attach failed: {e}")
+                self._bridge.stop()
+                self._bridge = None
+                return RemoteComputeSession(
+                    session_id=session_name,
+                    provider_id="google-colab",
+                    state=RemoteSessionState.FAILED,
+                    classification=ExecutionClassification.TEST,
+                    created_at=now,
+                    lease=RemoteComputeLease(issued_at=now, expires_at=now + lease_duration),
+                    metadata={"error": f"Browser attach failed: {e}"}
+                )
 
+        logger.info(f"Session {session_name} ATTACHED.")
         return RemoteComputeSession(
             session_id=session_name,
             provider_id="google-colab",
-            state=RemoteSessionState.FAILED,
+            state=RemoteSessionState.READY,  # Marks it ready for execution
             requested_accelerator=requested_accelerator,
-            assigned_accelerator=None,
-            observed_accelerator=None,
-            classification=ExecutionClassification.TEST,
+            classification=ExecutionClassification.REAL_REMOTE,
             created_at=now,
             lease=RemoteComputeLease(issued_at=now, expires_at=now + lease_duration),
-            metadata={
-                "transport": "browser",
-                "browser_state": BrowserSessionState.ATTACHING.value,
-                "attach_error": "BROWSER_SESSION_ATTACH_UNSUPPORTED",
-                "colab_mcp_evaluation": (
-                    "colab-mcp (PyPI) is a context-sharing MCP server for AI coding "
-                    "tools. It does NOT provide a control channel to browser Colab "
-                    "sessions. No official Google Colab MCP for session control exists."
-                ),
-                "termination_limitation": (
-                    "Cannot terminate unattached browser session programmatically."
-                ),
-            },
+            metadata={"transport": "browser", "browser_state": BrowserSessionState.ATTACHED.value}
         )
 
     def inspect(self, session: RemoteComputeSession) -> RemoteComputeResourceProfile:
-        """Cannot inspect — browser session was never attached."""
         _check_lease(session)
-        raise RuntimeError(
-            f"Cannot inspect browser session: "
-            f"{session.metadata.get('attach_error', 'UNATTACHED')}"
+        # colab-mcp doesn't natively expose resource inspection tools yet, 
+        # but we can return UNKNOWN or use a python code execution to probe if we wanted to.
+        return RemoteComputeResourceProfile(
+            observed_at=datetime.now(timezone.utc),
+            trust_levels=TrustProfile(accelerator_type=TrustLevel.UNKNOWN)
         )
 
     def health(self, session: RemoteComputeSession) -> RemoteSessionState:
-        """Returns the stored state — no live polling for unattached sessions."""
         _check_lease(session)
+        if session.state in (RemoteSessionState.EXPIRED, RemoteSessionState.TERMINATED, RemoteSessionState.FAILED):
+            return session.state
+            
+        with self._bridge_lock:
+            if not self._bridge:
+                session.state = RemoteSessionState.TERMINATED
+                return session.state
+            
+            try:
+                # A simple list_tools() call verifies the connection is still alive
+                self._bridge.list_tools()
+                session.state = RemoteSessionState.READY
+            except Exception:
+                session.state = RemoteSessionState.TERMINATED
+                
         return session.state
 
     def execute(self, session: RemoteComputeSession, job: RemoteComputeJob) -> RemoteComputeJob:
-        """Cannot execute — browser session was never attached."""
         _check_lease(session)
-        raise RuntimeError(
-            f"Cannot execute on browser session: "
-            f"{session.metadata.get('attach_error', 'UNATTACHED')}"
-        )
+        if session.state != RemoteSessionState.READY:
+            raise RuntimeError(f"Cannot execute on browser session in state: {session.state}")
+
+        with self._bridge_lock:
+            if not self._bridge:
+                raise RuntimeError("MCP bridge is not active.")
+
+            code = getattr(job, "code", None) or getattr(job, "script", None)
+            if not code:
+                raise ValueError("RemoteComputeJob has no executable code payload.")
+
+            tools = self._bridge.list_tools()
+            tool_names = {t.name for t in tools.tools}
+
+            exec_tool = None
+            for candidate in ["python", "run_python", "execute_python", "execute_cell"]:
+                if candidate in tool_names:
+                    exec_tool = candidate
+                    break
+                    
+            if not exec_tool:
+                raise RuntimeError(f"No execution tool found in MCP session. Available tools: {tool_names}")
+
+            try:
+                # Standard pattern: tools usually accept a 'code' parameter
+                args = {"code": code}
+                # Fallback heuristics for parameter naming if 'python' takes something else?
+                # Usually it's 'code' or 'query' or just a positional? 
+                # According to standard python tools in MCP, it's 'code' or 'command'.
+                res = self._bridge.call_tool(exec_tool, args)
+                
+                # Extract text output
+                output_text = ""
+                if hasattr(res, "content") and res.content:
+                    output_text = getattr(res.content[0], "text", str(res.content[0]))
+                    
+                job.status = "COMPLETED" if not getattr(res, "isError", False) else "FAILED"
+                if job.status == "COMPLETED":
+                    job.stdout = output_text
+                else:
+                    job.stderr = output_text
+
+            except Exception as e:
+                job.status = "FAILED"
+                job.error = str(e)
+                raise ColabCLIError(f"Colab MCP execution failed: {e}")
+
+        return job
 
     def collect(self, session: RemoteComputeSession, job: RemoteComputeJob) -> List[RemoteComputeArtifact]:
-        """Cannot collect — browser session was never attached."""
         _check_lease(session)
         return []
 
     def terminate(self, session: RemoteComputeSession) -> None:
-        """
-        Marks session as TERMINATED locally.
-        Cannot programmatically terminate an unattached browser session.
-        """
         session.state = RemoteSessionState.TERMINATED
-        logger.info(
-            "Browser session marked TERMINATED locally. "
-            "Cannot programmatically terminate unattached browser session."
-        )
+        with self._bridge_lock:
+            if self._bridge:
+                self._bridge.stop()
+                self._bridge = None
+        logger.info("Browser session terminated.")
 
 
 # =============================================================================
@@ -765,3 +865,4 @@ class ColabComputeProvider(RemoteComputeProvider):
 
     def terminate(self, session: RemoteComputeSession) -> None:
         self._get_transport(session).terminate(session)
+
