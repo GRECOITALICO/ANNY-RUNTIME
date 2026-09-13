@@ -20,6 +20,7 @@ class WorkspaceState(Enum):
 class Workspace:
     workspace_id: str
     tenant_id: str
+    project_id: str
     actor_scope: List[str]
     repository: str
     source_revision: str
@@ -42,6 +43,10 @@ class WorkspaceManager:
             return None
         if ws.tenant_id != context.tenant_id:
             raise PermissionError("Access denied: tenant mismatch")
+            
+        from runtime.security.context_guard import ContextGuard
+        ContextGuard.assert_workspace(context, ws)
+        
         if context.actor_id not in ws.actor_scope and '*' not in ws.actor_scope:
             raise PermissionError("Access denied: actor mismatch")
         return ws
@@ -57,6 +62,7 @@ class WorkspaceManager:
         ws = Workspace(
             workspace_id=workspace_id,
             tenant_id=context.tenant_id,
+            project_id=context.project_id,
             actor_scope=actor_scope,
             repository=repository,
             source_revision=source_revision,

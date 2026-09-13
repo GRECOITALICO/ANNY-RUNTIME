@@ -59,13 +59,17 @@ class GitHubAuthManager:
     Only status information (connected, principal, scopes) is exposed.
     """
 
-    GITHUB_TOKEN_REF = "github-access-token"
-    GITHUB_STATE_REF = "github-state"
-
-    def __init__(self, secret_backend, client_id: str = "", telemetry_collector=None):
+    def __init__(self, secret_backend, client_id: str = "", telemetry_collector=None, account_id: Optional[str] = None):
         self.secret_backend = secret_backend
         self.client_id = client_id
         self.telemetry_collector = telemetry_collector
+        self.account_id = account_id
+        if self.account_id:
+            self.token_ref = f"acct-{self.account_id}-github-token"
+            self.state_ref = f"acct-{self.account_id}-github-state"
+        else:
+            self.token_ref = "github-access-token"
+            self.state_ref = "github-state"
         self.state = GitHubCredentialState()
         self._device_flow: Optional[GitHubDeviceFlowState] = None
         self._load_state()
@@ -73,7 +77,7 @@ class GitHubAuthManager:
     def _load_state(self) -> None:
         """Load persisted credential state (not the token itself)."""
         try:
-            state_bytes = self.secret_backend.retrieve(self.GITHUB_STATE_REF)
+            state_bytes = self.secret_backend.retrieve(self.state_ref)
             if state_bytes:
                 data = json.loads(state_bytes.decode('utf-8'))
                 self.state = GitHubCredentialState(**data)
@@ -84,7 +88,7 @@ class GitHubAuthManager:
         """Persist credential state (not the token)."""
         try:
             state_json = json.dumps(asdict(self.state)).encode('utf-8')
-            self.secret_backend.store(self.GITHUB_STATE_REF, state_json)
+            self.secret_backend.store(self.state_ref, state_json)
         except Exception as e:
             logger.error(f"Failed to save GitHub state: {e}")
 
@@ -185,7 +189,7 @@ class GitHubAuthManager:
             if 'access_token' in result:
                 token = result['access_token']
                 self.secret_backend.store(
-                    self.GITHUB_TOKEN_REF, token.encode('utf-8'))
+                    self.token_ref, token.encode('utf-8'))
                 self._device_flow = None
                 self.validate()
                 return {'status': 'AUTHORIZED'}
@@ -211,7 +215,7 @@ class GitHubAuthManager:
 
     def validate(self) -> bool:
         """Validate the current GitHub token by calling the GitHub API."""
-        token_bytes = self.secret_backend.retrieve(self.GITHUB_TOKEN_REF)
+        token_bytes = self.secret_backend.retrieve(self.token_ref)
         if not token_bytes:
             self.state.auth_status = "UNAUTHORIZED"
             self.state.token_status = "MISSING"
@@ -289,14 +293,15 @@ class GitHubAuthManager:
 
     def disconnect(self) -> None:
         """Remove the GitHub credential."""
-        self.secret_backend.delete(self.GITHUB_TOKEN_REF)
+        self.secret_backend.delete(self.token_ref)
+        self.secret_backend.delete(self.state_ref)
         self.state = GitHubCredentialState()
         self._save_state()
         logger.info("GitHub disconnected")
 
     def has_token(self) -> bool:
         """Check if a token exists without exposing it."""
-        return self.secret_backend.exists(self.GITHUB_TOKEN_REF)
+        return self.secret_backend.exists(self.token_ref)
 
     def store_and_validate_token(self, token: str) -> dict:
         """Store a GitHub token (recovery/migration) and validate it.
@@ -352,7 +357,7 @@ class GitHubAuthManager:
                 missing = [s for s in ('repo', 'read:org') if s not in scopes]
                 return {'success': False, 'principal': principal, 'scopes': scopes, 'error': f'Missing required scopes: {", ".join(missing)}'}
             
-            self.secret_backend.store(self.GITHUB_TOKEN_REF, token.encode('utf-8'))
+            self.secret_backend.store(self.token_ref, token.encode('utf-8'))
             self.state.principal = principal
             self.state.auth_status = "AUTHORIZED"
             self.state.token_status = "VALID"

@@ -18,6 +18,8 @@ class SessionLease:
     session_id: str
     principal: str
     tenant_id: str
+    account_id: str
+    project_id: str
     anny_instance_id: str
     runtime_id: str
     scope: str

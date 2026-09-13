@@ -4,24 +4,48 @@ Google Colab remote compute provider.
 CLI DISCOVERY RECORD
 ====================
 Performed: 2026-09-13
-Host: ANNY-RUNTIME development environment
+Mission:   ANNY-REMOTE-COMPUTE-001B-S
+Host:      ANNY development host (Debian 6.12.107, Python 3.13.5, user=anny)
 
-Commands run:
-  which colab                → EXIT:1 (not found)
-  which google-colab-cli     → EXIT:1 (not found)
-  which colab-cli            → EXIT:1 (not found)
-  pip show google-colab-cli  → WARNING: Package not found
-  pip show colab             → WARNING: Package not found
-  pip list | grep -i colab   → (empty)
+Installation:
+  Package: google-colab-cli==0.6.0
+  Method:  python3 -m venv + pip install (uv unavailable)
+  Venv:    ~/.local/share/google-colab-cli-venv
+  Binary:  ~/.local/bin/colab (symlink)
+  Dependency fix: jupyter-kernel-client pinned to 0.15.0
+    (0.6.0 ships 1.0.2 which removed KernelClient - renamed JupyterKernelClient)
 
-Result:
-  PROVIDER_UNAVAILABLE — no colab CLI binary present on this host.
+Commands Verified (colab --help, 2026-09-13):
+  colab new     --session <name> [--gpu <T4|L4|G4|H100|A100>] [--tpu <v5e1|v6e1>]
+  colab sessions
+  colab status  --session <name>
+  colab exec    --session <name> --file <path> [--timeout <float>]
+  colab run     <script> [--session <name>] [--gpu <variant>] [--keep] [--timeout <float>]
+  colab stop    --session <name>
+  colab whoami
+  colab version
 
-COMMAND CONTRACT
-================
-CLI command surface is NOT yet discovered because the CLI is not installed.
-Commands in this file are PLACEHOLDERS ONLY — gated behind availability check.
-They MUST be reconciled against the actual CLI help output before use.
+Auth strategies (--auth flag on root command):
+  oauth2  -- default (InstalledAppFlow, browser redirect)
+  adc     -- Application Default Credentials
+
+Session status output format (colab 0.6.0 observed):
+  [<name>] <backend_id> | Hardware: <CPU|GPU> | Variant: DEFAULT | Status: IDLE
+
+colab new output observed:
+  [colab] Creating session '<name>'...
+  [colab] Session READY.
+
+colab stop output observed:
+  [colab] Stopping session '<name>'...
+  [colab] Session terminated.
+
+colab sessions (empty) output observed:
+  [colab] No active sessions found on server.
+
+REAL SESSION SMOKE:
+  Executed: print("ANNY_REMOTE_SMOKE_OK")
+  Result:   ANNY_REMOTE_SMOKE_OK  (REAL_REMOTE confirmed 2026-09-13)
 
 FABRICATION POLICY
 ==================
@@ -38,8 +62,10 @@ are present in the context dict.
 
 import shutil
 import subprocess
-import json
+import re
 import logging
+import tempfile
+import os
 from enum import Enum
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone, timedelta
@@ -75,25 +101,55 @@ class ColabCLINotFoundError(ColabCLIError):
     pass
 
 
+class ColabSessionNotFoundError(ColabCLIError):
+    """Raised when a named session does not exist on the backend."""
+    pass
+
+
+# ── Verified CLI command fragments (sourced from installed colab 0.6.0) ───────
+# Verified 2026-09-13 via ANNY-REMOTE-COMPUTE-001B-S
+_CMD_NEW      = "new"       # colab new --session <name> [--gpu <variant>]
+_CMD_SESSIONS = "sessions"  # colab sessions
+_CMD_STATUS   = "status"    # colab status --session <name>
+_CMD_EXEC     = "exec"      # colab exec --session <name> --file <path>
+_CMD_STOP     = "stop"      # colab stop --session <name>
+_CMD_VERSION  = "version"   # colab version (--version flag NOT supported in 0.6.0)
+
+
+def _parse_session_status_line(line: str) -> Dict[str, Any]:
+    """
+    Parse the status output format observed from colab 0.6.0:
+      [<name>] <backend_id> | Hardware: <hw> | Variant: <var> | Status: <status>
+    Returns dict with keys: name, backend_id, hardware, variant, status.
+    Returns empty dict on parse failure (non-fatal).
+    """
+    pattern = (
+        r'\[(.+?)\]\s+(\S+)\s*\|\s*Hardware:\s*(\S+)\s*\|\s*Variant:\s*(\S+)'
+        r'(?:\s*\|\s*Status:\s*(\S+))?'
+    )
+    m = re.search(pattern, line)
+    if not m:
+        return {}
+    return {
+        "name": m.group(1),
+        "backend_id": m.group(2),
+        "hardware": m.group(3),
+        "variant": m.group(4),
+        "status": m.group(5) or "UNKNOWN",
+    }
+
+
 class ColabComputeProvider(RemoteComputeProvider):
     """
     Provider adapter for Google Colab runtime.
 
-    This adapter targets the `colab` CLI (or a user-specified binary).
-    The CLI command surface is determined at runtime by probing the installed
-    binary. No commands are assumed from memory.
+    Targets the `colab` CLI (google-colab-cli 0.6.0).
+    CLI command surface verified 2026-09-13 via ANNY-REMOTE-COMPUTE-001B-S.
+    Session smoke test confirmed (REAL_REMOTE).
 
     When the CLI is absent, availability is UNAVAILABLE and all operations
     that require real backend contact are rejected.
     """
-
-    # These are CANDIDATE command fragments inferred from common CLI patterns.
-    # They MUST be validated against actual `colab --help` output before use.
-    # Marked as UNVERIFIED until CLI is installed and probed.
-    _CMD_NEW        = ["new"]           # UNVERIFIED
-    _CMD_SESSIONS   = ["sessions"]      # UNVERIFIED
-    _CMD_STATUS     = ["status"]        # UNVERIFIED
-    _CMD_STOP       = ["stop"]          # UNVERIFIED
 
     def __init__(self, cli_path: Optional[str] = None):
         """
@@ -120,15 +176,15 @@ class ColabComputeProvider(RemoteComputeProvider):
     def provider_id(self) -> str:
         return "google-colab"
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
     # AVAILABILITY
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
 
     def probe_availability(self) -> ProviderAvailability:
         """
         Determines whether the CLI is present and responsive.
 
-        Records actual version and help text for audit.
+        Uses `colab version` subcommand (--version flag NOT supported in 0.6.0).
         Does NOT perform authentication.
         Does NOT create a session.
         """
@@ -136,10 +192,10 @@ class ColabComputeProvider(RemoteComputeProvider):
             self._availability = ProviderAvailability.UNAVAILABLE
             return self._availability
 
-        # Try --version
+        # Use verified `colab version` subcommand
         try:
             r = subprocess.run(
-                [self.cli_path, "--version"],
+                [self.cli_path, _CMD_VERSION],
                 capture_output=True, text=True, timeout=10
             )
             self._cli_version = (r.stdout or r.stderr).strip()
@@ -148,7 +204,7 @@ class ColabComputeProvider(RemoteComputeProvider):
             logger.warning(f"Colab CLI not found at {self.cli_path}: {e}")
             return self._availability
 
-        # Try --help
+        # Capture --help for audit record
         try:
             r = subprocess.run(
                 [self.cli_path, "--help"],
@@ -171,56 +227,49 @@ class ColabComputeProvider(RemoteComputeProvider):
                 "Install google-colab-cli and re-run probe_availability()."
             )
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
     # CLASSIFICATION
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
 
-    def _determine_classification(self) -> ExecutionClassification:
+    def _determine_classification(self, session_confirmed: bool = False) -> ExecutionClassification:
         """
-        Returns REAL_REMOTE only when the CLI is installed and a real backend
-        interaction is confirmed. Returns TEST otherwise.
+        Returns REAL_REMOTE only when:
+          - CLI is installed and AVAILABLE
+          - A real authenticated backend session was confirmed
+
+        Returns TEST otherwise.
         """
         if self._availability != ProviderAvailability.AVAILABLE:
             return ExecutionClassification.TEST
-        # Placeholder: when CLI is available, a real auth/status probe would
-        # go here. Until CLI is installed and command surface verified,
-        # conservative TEST classification is returned even if binary exists.
+        if session_confirmed:
+            return ExecutionClassification.REAL_REMOTE
         return ExecutionClassification.TEST
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # CLI EXECUTION
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
+    # CLI EXECUTION HELPERS
+    # -------------------------------------------------------------------------
 
-    def _run_cli(self, args: List[str], timeout: int = 30) -> Dict[str, Any]:
+    def _run_cli_raw(self, args: List[str], timeout: int = 60) -> subprocess.CompletedProcess:
         """
-        Executes the CLI binary and returns parsed JSON stdout.
-
+        Executes the CLI binary and returns the raw CompletedProcess.
         Raises ColabCLINotFoundError if binary absent.
-        Raises ColabCLIError on non-zero exit or parse failure.
         """
         self._assert_available()
         try:
-            result = subprocess.run(
+            return subprocess.run(
                 [self.cli_path] + args,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
             )
-            if result.returncode != 0:
-                raise ColabCLIError(
-                    f"CLI exited {result.returncode}: {(result.stderr or result.stdout).strip()}"
-                )
-            return json.loads(result.stdout)
         except FileNotFoundError:
             raise ColabCLINotFoundError(f"CLI binary not found: {self.cli_path}")
         except subprocess.TimeoutExpired:
             raise ColabCLIError("CLI command timed out")
-        except json.JSONDecodeError as e:
-            raise ColabCLIError(f"CLI returned non-JSON output: {e}")
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
     # SECURITY
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
 
     @staticmethod
     def _assert_no_credentials(context: Dict[str, Any]) -> None:
@@ -231,50 +280,87 @@ class ColabComputeProvider(RemoteComputeProvider):
                 f"Security violation: forbidden keys in provision() context: {found}"
             )
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
     # LEASE
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
 
     def _check_lease(self, session: RemoteComputeSession) -> None:
         """Force EXPIRED state if lease deadline has passed."""
         if session.lease and datetime.now(timezone.utc) > session.lease.expires_at:
             session.state = RemoteSessionState.EXPIRED
 
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
     # PROVIDER CONTRACT IMPLEMENTATION
-    # ──────────────────────────────────────────────────────────────────────────
+    # -------------------------------------------------------------------------
 
     def provision(self, context: Dict[str, Any]) -> RemoteComputeSession:
         """
-        Creates a new remote Colab session.
+        Creates a new remote Colab session via `colab new --session <name>`.
 
-        REQUIRES CLI to be available. If CLI absent → raises ColabCLINotFoundError.
+        Verified command: colab new --session <name> [--gpu <variant>]
+        Observed output:
+          [colab] Creating session '<name>'...
+          [colab] Session READY.
 
         Context keys:
-          accelerator  (str, optional) : Requested accelerator preference (NOT guaranteed)
-          lease_duration (timedelta, optional) : Default 1 hour
+          session_name   (str, optional)      : Session name. Auto-generated if absent.
+          accelerator    (str, optional)      : GPU variant (T4/L4/G4/H100/A100).
+          lease_duration (timedelta, optional): Default 1 hour.
         """
         self._assert_no_credentials(context)
         self._assert_available()
 
-        requested_accelerator = context.get("accelerator", "UNKNOWN")
-        classification = self._determine_classification()
+        import uuid
+        session_name = context.get("session_name") or f"anny-{uuid.uuid4().hex[:8]}"
+        requested_accelerator = context.get("accelerator")
+        lease_duration = context.get("lease_duration", timedelta(hours=1))
 
-        # NOTE: The actual CLI command for session creation is UNVERIFIED.
-        # The candidate command `colab new` will be validated once CLI is installed.
-        # _run_cli(self._CMD_NEW + [...]) would go here.
-        raise NotImplementedError(
-            "Session creation requires a verified CLI command surface. "
-            "Install the colab CLI, run probe_availability(), then reconcile "
-            "_CMD_NEW against `colab new --help` output."
+        # Build verified CLI command
+        args = [_CMD_NEW, "--session", session_name]
+        if requested_accelerator:
+            args += ["--gpu", requested_accelerator]
+
+        logger.info(f"Provisioning colab session: {session_name}")
+        result = self._run_cli_raw(args, timeout=120)
+
+        if result.returncode != 0:
+            raise ColabCLIError(
+                f"colab new failed (exit {result.returncode}): "
+                f"{(result.stderr or result.stdout).strip()}"
+            )
+
+        # Verify "Session READY" in output (observed from 0.6.0)
+        output = result.stdout + result.stderr
+        if "Session READY" not in output:
+            raise ColabCLIError(
+                f"Session creation did not confirm READY state. Output: {output!r}"
+            )
+
+        now = datetime.now(timezone.utc)
+        session = RemoteComputeSession(
+            session_id=session_name,
+            provider_id=self.provider_id,
+            state=RemoteSessionState.CONNECTED,
+            requested_accelerator=requested_accelerator,
+            assigned_accelerator=None,   # not yet observed from status
+            observed_accelerator=None,
+            classification=self._determine_classification(session_confirmed=True),
+            created_at=now,
+            lease=RemoteComputeLease(
+                granted_at=now,
+                expires_at=now + lease_duration,
+            ),
         )
+        self._sessions[session_name] = session
+        return session
 
     def inspect(self, session: RemoteComputeSession) -> RemoteComputeResourceProfile:
         """
-        Returns observed resource profile for a session.
+        Returns observed resource profile for a session via `colab status`.
 
-        All fields default to None with TrustLevel.UNKNOWN.
-        Values are only promoted to OBSERVED when returned by actual CLI response.
+        Verified command: colab status --session <name>
+        Observed output:
+          [<name>] <backend_id> | Hardware: CPU | Variant: DEFAULT | Status: IDLE
         """
         self._check_lease(session)
         if session.state in (RemoteSessionState.EXPIRED, RemoteSessionState.TERMINATED):
@@ -282,29 +368,48 @@ class ColabComputeProvider(RemoteComputeProvider):
 
         self._assert_available()
 
-        # NOTE: CLI command UNVERIFIED. Candidate: `colab status <session_id>`
-        # _run_cli(self._CMD_STATUS + [session.session_id]) would go here.
-        # Until verified, return all-UNKNOWN profile.
+        result = self._run_cli_raw(
+            [_CMD_STATUS, "--session", session.session_id], timeout=30
+        )
+
+        parsed = {}
+        if result.returncode == 0:
+            for line in (result.stdout + result.stderr).splitlines():
+                p = _parse_session_status_line(line)
+                if p:
+                    parsed = p
+                    break
+
+        # Map observed hardware string -> fields; default UNKNOWN
+        hardware = parsed.get("hardware")   # e.g. "CPU", "T4"
+        gpu_present = (hardware not in (None, "CPU")) if hardware else None
+
+        # Populate session observed accelerator from status
+        session.observed_accelerator = hardware
+
         return RemoteComputeResourceProfile(
-            cpu=None,
+            cpu=None,               # not reported by colab status
             cores=None,
             ram=None,
-            gpu_present=None,
-            gpu_vendor=None,
-            gpu_model=None,
+            gpu_present=gpu_present,
+            gpu_vendor=None,        # not reported by colab status
+            gpu_model=hardware if gpu_present else None,
             vram=None,
-            accelerator_type=None,
+            accelerator_type=hardware,
             runtime=None,
             python_version=None,
             observed_at=datetime.now(timezone.utc),
-            trust_levels=TrustProfile()  # all UNKNOWN
+            trust_levels=TrustProfile(
+                accelerator_type=TrustLevel.OBSERVED if hardware else TrustLevel.UNKNOWN,
+            )
         )
 
     def health(self, session: RemoteComputeSession) -> RemoteSessionState:
         """
-        Polls the actual session health via CLI.
+        Polls the actual session health via `colab status --session <name>`.
 
-        Enforces lease expiry before polling.
+        Verified command: colab status --session <name>
+        Interprets Status field: IDLE -> CONNECTED (alive), absent session -> TERMINATED.
         """
         self._check_lease(session)
         if session.state in (
@@ -316,15 +421,39 @@ class ColabComputeProvider(RemoteComputeProvider):
 
         self._assert_available()
 
-        # NOTE: CLI command UNVERIFIED. Candidate: `colab status <session_id>`
-        # Full implementation requires verified command surface.
-        raise NotImplementedError(
-            "health() requires a verified CLI status command. "
-            "Reconcile _CMD_STATUS against `colab status --help` output."
+        result = self._run_cli_raw(
+            [_CMD_STATUS, "--session", session.session_id], timeout=30
         )
 
+        output = result.stdout + result.stderr
+        if result.returncode != 0 or "not found" in output.lower():
+            session.state = RemoteSessionState.TERMINATED
+            return session.state
+
+        parsed = {}
+        for line in output.splitlines():
+            p = _parse_session_status_line(line)
+            if p:
+                parsed = p
+                break
+
+        cli_status = parsed.get("status", "UNKNOWN").upper()
+        if cli_status in ("IDLE", "BUSY", "RUNNING"):
+            session.state = RemoteSessionState.CONNECTED
+        elif cli_status == "TERMINATED":
+            session.state = RemoteSessionState.TERMINATED
+        elif cli_status == "FAILED":
+            session.state = RemoteSessionState.FAILED
+
+        return session.state
+
     def execute(self, session: RemoteComputeSession, job: RemoteComputeJob) -> RemoteComputeJob:
-        """CONNECTED != READY: only READY sessions may execute."""
+        """
+        Executes code via `colab exec --session <name> --file <path>`.
+
+        Verified command: colab exec --session <name> --file <path> [--timeout <float>]
+        CONNECTED != READY: only READY sessions may accept workloads.
+        """
         self._check_lease(session)
 
         if session.state == RemoteSessionState.TERMINATED:
@@ -336,35 +465,70 @@ class ColabComputeProvider(RemoteComputeProvider):
 
         self._assert_available()
 
-        # NOTE: CLI command for remote execution UNVERIFIED.
-        raise NotImplementedError(
-            "execute() requires a verified CLI exec/run command. "
-            "Reconcile against `colab exec --help` or `colab run --help`."
-        )
+        code = getattr(job, "code", None) or getattr(job, "script", None)
+        if not code:
+            raise ValueError("RemoteComputeJob has no executable code payload.")
+
+        # Write code to a temp file for colab exec --file
+        with tempfile.NamedTemporaryFile(
+            suffix=".py", mode="w", delete=False, prefix="anny_job_"
+        ) as tf:
+            tf.write(code)
+            tmp_path = tf.name
+
+        try:
+            args = [_CMD_EXEC, "--session", session.session_id, "--file", tmp_path]
+            timeout = getattr(job, "timeout_seconds", 30) or 30
+            result = self._run_cli_raw(args, timeout=int(timeout) + 10)
+        finally:
+            os.unlink(tmp_path)
+
+        if result.returncode != 0:
+            job.state = "FAILED"
+            job.error = (result.stderr or result.stdout).strip()
+            raise ColabCLIError(
+                f"colab exec failed (exit {result.returncode}): {job.error}"
+            )
+
+        job.state = "COMPLETED"
+        job.stdout = result.stdout
+        return job
 
     def collect(self, session: RemoteComputeSession, job: RemoteComputeJob) -> List[RemoteComputeArtifact]:
-        """Collects artifacts from a completed job."""
+        """
+        Collect artifacts from a completed job.
+
+        colab 0.6.0 does not have a dedicated artifact-listing command;
+        `colab download` and `colab ls` are available for file transfer.
+        Returns an empty list until a higher-level workflow specifies artifact paths.
+        """
         self._check_lease(session)
         self._assert_available()
-
-        # NOTE: CLI artifact collection command UNVERIFIED.
-        raise NotImplementedError(
-            "collect() requires a verified CLI artifact command. "
-            "Reconcile against installed CLI help."
-        )
+        return []
 
     def terminate(self, session: RemoteComputeSession) -> None:
         """
-        Terminates the session.
+        Terminates the session via `colab stop --session <name>`.
+
+        Verified command: colab stop --session <name>
+        Observed output:
+          [colab] Stopping session '<name>'...
+          [colab] Session terminated.
 
         Forces TERMINATED state locally even if the CLI call fails,
         to prevent zombie sessions from being reused.
         """
         try:
             self._assert_available()
-            # NOTE: CLI stop command UNVERIFIED. Candidate: `colab stop <session_id>`
-            # _run_cli(self._CMD_STOP + [session.session_id]) would go here.
-        except (ColabCLINotFoundError, NotImplementedError):
-            pass  # CLI absent — force state locally
+            result = self._run_cli_raw(
+                [_CMD_STOP, "--session", session.session_id], timeout=60
+            )
+            if result.returncode != 0:
+                output = (result.stderr or result.stdout).strip()
+                logger.warning(
+                    f"colab stop returned exit {result.returncode}: {output}"
+                )
+        except (ColabCLINotFoundError, ColabCLIError) as e:
+            logger.warning(f"terminate(): CLI error ignored, forcing TERMINATED: {e}")
         finally:
             session.state = RemoteSessionState.TERMINATED

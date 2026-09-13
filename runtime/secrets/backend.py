@@ -121,3 +121,38 @@ class SecureBroker(SecretBackend):
     def list_references(self) -> List[str]:
         self._check_access()
         return self.backend.list_references()
+
+class AccountCredentialBroker(SecretBackend):
+    def __init__(self, backend: SecretBackend, account_id: str):
+        self.backend = backend
+        self.account_id = account_id
+        self.prefix = f"acct-{self.account_id}-"
+
+    def _check_namespace(self, reference: str):
+        from runtime.security.context_guard import ContextAccessError
+        if not reference.startswith(self.prefix):
+            raise ContextAccessError(f"CONTEXT_ACCESS_DENIED: Invalid credential namespace. Expected prefix {self.prefix}, got {reference}")
+
+    def credential_ref_for(self, service: str) -> str:
+        return f"{self.prefix}{service}"
+
+    def store(self, reference: str, value: bytes) -> bool:
+        self._check_namespace(reference)
+        return self.backend.store(reference, value)
+
+    def retrieve(self, reference: str) -> Optional[bytes]:
+        self._check_namespace(reference)
+        return self.backend.retrieve(reference)
+
+    def delete(self, reference: str) -> bool:
+        self._check_namespace(reference)
+        return self.backend.delete(reference)
+
+    def exists(self, reference: str) -> bool:
+        self._check_namespace(reference)
+        return self.backend.exists(reference)
+
+    def list_references(self) -> List[str]:
+        # Only return references belonging to this account
+        all_refs = self.backend.list_references()
+        return [ref for ref in all_refs if ref.startswith(self.prefix)]

@@ -55,6 +55,8 @@ class WorkerManager:
             worker_id=worker_id,
             execution_id=context.execution_id,
             task_id=context.task_id,
+            account_id=context.account_id,
+            project_id=context.project_id,
             capability_id=context.capability_id,
             executor_type=selection.executor_type.value,
             executor_id=selection.executor_id,

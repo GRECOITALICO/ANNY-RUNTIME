@@ -36,6 +36,8 @@ class WorkerDefinition:
     worker_id: str
     execution_id: str
     task_id: str
+    account_id: str
+    project_id: str
     capability_id: str
     executor_type: str
     executor_id: str
@@ -54,6 +56,8 @@ class WorkerDefinition:
 class Task:
     task_id: str
     capability_id: str
+    account_id: str
+    project_id: str
     input: Dict[str, Any]
     constraints: Dict[str, Any]
     deadline: datetime
@@ -66,6 +70,8 @@ class Task:
 class TaskExecutionContext:
     execution_id: str
     task_id: str
+    account_id: str
+    project_id: str
     capability_id: str
     workspace_path: str
     environment: Dict[str, str]

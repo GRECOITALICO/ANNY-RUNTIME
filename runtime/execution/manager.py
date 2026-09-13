@@ -62,13 +62,15 @@ class ExecutionManager:
         
         # Determine paths
         try:
-            workspace_path = self.workspace_manager.create_workspace(execution_id)
+            workspace_path = self.workspace_manager.create_workspace(execution_id, task.project_id)
         except Exception as e:
             raise RuntimeError(f"Failed to create workspace: {e}")
             
         context = TaskExecutionContext(
             execution_id=execution_id,
             task_id=task.task_id,
+            account_id=task.account_id,
+            project_id=task.project_id,
             capability_id=task.capability_id,
             workspace_path=workspace_path,
             environment={},

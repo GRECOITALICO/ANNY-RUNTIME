@@ -10,6 +10,7 @@ from runtime.admin.templates import (
     sessions_page, operations_page, receipts_page, doctor_page, executions_page,
     capabilities_page, executors_page, policies_page, workers_page, worker_detail_page,
     models_page, model_detail_page,
+    universe_accounts_page, universe_account_detail_page,
     universe_organization_page, universe_projects_page, universe_repositories_page,
     universe_resources_page, execution_tasks_page, execution_workers_page,
     intelligence_capabilities_page, infrastructure_topology_page, audit_events_page,
@@ -51,6 +52,7 @@ class AdminRouter:
             '/executors': self.handle_executors,
             '/policies': self.handle_policies,
             '/doctor': self.handle_doctor,
+            '/universe/accounts': self.handle_universe_accounts,
             '/universe/organization': self.handle_universe_organization,
             '/universe/projects': self.handle_universe_projects,
             '/universe/repositories': self.handle_universe_repositories,
@@ -118,6 +120,11 @@ class AdminRouter:
 
         if parsed.path.startswith('/browser/'):
             self.handle_browser_session_detail(parsed, handler)
+            return
+
+        if parsed.path.startswith('/universe/accounts/') and len(parsed.path) > len('/universe/accounts/'):
+            html = self.handle_universe_account_detail(parsed)
+            self._send_html(handler, html)
             return
 
         route_handler = self._get_routes.get(parsed.path)
@@ -738,8 +745,29 @@ class AdminRouter:
                 logger.error(f"Org discovery error: {e}")
         return universe_organization_page(orgs, self._get_csrf())
 
+    def handle_universe_accounts(self, parsed) -> str:
+        accounts = []
+        registry = self.context.get('account_registry')
+        if registry:
+            accounts = registry.list_accounts()
+        return universe_accounts_page(accounts, self._get_csrf())
+        
+    def handle_universe_account_detail(self, parsed) -> str:
+        account_id = parsed.path.split('/')[-1]
+        registry = self.context.get('account_registry')
+        if not registry:
+            return generic_placeholder_page("Account Registry Not Available", self._get_csrf())
+        account = registry.get_account(account_id)
+        if not account:
+            return generic_placeholder_page(f"Account {account_id} not found", self._get_csrf())
+        return universe_account_detail_page(account, self._get_csrf())
+
     def handle_universe_projects(self, parsed) -> str:
-        return universe_projects_page([], self._get_csrf())
+        projects = []
+        registry = self.context.get('project_registry')
+        if registry:
+            projects = registry.list_projects()
+        return universe_projects_page(projects, self._get_csrf())
 
     def handle_universe_repositories(self, parsed) -> str:
         repos = []

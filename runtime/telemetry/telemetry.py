@@ -57,6 +57,8 @@ class TelemetryEnvelope:
     worker_id: Optional[str] = None
     directorate_id: Optional[str] = None   # null until concept introduced
     workspace_id: Optional[str] = None
+    tenant_id: Optional[str] = None
+    account_id: Optional[str] = None
     project_id: Optional[str] = None
     repository_id: Optional[str] = None
     resource_id: Optional[str] = None
@@ -105,6 +107,8 @@ class TelemetryEnvelope:
         worker_id: Optional[str] = None,
         directorate_id: Optional[str] = None,
         workspace_id: Optional[str] = None,
+        tenant_id: Optional[str] = None,
+        account_id: Optional[str] = None,
         project_id: Optional[str] = None,
         repository_id: Optional[str] = None,
         resource_id: Optional[str] = None,
@@ -135,6 +139,8 @@ class TelemetryEnvelope:
             worker_id=worker_id,
             directorate_id=directorate_id,
             workspace_id=workspace_id,
+            tenant_id=tenant_id,
+            account_id=account_id,
             project_id=project_id,
             repository_id=repository_id,
             resource_id=resource_id,

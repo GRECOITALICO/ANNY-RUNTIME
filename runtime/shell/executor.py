@@ -6,6 +6,8 @@ import time
 @dataclass(frozen=True)
 class ExecutionContext:
     tenant_id: str
+    account_id: str
+    project_id: str
     anny_instance_id: str
     runtime_id: str
     session_id: str

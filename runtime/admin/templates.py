@@ -1248,6 +1248,36 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
 def _render_empty_state(message="No data available."):
     return f'<div style="padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px;">{message}</div>'
 
+def universe_accounts_page(accounts, csrf_token=""):
+    rows = ""
+    for acct in accounts:
+        rows += f'<tr><td><a href="/universe/accounts/{acct.account_id}">{acct.account_id}</a></td><td>{acct.name}</td><td>{acct.owner_principal}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
+    content = f"""
+        <div class="page-header"><h2>Accounts</h2><p>Multi-Account Identity Boundaries</p></div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Account ID</th><th>Name</th><th>Owner</th><th>Status</th></tr></thead>
+                <tbody>{rows if rows else '<tr><td colspan="4" style="text-align:center;">No accounts registered</td></tr>'}</tbody>
+            </table>
+        </div>
+    """
+    return base_layout("Accounts", content, "/universe/accounts", csrf_token)
+
+def universe_account_detail_page(account, csrf_token=""):
+    content = f"""
+        <div class="page-header">
+            <a href="/universe/accounts" class="btn btn-secondary">← Back</a>
+            <h2>Account Details</h2>
+            <p>{account.account_id}</p>
+        </div>
+        <div class="detail-panel">
+            <h3>Identity</h3>
+            <pre><code>Name: {account.name}
+Owner: {account.owner_principal}</code></pre>
+        </div>
+    """
+    return base_layout(f"Account {account.account_id}", content, "/universe/accounts", csrf_token)
+
 def universe_organization_page(orgs, csrf_token=""):
     rows = ""
     for org in orgs:

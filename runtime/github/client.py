@@ -46,10 +46,11 @@ class GitHubRateLimitError(GitHubClientError):
 class GitHubClient:
     """Read-only GitHub API client."""
 
-    def __init__(self, secret_backend=None, token: Optional[str] = None, timeout_seconds: int = 10):
+    def __init__(self, secret_backend=None, token: Optional[str] = None, timeout_seconds: int = 10, account_id: Optional[str] = None):
         self.secret_backend = secret_backend
         self._token = token
         self.timeout_seconds = timeout_seconds
+        self.account_id = account_id
 
     def _get_token(self) -> str:
         """Retrieve GitHub token from direct argument or SecretBackend."""
@@ -57,7 +58,8 @@ class GitHubClient:
             return self._token
         if self.secret_backend:
             try:
-                token_bytes = self.secret_backend.retrieve(GITHUB_TOKEN_REF)
+                ref = f"acct-{self.account_id}-github-token" if self.account_id else GITHUB_TOKEN_REF
+                token_bytes = self.secret_backend.retrieve(ref)
                 if token_bytes:
                     return token_bytes.decode('utf-8').strip()
             except Exception as e:

@@ -9,6 +9,8 @@ class ExecutionContext:
     No physical tool should execute without a verified instance of this context.
     """
     tenant_id: str
+    account_id: str
+    project_id: str
     anny_instance_id: str
     runtime_id: str
     session_id: str

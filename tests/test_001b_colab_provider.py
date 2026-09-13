@@ -26,40 +26,40 @@ def test_B_03_provision_blocks_credentials(provider):
 def test_B_04_classification_test_when_missing(provider):
     assert provider._determine_classification() == ExecutionClassification.TEST
 
-def test_B_05_provision_unverified_surface():
+def test_B_05_provision_cli_error_on_fake_binary():
+    # CLI surface is now VERIFIED (001B-S). provision() attempts real CLI call.
+    # With a fake binary, _run_cli_raw raises ColabCLINotFoundError (FileNotFoundError caught).
     p = ColabComputeProvider(cli_path="fake-cli")
-    # Mock probe to return AVAILABLE
-    with patch.object(p, 'probe_availability', return_value=ProviderAvailability.AVAILABLE):
-        p._availability = ProviderAvailability.AVAILABLE
-        with pytest.raises(NotImplementedError, match="Session creation requires a verified CLI command surface"):
-            p.provision({})
+    p._availability = ProviderAvailability.AVAILABLE
+    with pytest.raises(ColabCLINotFoundError, match="CLI binary not found"):
+        p.provision({})
 
 def test_B_06_inspect_raises_on_missing_cli(provider):
     s = RemoteComputeSession(session_id="s1", provider_id="google-colab", state=RemoteSessionState.CONNECTED, classification=ExecutionClassification.TEST, lease=None)
     with pytest.raises(ColabCLINotFoundError):
         provider.inspect(s)
 
-def test_B_07_inspect_unverified_surface():
+def test_B_07_inspect_cli_error_on_fake_binary():
+    # CLI surface is now VERIFIED (001B-S). inspect() attempts real CLI call.
+    # With a fake binary, _run_cli_raw raises ColabCLINotFoundError.
     p = ColabComputeProvider(cli_path="fake-cli")
     s = RemoteComputeSession(session_id="s1", provider_id="google-colab", state=RemoteSessionState.CONNECTED, classification=ExecutionClassification.TEST, lease=None)
     p._availability = ProviderAvailability.AVAILABLE
-    
-    profile = p.inspect(s)
-    # Should return all UNKNOWN since command is unverified
-    assert profile.cpu is None
-    assert profile.gpu_present is None
-    assert profile.trust_levels.accelerator_type == TrustLevel.UNKNOWN
+    with pytest.raises(ColabCLINotFoundError, match="CLI binary not found"):
+        p.inspect(s)
 
 def test_B_08_health_raises_on_missing_cli(provider):
     s = RemoteComputeSession(session_id="s1", provider_id="google-colab", state=RemoteSessionState.CONNECTED, classification=ExecutionClassification.TEST, lease=None)
     with pytest.raises(ColabCLINotFoundError):
         provider.health(s)
 
-def test_B_09_health_unverified_surface():
+def test_B_09_health_cli_error_on_fake_binary():
+    # CLI surface is now VERIFIED (001B-S). health() attempts real CLI call.
+    # With a fake binary, _run_cli_raw raises ColabCLINotFoundError.
     p = ColabComputeProvider(cli_path="fake-cli")
     s = RemoteComputeSession(session_id="s1", provider_id="google-colab", state=RemoteSessionState.CONNECTED, classification=ExecutionClassification.TEST, lease=None)
     p._availability = ProviderAvailability.AVAILABLE
-    with pytest.raises(NotImplementedError, match="health.. requires a verified CLI status command"):
+    with pytest.raises(ColabCLINotFoundError, match="CLI binary not found"):
         p.health(s)
 
 def test_B_10_terminate_forces_state(provider):

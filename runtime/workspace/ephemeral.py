@@ -10,12 +10,12 @@ class EphemeralWorkspaceManager:
         # Secure the base directory
         os.chmod(self.base_dir, 0o700)
 
-    def create_workspace(self, execution_id: str) -> str:
+    def create_workspace(self, execution_id: str, project_id: str = "default") -> str:
         """
         Creates a securely isolated ephemeral workspace for an execution.
         Raises an error if the workspace already exists.
         """
-        workspace_path = os.path.join(self.base_dir, execution_id)
+        workspace_path = os.path.join(self.base_dir, project_id, execution_id)
         if os.path.exists(workspace_path):
             raise FileExistsError(f"Workspace {workspace_path} already exists")
         

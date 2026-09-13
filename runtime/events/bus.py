@@ -39,6 +39,9 @@ class EventType(Enum):
 class Event:
     event_type: EventType
     source: str
+    tenant_id: Optional[str] = None
+    account_id: Optional[str] = None
+    project_id: Optional[str] = None
     payload: Dict[str, Any] = field(default_factory=dict)
     timestamp: float = field(default_factory=time.time)
 

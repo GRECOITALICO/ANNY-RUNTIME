@@ -13,8 +13,9 @@ class FabricError(Exception):
         super().__init__(f"[{error_code}] {message}")
 
 class FabricClient:
-    def __init__(self, endpoint: Optional[str] = None):
+    def __init__(self, endpoint: Optional[str] = None, project_id: Optional[str] = None):
         self.endpoint = endpoint or os.environ.get("FABRIC_ENDPOINT", "http://localhost:8000")
+        self.project_id = project_id
         self.credential = DefaultAzureCredential()
         # Ensure endpoint doesn't end with slash
         if self.endpoint.endswith("/"):
@@ -33,6 +34,8 @@ class FabricClient:
     def _request(self, method: str, path: str, json_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         url = f"{self.endpoint}{path}"
         headers = {"Authorization": f"Bearer {self._get_token()}"}
+        if self.project_id:
+            headers["X-Project-Id"] = self.project_id
         
         try:
             with httpx.Client(timeout=10.0) as client:

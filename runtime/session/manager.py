@@ -22,7 +22,7 @@ class SessionManager:
         self.enrollment_manager = enrollment_manager
         self._sessions: Dict[str, SessionLease] = {}
         
-    def attach(self, principal: str, tenant_id: str, anny_instance_id: str, scope: str, provider_metadata: Dict[str, Any]) -> SessionLease:
+    def attach(self, principal: str, tenant_id: str, account_id: str, project_id: str, anny_instance_id: str, scope: str, provider_metadata: Dict[str, Any]) -> SessionLease:
         """
         Creates a new session if enrollment allows.
         Validates that the provided tenant_id matches the enrolled tenant_id.
@@ -43,6 +43,8 @@ class SessionManager:
             session_id=session_id,
             principal=principal,
             tenant_id=tenant_id,
+            account_id=account_id,
+            project_id=project_id,
             anny_instance_id=anny_instance_id,
             runtime_id=self.runtime_identity.runtime_id,
             scope=scope,
@@ -90,6 +92,8 @@ class SessionManager:
         lease = self.get(session_id)
         return ExecutionContext(
             tenant_id=lease.tenant_id,
+            account_id=lease.account_id,
+            project_id=lease.project_id,
             anny_instance_id=lease.anny_instance_id,
             runtime_id=lease.runtime_id,
             session_id=lease.session_id,

@@ -11,6 +11,9 @@ class JournalEntry:
     operation_id: str
     execution_id: str
     session_id: str
+    tenant_id: str
+    account_id: str
+    project_id: str
     actor_id: str
     workspace_id: str
     tool: str
