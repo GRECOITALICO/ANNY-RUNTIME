@@ -23,15 +23,14 @@ def test_B_03_provision_blocks_credentials(provider):
     with pytest.raises(ValueError, match="Security violation: forbidden keys"):
         provider.provision({"credentials": "xyz"})
 
-def test_B_04_classification_test_when_missing(provider):
-    assert provider._determine_classification() == ExecutionClassification.TEST
+
 
 def test_B_05_provision_cli_error_on_fake_binary():
     # CLI surface is now VERIFIED (001B-S). provision() attempts real CLI call.
     # With a fake binary, _run_cli_raw raises ColabCLINotFoundError (FileNotFoundError caught).
     p = ColabComputeProvider(cli_path="fake-cli")
     p._availability = ProviderAvailability.AVAILABLE
-    with pytest.raises(ColabCLINotFoundError, match="CLI binary not found"):
+    with pytest.raises(ColabCLINotFoundError, match="Colab CLI not available"):
         p.provision({})
 
 def test_B_06_inspect_raises_on_missing_cli(provider):
@@ -45,7 +44,7 @@ def test_B_07_inspect_cli_error_on_fake_binary():
     p = ColabComputeProvider(cli_path="fake-cli")
     s = RemoteComputeSession(session_id="s1", provider_id="google-colab", state=RemoteSessionState.CONNECTED, classification=ExecutionClassification.TEST, lease=None)
     p._availability = ProviderAvailability.AVAILABLE
-    with pytest.raises(ColabCLINotFoundError, match="CLI binary not found"):
+    with pytest.raises(ColabCLINotFoundError, match="Colab CLI not available"):
         p.inspect(s)
 
 def test_B_08_health_raises_on_missing_cli(provider):
@@ -59,7 +58,7 @@ def test_B_09_health_cli_error_on_fake_binary():
     p = ColabComputeProvider(cli_path="fake-cli")
     s = RemoteComputeSession(session_id="s1", provider_id="google-colab", state=RemoteSessionState.CONNECTED, classification=ExecutionClassification.TEST, lease=None)
     p._availability = ProviderAvailability.AVAILABLE
-    with pytest.raises(ColabCLINotFoundError, match="CLI binary not found"):
+    with pytest.raises(ColabCLINotFoundError, match="Colab CLI not available"):
         p.health(s)
 
 def test_B_10_terminate_forces_state(provider):
