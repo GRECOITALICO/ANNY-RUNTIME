@@ -7,6 +7,8 @@ import pytest
 
 from runtime.control_plane import RuntimeControlPlaneClient
 from runtime.continuity.engine import ContinuityEngine
+from runtime.core.config import RuntimeConfig
+from runtime.core.engine import RuntimeEngine
 from runtime.evolution import ReleaseVerifier
 from runtime.evolution.manager import EvolutionError, RuntimeEvolutionManager
 
@@ -39,6 +41,22 @@ def test_control_plane_is_best_effort_when_unconfigured():
     response = client.heartbeat({"runtime_id": "RUNTIME-TEST"})
     assert response.ok is False
     assert response.error == "CONTROL_PLANE_NOT_CONFIGURED"
+
+
+def test_runtime_engine_keeps_control_plane_separate_from_admission(tmp_path, monkeypatch):
+    monkeypatch.delenv("ANNY_CONTROL_PLANE_TOKEN", raising=False)
+    config = RuntimeConfig(data_dir=str(tmp_path), control_plane_url="https://control.example")
+    engine = RuntimeEngine(config)
+    engine._init_subsystems()
+    assert engine.control_plane.enabled is True
+    assert engine.bootstrap_report is None
+
+
+def test_runtime_engine_evolution_is_prepare_only_until_admitted(tmp_path):
+    config = RuntimeConfig(data_dir=str(tmp_path))
+    engine = RuntimeEngine(config)
+    with pytest.raises(RuntimeError, match="admitted runtime"):
+        engine.prepare_evolution({}, str(tmp_path / "candidate.bin"), object())
 
 
 def _signed_descriptor(private_key, artifact_hash, key_id):
