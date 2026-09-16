@@ -38,8 +38,8 @@ def test_continuity_engine_step_sequence(temp_data_dir):
     record_c2.last_completed_step = "STEP-C.1"
     engine.save_record(record_c2)
 
-    # 2. Modifying repository and creating commit
-    event = mutation_contract.record_mutation(
+    # 2. Modifying repository and creating commit (2-phase)
+    prepare_event = mutation_contract.prepare_mutation(
         mission_id="TEST-MISSION-1",
         task_id="TASK-C",
         step_id="STEP-C.2",
@@ -48,13 +48,17 @@ def test_continuity_engine_step_sequence(temp_data_dir):
         repository="ANNY-OPERATIONAL",
         branch="main",
         commit_before="abc1234",
-        commit_after="def5678",
-        files_changed=["README.md"],
         reason="Updated documentation",
         action="commit",
-        tests=["test_doc.py"],
-        evidence_refs=["evidence-doc-001"],
         next_action="RUN_TESTS"
+    )
+    # git commit happens here (externally)
+    event = mutation_contract.finalize_mutation(
+        prepare_event=prepare_event,
+        commit_after="def5678",
+        files_changed=["README.md"],
+        tests=["test_doc.py"],
+        evidence_refs=["evidence-doc-001"]
     )
 
     # 3. NO certification!
