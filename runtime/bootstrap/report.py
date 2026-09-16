@@ -33,23 +33,43 @@ class BootstrapReport:
 
 
 class ChatGPTBootstrapFormatter:
-    """Formats a BootstrapReport into the canonical 9-line structure."""
-    
+    """Formats a BootstrapReport into the canonical structure."""
+
     @staticmethod
     def format(report: BootstrapReport) -> str:
-        status = "READY" if report.anny_ready else "DEGRADED"
-        
+        if report.anny_ready:
+            status = "READY"
+        else:
+            status = "BLOCKED"   # NEVER "DEGRADED" — failure = BLOCKED
+
         # Extract evidence safely
         node_id = report.fabric_node or "UNKNOWN"
         runtime_id = report.runtime_id or "UNKNOWN"
         tenant_id = report.get_gate(ReadinessGate.FABRIC_TENANT_BOUND).evidence or "UNBOUND"
-        
-        return f"""ANNY BOOTSTRAP: {status}
-PLANE_1_GITHUB: {report.get_gate(ReadinessGate.GITHUB_CONNECTED).passed}
-PLANE_2_FABRIC: {report.get_gate(ReadinessGate.FABRIC_REACHABLE).passed}
-PLANE_3_RUNTIME: {report.get_gate(ReadinessGate.RUNTIME_IDENTITY).passed}
-RUNTIME_ID: {runtime_id}
-FABRIC_NODE: {node_id}
-FABRIC_TENANT: {tenant_id}
-RECONCILIATION: {report.get_gate(ReadinessGate.PLANE_RECONCILIATION).passed}
-CONTINUITY_COHERENT: {report.get_gate(ReadinessGate.CONTINUITY_COHERENT).passed}"""
+
+        def g(gate):
+            r = report.get_gate(gate)
+            return "PASS" if r.passed else "FAIL"
+
+        lines = [
+            f"ANNY BOOTSTRAP: {status}",
+            f"PLANE_1_GITHUB_CONNECTED: {g(ReadinessGate.GITHUB_CONNECTED)}",
+            f"PLANE_1_GITHUB_ORG_BOUND: {g(ReadinessGate.GITHUB_ORG_BOUND)}",
+            f"PLANE_2_FABRIC_REACHABLE: {g(ReadinessGate.FABRIC_REACHABLE)}",
+            f"PLANE_2_FABRIC_IDENTITY: {g(ReadinessGate.FABRIC_IDENTITY_VERIFIED)}",
+            f"PLANE_2_FABRIC_TRUST: {g(ReadinessGate.FABRIC_TRUST_VERIFIED)}",
+            f"PLANE_2_FABRIC_TENANT: {g(ReadinessGate.FABRIC_TENANT_BOUND)}",
+            f"PLANE_2_FABRIC_STATE: {g(ReadinessGate.FABRIC_STATE_READABLE)}",
+            f"PLANE_2_FABRIC_PROVENANCE: {g(ReadinessGate.FABRIC_PROVENANCE_VALID)}",
+            f"PLANE_2_FABRIC_NODE_HEAD: {g(ReadinessGate.FABRIC_NODE_AT_REMOTE_HEAD)}",
+            f"PLANE_3_RUNTIME_REACHABLE: {g(ReadinessGate.RUNTIME_REACHABLE)}",
+            f"PLANE_3_RUNTIME_HEALTH: {g(ReadinessGate.RUNTIME_HEALTH_VERIFIED)}",
+            f"PLANE_3_RUNTIME_BINDING: {g(ReadinessGate.RUNTIME_BINDING_VERIFIED)}",
+            f"PLANE_3_RUNTIME_ADMITTED: {g(ReadinessGate.RUNTIME_ADMITTED)}",
+            f"CROSS_RECONCILIATION: {g(ReadinessGate.PLANE_RECONCILIATION)}",
+            f"CROSS_CONTINUITY: {g(ReadinessGate.CONTINUITY_COHERENT)}",
+            f"RUNTIME_ID: {runtime_id}",
+            f"FABRIC_NODE: {node_id}",
+            f"FABRIC_TENANT: {tenant_id}",
+        ]
+        return "\n".join(lines)

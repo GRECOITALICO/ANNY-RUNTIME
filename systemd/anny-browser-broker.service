@@ -1,0 +1,77 @@
+[Unit]
+Description=ANNY Browser Broker
+Documentation=https://github.com/anny-ai/runtime
+# Start after the network is available. Does NOT depend on anny-runtime.service.
+# The two services are siblings — not parent/child.
+After=network.target
+
+[Service]
+Type=simple
+User=anny
+
+# ── Executable ────────────────────────────────────────────────────────────────
+ExecStart=/opt/anny-runtime/venv/bin/python3 /opt/anny-runtime/runtime/browser/broker_server.py
+WorkingDirectory=/opt/anny-runtime
+Restart=on-failure
+RestartSec=5s
+Environment=PYTHONUNBUFFERED=1
+
+# ── GUI/Display environment ───────────────────────────────────────────────────
+# Chrome requires access to a display session. A system service does NOT
+# automatically inherit the user's Wayland/X11 session.
+#
+# DISCOVERY (2026-09-15, host: ANNY dev host, uid=1000):
+#   DISPLAY=:0
+#   WAYLAND_DISPLAY=wayland-0
+#   XDG_RUNTIME_DIR=/run/user/1000
+#   DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+#
+# These are derived from the logged-in session. On a clean-machine install,
+# the installer writes them dynamically to /etc/anny/broker-display.env
+# (see scripts/install.sh). The PassEnvironment approach below is used
+# when the installer exports them; otherwise set them explicitly here.
+#
+# DO NOT hardcode /run/user/1000 for other machines — use the installer env file.
+EnvironmentFile=-/etc/anny/broker-display.env
+
+# ── Security hardening (Chrome-safe) ─────────────────────────────────────────
+# INTENTIONALLY OMITTED (would break Chrome sandbox):
+#   NoNewPrivileges=yes     — blocks chrome-sandbox SUID and CLONE_NEWUSER
+#   RestrictSUIDSGID=yes    — blocks SUID chrome-sandbox fallback
+#
+# Evaluated and included (verified Chrome-compatible):
+PrivateTmp=yes
+#   Chrome uses /tmp for crash pipes — PrivateTmp=yes is safe because Chrome
+#   creates its own tmpdir under /tmp relative to the namespace.
+
+ProtectSystem=full
+#   Makes /usr and /boot read-only. Chrome binary at /usr/bin/google-chrome
+#   is already read-only. Safe.
+
+ProtectHome=no
+#   REQUIRED: Chrome must write to ~/.anny/browser-profiles/colab and
+#   ~/.anny/browser-broker.sock. ProtectHome=yes would block this.
+
+PrivateDevices=no
+#   GPU access requires /dev/dri/* and sound devices.
+#   Setting PrivateDevices=yes blocks GPU rendering. Omitted for Chrome.
+
+# Restrict network socket families — broker only uses Unix sockets locally.
+# Chrome itself needs AF_INET/AF_INET6 for web content.
+# Omitting RestrictAddressFamilies to not block Chrome networking.
+
+# Capability bounding — broker runs as user anny and needs no capabilities.
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# System call filter — be careful: Chrome uses many syscalls for sandboxing.
+# clone() with CLONE_NEWUSER is specifically required. Do NOT restrict clone.
+# Omitting SystemCallFilter to preserve Chrome sandbox compatibility.
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=anny-browser-broker
+
+[Install]
+WantedBy=multi-user.target

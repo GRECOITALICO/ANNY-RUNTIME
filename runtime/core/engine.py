@@ -26,6 +26,9 @@ class RuntimeEngine:
         self._state = RuntimeState.STOPPED
         self._generation = RuntimeGeneration(config.data_dir)
         self.bootstrap_report = None
+        
+    @property
+    def config(self) -> RuntimeConfig:
         return self._config
 
     @property
@@ -58,7 +61,8 @@ class RuntimeEngine:
                 data_dir=self.config.data_dir,
                 github_client=github_client,
                 fabric_client=fabric_client,
-                continuity_engine=self.continuity_engine
+                continuity_engine=self.continuity_engine,
+                config=self._config,
             )
             self.bootstrap_report = bootstrap.resolve()
             

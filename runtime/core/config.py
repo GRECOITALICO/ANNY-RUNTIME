@@ -61,6 +61,10 @@ class RuntimeConfig:
     update_channel: str = 'dev'
     log_level: str = 'INFO'
     
+    # Fabric config
+    fabric_org: str = None
+    fabric_repo: str = None
+    
     # Admin panel configuration
     admin_enabled: bool = True
     admin_host: str = '127.0.0.1'
@@ -110,3 +114,20 @@ class RuntimeConfig:
                     
         filtered_data = {k: v for k, v in config_data.items() if k in valid_keys}
         return cls(**filtered_data)
+
+    def save(self) -> None:
+        """Saves the current configuration to config.yaml."""
+        import yaml
+        config_path = get_config_dir() / "config.yaml"
+        get_config_dir().mkdir(parents=True, exist_ok=True)
+        
+        # Serialize fields, avoiding complex nesting for simplicity
+        data = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
+        
+        # Put admin configs into an admin block
+        admin_keys = [k for k in data.keys() if k.startswith('admin_')]
+        if admin_keys:
+            data['admin'] = {k.replace('admin_', ''): data.pop(k) for k in admin_keys}
+            
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.dump(data, f, default_flow_style=False)

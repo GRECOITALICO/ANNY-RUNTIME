@@ -7,7 +7,7 @@ from typing import Callable, Dict, Any, Optional
 import json
 from runtime.admin.templates import (
     first_run_page, reconnect_page, failure_page, ready_page, github_page, fabric_page,
-    sessions_page, operations_page, receipts_page, doctor_page, executions_page,
+    fabric_setup_page, sessions_page, operations_page, receipts_page, doctor_page, executions_page,
     capabilities_page, executors_page, policies_page, workers_page, worker_detail_page,
     models_page, model_detail_page,
     universe_accounts_page, universe_account_detail_page,
@@ -78,6 +78,7 @@ class AdminRouter:
             '/github/token': self.handle_github_token,
             '/github/device/init': self.handle_github_device_init,
             '/github/disconnect': self.handle_github_disconnect,
+            '/fabric/setup': self.handle_fabric_setup,
             '/admin/restart': self.handle_admin_restart,
             '/admin/diagnostics': self.handle_admin_diagnostics,
             '/admin/update-check': self.handle_admin_update_check,
@@ -243,26 +244,60 @@ class AdminRouter:
             self._send_json(handler, {"error": safe_msg, "status": "ERROR"}, status=500)
 
     def handle_api_status(self, parsed) -> str:
-        """Returns the live status of the 3-plane bootstrap sequence."""
+        """Returns the live status of the 3-plane bootstrap sequence.
+
+        Exposes fabric_org/fabric_repo for the RUNTIME_BINDING_VERIFIED gate
+        and exposes state for RUNTIME_HEALTH_VERIFIED gate.
+        """
         engine = self.context.get('runtime_engine')
         if not engine:
-            self.context['direct_json_response'] = {"anny_ready": False, "error": "No runtime engine"}
+            self.context['direct_json_response'] = {
+                "anny_ready": False,
+                "state": "STOPPED",
+                "error": "No runtime engine"
+            }
             return '/'
-            
+
+        # Expose live state name for health gate
+        state_name = engine.state.name
+
+        # Expose fabric binding for RUNTIME_BINDING_VERIFIED gate
+        fabric_org = None
+        fabric_repo = None
+        if engine.config:
+            fabric_org = getattr(engine.config, 'fabric_org', None)
+            fabric_repo = getattr(engine.config, 'fabric_repo', None)
+
         report = engine.bootstrap_report
         if not report:
-            self.context['direct_json_response'] = {"anny_ready": False, "status": engine.state.name}
+            self.context['direct_json_response'] = {
+                "anny_ready": False,
+                "state": state_name,
+                "fabric_org": fabric_org,
+                "fabric_repo": fabric_repo,
+            }
             return '/'
-            
+
         self.context['direct_json_response'] = {
             "anny_ready": report.anny_ready,
+            "state": state_name,
+            "fabric_org": fabric_org,
+            "fabric_repo": fabric_repo,
             "runtime_id": report.runtime_id,
             "fabric_node": report.fabric_node,
-            "gates": [{"gate": g.gate.name, "passed": g.passed, "detail": g.detail, "evidence": g.evidence} for g in report.gates]
+            "gates": [
+                {
+                    "gate": g.gate.name,
+                    "passed": g.passed,
+                    "detail": g.detail,
+                    "evidence": g.evidence
+                } for g in report.gates
+            ]
         }
         return '/'
 
     def _get_fabric_client(self):
+        """Build a FabricClient using dynamic config — not hardcoded constants."""
         gh_mgr = self.context.get('github_manager')
         secret_backend = self.context.get('secret_backend')
         if not gh_mgr or not gh_mgr.has_token():
@@ -271,8 +306,11 @@ class AdminRouter:
             from runtime.github.client import GitHubClient
             from runtime.fabric.client import FabricClient
             gh_client = GitHubClient(secret_backend=secret_backend)
-            return FabricClient(github_client=gh_client)
-        except Exception:
+            engine = self.context.get('runtime_engine')
+            config = engine.config if engine else None
+            return FabricClient(github_client=gh_client, config=config)
+        except Exception as e:
+            logger.warning(f"Could not create FabricClient: {e}")
             return None
 
     def _get_continuity_dto(self) -> ContinuityDTO:
@@ -353,6 +391,25 @@ class AdminRouter:
             reason = gh_status.get('last_failure_reason', 'Unknown error')
             return failure_page(reason, self._get_csrf())
         else:
+            engine = self.context.get('runtime_engine')
+            if engine and engine.config:
+                if not getattr(engine.config, 'fabric_org', None) or not getattr(engine.config, 'fabric_repo', None):
+                    # Fetch organizations
+                    orgs = []
+                    if gh_mgr and gh_mgr.has_token():
+                        try:
+                            from runtime.github.client import GitHubClient
+                            gh_client = GitHubClient(secret_backend=gh_mgr.secret_backend)
+                            principal = gh_status.get('principal')
+                            if principal:
+                                orgs.append({"login": principal})
+                            gh_orgs = gh_client.get("/user/orgs").json()
+                            if isinstance(gh_orgs, list):
+                                orgs.extend(gh_orgs)
+                        except Exception as e:
+                            logger.error(f"Failed to fetch orgs for setup: {e}")
+                    return fabric_setup_page(orgs, error=error, csrf_token=self._get_csrf())
+
             continuity_dto = self._get_continuity_dto()
             
             # Derive identity from observable state, not hardcoded values
@@ -712,6 +769,31 @@ class AdminRouter:
 
     def handle_admin_update_check(self, form_data) -> str:
         self._audit("UPDATE_CHECK", "SUCCESS")
+        return '/'
+
+    def handle_fabric_setup(self, form_data) -> str:
+        fabric_org = form_data.get('fabric_org', [''])[0]
+        fabric_repo = form_data.get('fabric_repo', [''])[0]
+        
+        if not fabric_org or not fabric_repo:
+            return '/?error=Both+Organization+and+Repository+are+required'
+            
+        engine = self.context.get('runtime_engine')
+        if engine and engine.config:
+            engine.config.fabric_org = fabric_org
+            engine.config.fabric_repo = fabric_repo
+            engine.config.save()
+            self._audit("FABRIC_SETUP", "SUCCESS", f"{fabric_org}/{fabric_repo}")
+            
+            # Restart engine startup to re-run bootstrap with new config
+            try:
+                gh_mgr = self.context.get('github_manager')
+                github_client = GitHubClient(secret_backend=gh_mgr.secret_backend)
+                engine.startup(github_client=github_client, fabric_client=self._get_fabric_client())
+                self.context['bootstrap_snapshot']['result'] = engine.bootstrap_report
+            except Exception as e:
+                logger.error(f"Failed to re-bootstrap after fabric setup: {e}")
+                
         return '/'
 
     def _audit(self, action: str, result: str, details: str = None) -> None:
