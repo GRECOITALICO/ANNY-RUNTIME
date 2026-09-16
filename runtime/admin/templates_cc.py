@@ -1,418 +1,225 @@
 def control_center_page(csrf_token: str) -> str:
-    """Renders the ANNY Control Center dashboard page."""
-    _html = """<!DOCTYPE html>
+    """Evidence-first ANNY Runtime control center.
+
+    The page intentionally derives trust indicators from the bootstrap gate report
+    rather than from optimistic client-side assumptions. Runtime state remains the
+    process state; readiness, continuity, admission and Repository Fabric status
+    are shown only from their corresponding gates.
+    """
+    html = r'''<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ANNY CONTROL CENTER</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-color: #0b0f19;
-            --panel-bg: #111827;
-            --text-primary: #f3f4f6;
-            --text-secondary: #9ca3af;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
-            --success: #10b981;
-            --warning: #f59e0b;
-            --danger: #ef4444;
-            --border: #1f2937;
-            --verifying: #8b5cf6;
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0; padding: 0;
-            background-color: var(--bg-color);
-            color: var(--text-primary);
-            font-family: 'Inter', sans-serif;
-            display: flex; flex-direction: column; min-height: 100vh;
-        }
-        header {
-            background-color: var(--panel-bg);
-            border-bottom: 1px solid var(--border);
-            padding: 1rem 2rem;
-            display: flex; justify-content: space-between; align-items: center;
-            position: sticky; top: 0; z-index: 100;
-            box-shadow: 0 4px 12px rgba(0,0,0,.3);
-        }
-        .header-left h1 {
-            font-size: 1.3rem; font-weight: 700; letter-spacing: .08em; margin: 0;
-            background: linear-gradient(90deg, #60a5fa, #a78bfa);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        }
-        .header-left .sub { font-size: .75rem; color: var(--text-secondary); margin-top: .2rem; }
-        .header-actions { display: flex; align-items: center; gap: 1rem; }
-        #last-verified { font-size: .75rem; color: var(--text-secondary); }
-        #verify-btn {
-            background: linear-gradient(135deg, #3b82f6, #6366f1);
-            color: #fff; border: none; padding: .45rem 1.1rem;
-            border-radius: 6px; font-weight: 600; font-size: .85rem;
-            cursor: pointer; transition: opacity .2s;
-        }
-        #verify-btn:hover { opacity: .85; }
-        #verify-btn:disabled { opacity: .4; cursor: not-allowed; }
-        main {
-            padding: 1.5rem;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-            gap: 1.25rem;
-        }
-        .panel {
-            background-color: var(--panel-bg);
-            border: 1px solid var(--border);
-            border-radius: 10px; padding: 1.25rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,.15);
-        }
-        .panel.full { grid-column: 1 / -1; }
-        .panel h2 {
-            font-size: .75rem; text-transform: uppercase; letter-spacing: .08em;
-            color: var(--text-secondary); margin: 0 0 1rem;
-            border-bottom: 1px solid var(--border); padding-bottom: .5rem;
-        }
-        .kv-grid {
-            display: grid; grid-template-columns: 1fr 1fr; gap: .75rem;
-        }
-        .kv { display: flex; flex-direction: column; }
-        .kv .lbl { font-size: .65rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: .2rem; }
-        .kv .val { font-family: 'JetBrains Mono', monospace; font-size: .85rem; font-weight: 600; }
-        .badge {
-            display: inline-block; padding: .15rem .45rem; border-radius: 4px;
-            font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
-        }
-        .pass, .ready, .ok, .connected, .admitted, .coherent, .authorized { background: rgba(16,185,129,.15); color: #10b981; }
-        .fail, .blocked, .error { background: rgba(239,68,68,.15); color: #ef4444; }
-        .verifying, .starting { background: rgba(139,92,246,.15); color: #8b5cf6; }
-        .stale, .pending, .not_configured, .unavailable, .unauthorized { background: rgba(245,158,11,.15); color: #f59e0b; }
-        .unknown { background: rgba(156,163,175,.12); color: #9ca3af; }
-        table { width: 100%; border-collapse: collapse; font-size: .82rem; }
-        th, td { padding: .45rem .5rem; text-align: left; border-bottom: 1px solid var(--border); }
-        th { color: var(--text-secondary); font-weight: 600; text-transform: uppercase; font-size: .68rem; }
-        .mono { font-family: 'JetBrains Mono', monospace; }
-        .dot { width:8px; height:8px; border-radius:50%; background:var(--border); display:inline-block; }
-        .dot.on { background:#10b981; }
-        .dot.off { background:#1f2937; }
-        .pulse { animation: pulse 2s infinite; }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-        @media(max-width:640px){ main{grid-template-columns:1fr} }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANNY Runtime — Trust Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#080b12; --panel:#0f141d; --panel2:#121a25; --line:#253041;
+  --text:#edf2f7; --muted:#8b98aa; --dim:#627084;
+  --good:#31c48d; --warn:#e6b84a; --bad:#f06a6a; --info:#73a7ff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,sans-serif;min-height:100vh}
+header{position:sticky;top:0;z-index:10;background:rgba(8,11,18,.97);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:16px 22px;display:flex;justify-content:space-between;gap:18px;align-items:center}
+.brand{display:flex;align-items:center;gap:12px}.mark{width:34px;height:34px;border:1px solid var(--line);display:grid;place-items:center;font-size:17px;background:var(--panel2)}
+.brand h1{font-size:15px;letter-spacing:.1em;margin:0;font-weight:700}.brand p{margin:3px 0 0;color:var(--muted);font-size:11px}
+.header-right{display:flex;align-items:center;gap:10px}.poll{font-size:11px;color:var(--muted)}
+button{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:8px 12px;font-weight:600;font-size:12px;cursor:pointer}button:hover{border-color:#3c4d64}button:disabled{opacity:.5;cursor:wait}
+main{max-width:1500px;margin:0 auto;padding:20px;display:grid;gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.panel{background:var(--panel);border:1px solid var(--line);padding:16px;min-width:0}.panel h2{font-size:11px;letter-spacing:.11em;text-transform:uppercase;margin:0 0 13px;color:var(--muted)}
+.card{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;min-height:74px}.label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.value{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;margin-top:6px;word-break:break-word}
+.badge{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);padding:4px 7px;font:600 10px 'JetBrains Mono',monospace;letter-spacing:.04em}.badge.good{color:var(--good);border-color:rgba(49,196,141,.35);background:rgba(49,196,141,.08)}.badge.warn{color:var(--warn);border-color:rgba(230,184,74,.35);background:rgba(230,184,74,.07)}.badge.bad{color:var(--bad);border-color:rgba(240,106,106,.35);background:rgba(240,106,106,.07)}.badge.info{color:var(--info);border-color:rgba(115,167,255,.35);background:rgba(115,167,255,.07)}.badge.unknown{color:var(--muted)}
+.trust{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.trust-item{background:var(--panel2);border:1px solid var(--line);padding:12px}.trust-item .t{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}.trust-item .s{margin-top:8px}
+.kv{display:grid;grid-template-columns:160px 1fr;gap:10px 16px;font-size:12px}.kv .k{color:var(--muted)}.mono{font-family:'JetBrains Mono',monospace}
+.table-wrap{overflow:auto;border:1px solid var(--line)}table{width:100%;border-collapse:collapse;font-size:11px}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}td{color:#dfe6ee}tr:last-child td{border-bottom:none}
+.reason{color:var(--muted);font-size:11px;line-height:1.45}.empty{color:var(--dim);padding:10px 0;font-size:12px}.okline{display:flex;align-items:center;gap:8px}.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block}.dot.good{background:var(--good)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
+.notice{padding:11px 12px;border:1px solid var(--line);background:var(--panel2);font-size:11px;line-height:1.5;color:var(--muted)}
+.gate-pass{color:var(--good)}.gate-fail{color:var(--bad)}.gate-block{color:var(--warn)}
+@media(max-width:1100px){.grid4,.trust{grid-template-columns:repeat(2,minmax(0,1fr))}.grid2{grid-template-columns:1fr}}
+@media(max-width:650px){header{padding:13px 14px}.header-right{flex-direction:column;align-items:flex-end}.grid4,.trust{grid-template-columns:1fr}main{padding:12px}.kv{grid-template-columns:1fr;gap:3px}.panel{padding:13px}}
+</style>
 </head>
 <body>
 <header>
-    <div class="header-left">
-        <h1>⬡ ANNY CONTROL CENTER</h1>
-        <div class="sub">
-            State: <span id="rt-state-badge" class="badge unknown pulse">LOADING</span>
-            &nbsp;|&nbsp; Ready: <span id="rt-ready-badge" class="badge unknown">--</span>
-        </div>
-    </div>
-    <div class="header-actions">
-        <span id="last-verified">LAST POLLED: —</span>
-        <button id="verify-btn" onclick="triggerVerify()">⟳ VERIFY NOW</button>
-    </div>
+  <div class="brand"><div class="mark">⬡</div><div><h1>ANNY RUNTIME · TRUST CENTER</h1><p>Live runtime state, deterministic bootstrap evidence, operational continuity and Repository Fabric binding.</p></div></div>
+  <div class="header-right"><span id="poll" class="poll">LIVE CHECK: —</span><button id="verify" onclick="verifyNow()">VERIFY NOW</button></div>
 </header>
 <main>
+  <div id="notice" class="notice">Waiting for the runtime status endpoint.</div>
 
-<!-- Top-Level State -->
-<div class="panel">
-    <h2>Top-Level State</h2>
-    <div class="kv-grid">
-        <div class="kv"><span class="lbl">ANNY STATUS</span><span class="val" id="st-anny">--</span></div>
-        <div class="kv"><span class="lbl">RUNTIME HEALTH</span><span class="val" id="st-health">--</span></div>
-        <div class="kv"><span class="lbl">GITHUB STATUS</span><span class="val" id="st-github">--</span></div>
-        <div class="kv"><span class="lbl">FABRIC STATUS</span><span class="val" id="st-fabric">--</span></div>
-        <div class="kv"><span class="lbl">ADMISSION STATUS</span><span class="val" id="st-admission">--</span></div>
-        <div class="kv"><span class="lbl">RECONCILIATION</span><span class="val" id="st-recon">--</span></div>
+  <section class="grid4">
+    <div class="panel card"><div><div class="label">Runtime process</div><div id="runtime-state" class="value">UNKNOWN</div></div><div id="runtime-badge"></div></div>
+    <div class="panel card"><div><div class="label">Bootstrap verdict</div><div id="ready-value" class="value">UNKNOWN</div></div><div id="ready-badge"></div></div>
+    <div class="panel card"><div><div class="label">Continuity gate</div><div id="continuity-value" class="value">UNKNOWN</div></div><div id="continuity-badge"></div></div>
+    <div class="panel card"><div><div class="label">Repository Fabric</div><div id="fabric-value" class="value">UNKNOWN</div></div><div id="fabric-badge"></div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Trust basis</h2>
+    <div class="trust" id="trust-grid"></div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <h2>Runtime identity & binding</h2>
+      <div class="kv">
+        <div class="k">Runtime ID</div><div id="runtime-id" class="mono">—</div>
+        <div class="k">Runtime version</div><div id="runtime-version" class="mono">—</div>
+        <div class="k">GitHub</div><div id="github" class="mono">—</div>
+        <div class="k">GitHub org</div><div id="github-org" class="mono">—</div>
+        <div class="k">Fabric org</div><div id="fabric-org" class="mono">—</div>
+        <div class="k">Fabric repo</div><div id="fabric-repo" class="mono">—</div>
+        <div class="k">Fabric node</div><div id="fabric-node" class="mono">—</div>
+      </div>
     </div>
-</div>
-
-<!-- Operational Snapshot -->
-<div class="panel">
-    <h2>Operational Snapshot</h2>
-    <div class="kv-grid">
-        <div class="kv"><span class="lbl">RUNTIME ID</span><span class="val mono" id="snap-id">--</span></div>
-        <div class="kv"><span class="lbl">VERSION</span><span class="val mono" id="snap-ver">--</span></div>
-        <div class="kv"><span class="lbl">FABRIC ORG</span><span class="val mono" id="snap-fab-org">--</span></div>
-        <div class="kv"><span class="lbl">FABRIC REPO</span><span class="val mono" id="snap-fab-repo">--</span></div>
-        <div class="kv"><span class="lbl">FABRIC NODE</span><span class="val mono" id="snap-fab-node">--</span></div>
-        <div class="kv"><span class="lbl">TENANT</span><span class="val mono" id="snap-tenant">--</span></div>
-        <div class="kv"><span class="lbl">POLICY REV</span><span class="val mono" id="snap-pol-rev">--</span></div>
-        <div class="kv"><span class="lbl">CONTRACT REV</span><span class="val mono" id="snap-con-rev">--</span></div>
+    <div class="panel">
+      <h2>Operational continuity</h2>
+      <div class="kv">
+        <div class="k">Status</div><div id="cont-status">—</div>
+        <div class="k">Current mission</div><div id="mission" class="mono">—</div>
+        <div class="k">Current task</div><div id="task" class="mono">—</div>
+        <div class="k">Current step</div><div id="step" class="mono">—</div>
+        <div class="k">Next action</div><div id="action" class="mono">—</div>
+        <div class="k">Blockers</div><div id="blockers" class="mono">—</div>
+      </div>
+      <div id="continuity-note" class="reason" style="margin-top:14px">Continuity context will be shown only when the runtime exposes it.</div>
     </div>
-</div>
+  </section>
 
-<!-- Bootstrap Verification -->
-<div class="panel full">
-    <h2>Bootstrap Verification</h2>
-    <div style="overflow-x:auto">
-        <table>
-            <thead><tr><th>Phase</th><th>Gate</th><th>Result</th><th>Detail</th><th>Evidence</th></tr></thead>
-            <tbody id="gates-tbody"><tr><td colspan="5" style="color:var(--text-secondary)">Loading...</td></tr></tbody>
-        </table>
+  <section class="panel">
+    <h2>Repository Fabric evidence</h2>
+    <div class="table-wrap"><table><thead><tr><th>Gate</th><th>Result</th><th>Evidence</th><th>Detail</th></tr></thead><tbody id="fabric-gates"></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>Deterministic bootstrap gates</h2>
+    <div class="table-wrap"><table><thead><tr><th>#</th><th>Gate</th><th>Result</th><th>Evidence</th><th>Detail</th></tr></thead><tbody id="gates"></tbody></table></div>
+  </section>
+
+  <section class="grid2">
+    <div class="panel">
+      <h2>Runtime health</h2>
+      <div id="health"></div>
     </div>
-</div>
-
-<!-- Runtime Health -->
-<div class="panel">
-    <h2>Runtime Health</h2>
-    <table><thead><tr><th>Subsystem</th><th>Status</th></tr></thead>
-    <tbody id="health-tbody"></tbody></table>
-</div>
-
-<!-- Repository Fabric -->
-<div class="panel">
-    <h2>Repository Fabric</h2>
-    <table><thead><tr><th>Component</th><th>Status</th></tr></thead>
-    <tbody id="fabric-tbody"></tbody></table>
-</div>
-
-<!-- Access Verification -->
-<div class="panel">
-    <h2>Access Verification</h2>
-    <table><thead><tr><th>Capability</th><th>Expected</th><th>Result</th></tr></thead>
-    <tbody id="access-tbody"></tbody></table>
-</div>
-
-<!-- Current Contract -->
-<div class="panel">
-    <h2>Current Contract</h2>
-    <div id="contract-div"></div>
-</div>
-
-<!-- Capability Inventory -->
-<div class="panel full">
-    <h2>Capability Inventory</h2>
-    <div style="overflow-x:auto">
-        <table>
-            <thead><tr>
-                <th>Capability ID</th>
-                <th title="DECLARED">DEC</th><th title="CONFIGURED">CFG</th>
-                <th title="ENABLED">ENA</th><th title="AUTHORIZED">AUT</th>
-                <th title="AVAILABLE">AVL</th><th title="FUNCTIONAL">FNC</th>
-                <th title="TESTED">TST</th><th title="VERIFIED">VRF</th>
-            </tr></thead>
-            <tbody id="cap-tbody"></tbody>
-        </table>
+    <div class="panel">
+      <h2>Inventory visibility</h2>
+      <div id="inventory"></div>
     </div>
-</div>
-
-<!-- Tools -->
-<div class="panel">
-    <h2>Tools</h2>
-    <table><thead><tr><th>Tool</th><th>Status</th></tr></thead>
-    <tbody id="tools-tbody"></tbody></table>
-</div>
-
-<!-- Models -->
-<div class="panel">
-    <h2>Models</h2>
-    <table><thead><tr><th>Model</th><th>Status</th></tr></thead>
-    <tbody id="models-tbody"></tbody></table>
-</div>
-
-<!-- Workers -->
-<div class="panel">
-    <h2>Workers</h2>
-    <table><thead><tr><th>Worker Profile</th><th>Status</th></tr></thead>
-    <tbody id="workers-tbody"></tbody></table>
-</div>
-
-<!-- Connectors -->
-<div class="panel">
-    <h2>Connectors</h2>
-    <table><thead><tr><th>Connector</th><th>Status</th></tr></thead>
-    <tbody id="connectors-tbody"></tbody></table>
-</div>
-
-<!-- Continuity -->
-<div class="panel full">
-    <h2>Continuity</h2>
-    <div class="kv-grid">
-        <div class="kv"><span class="lbl">CURRENT MISSION</span><span class="val mono" id="cont-mission">--</span></div>
-        <div class="kv"><span class="lbl">CURRENT TASK</span><span class="val mono" id="cont-task">--</span></div>
-        <div class="kv"><span class="lbl">CURRENT STEP</span><span class="val mono" id="cont-step">--</span></div>
-        <div class="kv"><span class="lbl">NEXT ACTION</span><span class="val mono" id="cont-action">--</span></div>
-        <div class="kv"><span class="lbl">BLOCKERS</span><span class="val mono" id="cont-blockers">--</span></div>
-        <div class="kv"><span class="lbl">STATUS</span><span class="val" id="cont-status">--</span></div>
-    </div>
-</div>
-
+  </section>
 </main>
 <script>
 const CSRF_TOKEN = "__CSRF__";
-
-function badge(text) {
-    if (!text) return '<span class="badge unknown">UNKNOWN</span>';
-    const u = String(text).toUpperCase().split(' ').join('_');
-    const cls = (['PASS','READY','OK','CONNECTED','ADMITTED','COHERENT','AUTHORIZED'].includes(u) ? 'pass' :
-                 ['FAIL','BLOCKED','ERROR','DENIED'].includes(u) ? 'fail' :
-                 ['VERIFYING','STARTING'].includes(u) ? 'verifying' :
-                 ['STALE','PENDING','NOT_CONFIGURED','UNAVAILABLE','UNAUTHORIZED'].includes(u) ? 'stale' : 'unknown');
-    return '<span class="badge ' + cls + '">' + u + '</span>';
+const FABRIC_GATE_NAMES = new Set([
+  'FABRIC_REACHABLE','FABRIC_IDENTITY_VERIFIED','FABRIC_NODE_AT_REMOTE_HEAD',
+  'FABRIC_TRUST_VERIFIED','FABRIC_TENANT_BOUND','FABRIC_STATE_READABLE','FABRIC_PROVENANCE_VALID',
+  'RUNTIME_BINDING_VERIFIED','RUNTIME_ADMITTED'
+]);
+const TRUST_NAMES = [
+  ['Runtime reachable','RUNTIME_REACHABLE'],
+  ['Runtime health','RUNTIME_HEALTH_VERIFIED'],
+  ['GitHub connected','GITHUB_CONNECTED'],
+  ['Fabric reachable','FABRIC_REACHABLE'],
+  ['Fabric node @ remote HEAD','FABRIC_NODE_AT_REMOTE_HEAD'],
+  ['Fabric trust','FABRIC_TRUST_VERIFIED'],
+  ['Fabric tenant','FABRIC_TENANT_BOUND'],
+  ['Runtime binding','RUNTIME_BINDING_VERIFIED'],
+  ['Runtime admitted','RUNTIME_ADMITTED'],
+  ['Continuity coherent','CONTINUITY_COHERENT']
+];
+function safe(v){ return v === null || v === undefined || v === '' ? '—' : String(v); }
+function escapeHtml(v){ return safe(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+function cls(status){
+  const s=String(status||'UNKNOWN').toUpperCase();
+  if(['PASS','READY','CONNECTED','ADMITTED','COHERENT','OK','AUTHORIZED'].includes(s)) return 'good';
+  if(['FAIL','BLOCKED','ERROR','DENIED','UNAUTHORIZED'].includes(s)) return 'bad';
+  if(['VERIFYING','STARTING','PENDING','STALE','NOT_CONFIGURED','UNAVAILABLE'].includes(s)) return 'warn';
+  return 'unknown';
 }
-
-function dot(v) { return '<span class="dot ' + (v ? 'on' : 'off') + '"></span>'; }
-
-function setInner(id, html) {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = html;
+function badge(status){ return '<span class="badge '+cls(status)+'">'+escapeHtml(status||'UNKNOWN')+'</span>'; }
+function gateMap(gates){ const m={}; (gates||[]).forEach(g=>{ const n=safe(g.gate); m[n]=g; }); return m; }
+function gateState(g){ return g ? (g.status || (g.passed ? 'PASS':'FAIL')) : 'UNVERIFIED'; }
+function set(id, html){ const el=document.getElementById(id); if(el) el.innerHTML=html; }
+function text(id, val){ const el=document.getElementById(id); if(el) el.textContent=safe(val); }
+function renderTrust(map){
+  set('trust-grid', TRUST_NAMES.map(([label,name])=>{
+    const g=map[name]; const s=gateState(g); const c=cls(s);
+    return '<div class="trust-item"><div class="t">'+label+'</div><div class="s okline"><span class="dot '+c+'"></span>'+badge(s)+'</div></div>';
+  }).join(''));
 }
-function setText(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text || '--';
+function renderGates(gates){
+  if(!gates || !gates.length){ set('gates','<tr><td colspan="5" class="empty">No bootstrap report is currently exposed.</td></tr>'); return; }
+  set('gates', gates.map((g,i)=>'<tr><td class="mono">'+(i+1)+'</td><td class="mono">'+escapeHtml(g.gate)+'</td><td>'+badge(g.status)+'</td><td class="mono">'+escapeHtml(g.evidence)+'</td><td>'+escapeHtml(g.detail)+'</td></tr>').join(''));
 }
-
-function populateTable(tbodyId, arr, cols) {
-    if (!arr || !arr.length) {
-        setInner(tbodyId, '<tr><td colspan="' + cols + '" style="color:var(--text-secondary)">None</td></tr>');
-        return;
-    }
-    setInner(tbodyId, arr.map(function(i) {
-        return '<tr><td class="mono">' + (i.name || i.id || '--') + '</td><td>' + badge(i.status) + '</td></tr>';
-    }).join(''));
+function renderFabricGates(gates){
+  const rows=(gates||[]).filter(g=>FABRIC_GATE_NAMES.has(String(g.gate)));
+  if(!rows.length){ set('fabric-gates','<tr><td colspan="4" class="empty">Fabric evidence unavailable.</td></tr>'); return; }
+  set('fabric-gates', rows.map(g=>'<tr><td class="mono">'+escapeHtml(g.gate)+'</td><td>'+badge(g.status)+'</td><td class="mono">'+escapeHtml(g.evidence)+'</td><td>'+escapeHtml(g.detail)+'</td></tr>').join(''));
 }
-
-function updateUI(d) {
-    // Header badges
-    const stateBadge = document.getElementById('rt-state-badge');
-    if (stateBadge) {
-        stateBadge.innerHTML = (d.runtime_state || 'UNKNOWN');
-        stateBadge.className = 'badge ' + (d.runtime_state || 'unknown').toLowerCase().replace(/_/g,'-');
-        const isActive = ['STARTING','VERIFYING'].includes((d.runtime_state||'').toUpperCase());
-        if (isActive) stateBadge.classList.add('pulse'); else stateBadge.classList.remove('pulse');
-    }
-    setInner('rt-ready-badge', badge(d.anny_ready ? 'PASS' : (d.runtime_state === 'STARTING' ? 'VERIFYING' : 'BLOCKED')));
-
-    // Top-level state
-    setInner('st-anny', badge(d.anny_ready ? 'READY' : 'BLOCKED'));
-    setInner('st-health', badge(d.runtime_health));
-    setInner('st-github', badge(d.github_status));
-    setInner('st-fabric', badge(d.fabric_status));
-    setInner('st-admission', badge(d.admission_status));
-    setInner('st-recon', badge(d.reconciliation_status));
-
-    // Timestamp
-    if (d.timestamp) setText('last-verified', 'LAST POLLED: ' + d.timestamp);
-
-    // Snapshot
-    setText('snap-id', d.runtime_id);
-    setText('snap-ver', d.runtime_version);
-    setText('snap-fab-org', d.fabric_org);
-    setText('snap-fab-repo', d.fabric_repo);
-    setText('snap-fab-node', d.fabric_node);
-    setText('snap-tenant', d.tenant);
-    setText('snap-pol-rev', d.policy_revision);
-    setText('snap-con-rev', d.contract_revision);
-
-    // Gates
-    if (d.gates && d.gates.length) {
-        setInner('gates-tbody', d.gates.map(function(g) {
-            return '<tr><td>' + (g.phase||'') + '</td><td class="mono">' + (g.gate||'') + '</td><td>' +
-                   badge(g.status) + '</td><td>' + (g.detail||'') + '</td><td class="mono" style="font-size:.7rem">' +
-                   (g.evidence||'') + '</td></tr>';
-        }).join(''));
-    } else if (d.runtime_state === 'STARTING') {
-        setInner('gates-tbody', '<tr><td colspan="5" style="color:var(--verifying)">Bootstrap running...</td></tr>');
-    }
-
-    // Health
-    if (d.health && Object.keys(d.health).length) {
-        setInner('health-tbody', Object.entries(d.health).map(function(kv) {
-            return '<tr><td class="mono">' + kv[0] + '</td><td>' + badge(kv[1]) + '</td></tr>';
-        }).join(''));
-    }
-
-    // Fabric details
-    if (d.fabric_details && Object.keys(d.fabric_details).length) {
-        setInner('fabric-tbody', Object.entries(d.fabric_details).map(function(kv) {
-            return '<tr><td class="mono">' + kv[0] + '</td><td>' + badge(kv[1]) + '</td></tr>';
-        }).join(''));
-    } else {
-        setInner('fabric-tbody', '<tr><td class="mono">fabric</td><td>' + badge(d.fabric_status) + '</td></tr>');
-    }
-
-    // Access
-    if (d.access && d.access.length) {
-        setInner('access-tbody', d.access.map(function(a) {
-            return '<tr><td class="mono">' + a.capability + '</td><td class="mono">' + a.expected + '</td><td>' + badge(a.result) + '</td></tr>';
-        }).join(''));
-    } else {
-        setInner('access-tbody', '<tr><td colspan="3" style="color:var(--text-secondary)">None</td></tr>');
-    }
-
-    // Contract
-    if (d.contract) {
-        setInner('contract-div',
-            '<div style="margin-bottom:.4rem"><strong>ALLOWED:</strong> <span class="mono">' + (d.contract.allowed||'NONE') + '</span></div>' +
-            '<div style="margin-bottom:.4rem"><strong>DENIED:</strong> <span class="mono">' + (d.contract.denied||'NONE') + '</span></div>' +
-            '<div style="margin-bottom:.4rem"><strong>NETWORK:</strong> <span class="mono">' + (d.contract.network||'UNKNOWN') + '</span></div>' +
-            '<div><strong>WORKER LIMITS:</strong> <span class="mono">' + (d.contract.worker_limits||'UNKNOWN') + '</span></div>'
-        );
-    }
-
-    // Capabilities
-    if (d.capabilities && d.capabilities.length) {
-        setInner('cap-tbody', d.capabilities.map(function(c) {
-            var s = c.states || {};
-            return '<tr><td class="mono">' + c.id + '</td>' +
-                   ['DECLARED','CONFIGURED','ENABLED','AUTHORIZED','AVAILABLE','FUNCTIONAL','TESTED','VERIFIED'].map(function(k) {
-                       return '<td>' + dot(s[k]) + '</td>';
-                   }).join('') + '</tr>';
-        }).join(''));
-    } else {
-        setInner('cap-tbody', '<tr><td colspan="9" style="color:var(--text-secondary)">No capabilities declared</td></tr>');
-    }
-
-    // Inventories
-    populateTable('tools-tbody', d.tools, 2);
-    populateTable('models-tbody', d.models, 2);
-    populateTable('workers-tbody', d.workers, 2);
-    populateTable('connectors-tbody', d.connectors, 2);
-
-    // Continuity
-    if (d.continuity) {
-        setText('cont-mission', d.continuity.mission);
-        setText('cont-task', d.continuity.task);
-        setText('cont-step', d.continuity.step);
-        setText('cont-action', d.continuity.action);
-        setText('cont-blockers', d.continuity.blockers);
-        setInner('cont-status', badge(d.continuity.status));
-    }
+function renderHealth(d,map){
+  const rows=[
+    ['Process state',safe(d.runtime_state)],
+    ['Runtime reachable',gateState(map.RUNTIME_REACHABLE)],
+    ['Runtime health gate',gateState(map.RUNTIME_HEALTH_VERIFIED)],
+    ['Runtime binding',gateState(map.RUNTIME_BINDING_VERIFIED)],
+    ['Generation', d.health && d.health.generation !== undefined ? d.health.generation : 'not exposed']
+  ];
+  set('health', rows.map(r=>'<div class="okline" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:8px 0"><span class="label">'+escapeHtml(r[0])+'</span><span class="mono">'+escapeHtml(r[1])+'</span></div>').join(''));
 }
-
-async function fetchStatus() {
-    try {
-        const r = await fetch('/api/status');
-        if (!r.ok) return;
-        const d = await r.json();
-        updateUI(d);
-        const now = new Date().toISOString().replace('T',' ').substring(0,19);
-        setText('last-verified', 'LAST POLLED: ' + now + ' UTC');
-    } catch(e) {
-        console.error('Status fetch failed:', e);
-    }
+function renderInventory(d){
+  const names=['capabilities','tools','models','workers','connectors'];
+  set('inventory', names.map(n=>{
+    const arr=d[n]||[]; return '<div class="okline" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:8px 0"><span class="label">'+n+'</span><span class="mono">'+arr.length+'</span></div>';
+  }).join(''));
 }
-
-async function triggerVerify() {
-    const btn = document.getElementById('verify-btn');
-    btn.disabled = true; btn.textContent = '⟳ VERIFYING...';
-    try {
-        await fetch('/api/bootstrap/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'csrf_token=' + encodeURIComponent(CSRF_TOKEN)
-        });
-        setTimeout(fetchStatus, 500);
-    } catch(e) { console.error(e); }
-    finally { btn.disabled = false; btn.textContent = '⟳ VERIFY NOW'; }
+function update(d, c){
+  const gates=d.gates||[]; const map=gateMap(gates);
+  const continuity=gateState(map.CONTINUITY_COHERENT); const fabric=gateState(map.FABRIC_REACHABLE); const ready=d.anny_ready ? 'READY':'BLOCKED';
+  text('runtime-state', d.runtime_state); set('runtime-badge',badge(d.runtime_state));
+  text('ready-value',ready); set('ready-badge',badge(ready));
+  text('continuity-value',continuity); set('continuity-badge',badge(continuity));
+  text('fabric-value',fabric); set('fabric-badge',badge(fabric));
+  text('runtime-id',d.runtime_id); text('runtime-version',d.runtime_version); text('github',d.github_status); text('github-org',d.github_org);
+  text('fabric-org',d.fabric_org); text('fabric-repo',d.fabric_repo); text('fabric-node',d.fabric_node);
+  renderTrust(map); renderGates(gates); renderFabricGates(gates); renderHealth(d,map); renderInventory(d);
+  const cont=d.continuity||{};
+  set('cont-status', badge(cont.status || continuity)); text('mission',cont.mission); text('task',cont.task); text('step',cont.step); text('action',cont.action); text('blockers',cont.blockers);
+  const contKnown=[cont.mission,cont.task,cont.step,cont.action].some(Boolean);
+  text('continuity-note', contKnown ? 'Context is exposed by the current runtime status projection.' : 'The current status projection does not expose a canonical mission/task record. Continuity trust is therefore shown from the deterministic CONTINUITY_COHERENT gate, not inferred from UI state.');
+  const failed=gates.filter(g=>String(g.status).toUpperCase()!=='PASS');
+  if(d.anny_ready) {
+    set('notice','ANNY reports READY because the mandatory bootstrap gates passed. Keep this distinction: process state, bootstrap readiness, continuity coherence and Fabric connectivity are separate proofs.');
+  } else if(failed.length) {
+    const names=failed.slice(0,4).map(g=>escapeHtml(g.gate)).join(', '); const more=failed.length>4?' …':'';
+    set('notice','ANNY is BLOCKED. The control center is showing the actual failed/unverified gates instead of converting them into a generic degraded state: '+names+more);
+  } else {
+    set('notice','Runtime is up, but the bootstrap report has not yet provided enough evidence to establish readiness.');
+  }
 }
-
-fetchStatus();
-setInterval(fetchStatus, 2000);
+async function fetchStatus(){
+  try{
+    const r=await fetch('/api/status',{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json(); update(d, gateMap(d.gates||[]));
+    text('poll','LIVE CHECK: '+new Date().toISOString().replace('T',' ').replace('Z',' UTC'));
+  }catch(e){
+    set('notice','CONTROL PLANE UNREACHABLE: '+escapeHtml(e.message)+'. The UI does not mark the runtime healthy when it cannot poll the status endpoint.');
+    text('runtime-state','UNREACHABLE'); set('runtime-badge',badge('UNAVAILABLE'));
+    text('ready-value','UNVERIFIED'); set('ready-badge',badge('UNVERIFIED'));
+    text('continuity-value','UNVERIFIED'); set('continuity-badge',badge('UNVERIFIED'));
+    text('fabric-value','UNVERIFIED'); set('fabric-badge',badge('UNVERIFIED'));
+  }
+}
+async function verifyNow(){
+  const b=document.getElementById('verify'); b.disabled=true; b.textContent='VERIFYING…';
+  try{
+    await fetch('/api/bootstrap/verify',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'csrf_token='+encodeURIComponent(CSRF_TOKEN),cache:'no-store'});
+  }catch(e){} finally{ setTimeout(()=>{ fetchStatus(); b.disabled=false; b.textContent='VERIFY NOW'; },450); }
+}
+fetchStatus(); setInterval(fetchStatus,2000);
 </script>
 </body>
-</html>"""
-    return _html.replace("__CSRF__", csrf_token)
+</html>'''
+    return html.replace("__CSRF__", csrf_token)
