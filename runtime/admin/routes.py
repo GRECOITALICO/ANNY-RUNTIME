@@ -297,20 +297,20 @@ class AdminRouter:
         return '/'
 
     def _get_fabric_client(self):
-        """Build a FabricClient using dynamic config — not hardcoded constants."""
+        """Build a GitHubFabricAdapter using dynamic config — not hardcoded constants."""
         gh_mgr = self.context.get('github_manager')
         secret_backend = self.context.get('secret_backend')
         if not gh_mgr or not gh_mgr.has_token():
             return None
         try:
             from runtime.github.client import GitHubClient
-            from runtime.fabric.client import FabricClient
+            from runtime.fabric.github_adapter import GitHubFabricAdapter
             gh_client = GitHubClient(secret_backend=secret_backend)
             engine = self.context.get('runtime_engine')
             config = engine.config if engine else None
-            return FabricClient(github_client=gh_client, config=config)
+            return GitHubFabricAdapter(github_client=gh_client, config=config)
         except Exception as e:
-            logger.warning(f"Could not create FabricClient: {e}")
+            logger.warning(f"Could not create GitHubFabricAdapter: {e}")
             return None
 
     def _get_continuity_dto(self) -> ContinuityDTO:
@@ -349,9 +349,15 @@ class AdminRouter:
         status_val = "READY" if result.anny_ready else "BLOCKED"
         recon_status = "COHERENT" if result.anny_ready else "INCOHERENT"
 
+        engine = self.context.get('runtime_engine')
+        config = engine.config if engine else None
+        fabric_org = config.fabric_org if config and hasattr(config, 'fabric_org') else None
+        fabric_repo = config.fabric_repo if config and hasattr(config, 'fabric_repo') else None
+        canonical_src = f"{fabric_org}/{fabric_repo}" if (fabric_org and fabric_repo) else "NOT_CONFIGURED"
+
         return ContinuityDTO(
             status=status_val,
-            canonical_source="GRECOITALICO/ANNY-OPERATIONAL",
+            canonical_source=canonical_src,
             canonical_revision=None,
             current_mission=None,
             current_task=None,
@@ -499,8 +505,8 @@ class AdminRouter:
             return fabric_page(status, self._get_csrf())
         
         try:
-            from runtime.adapters.fabric_client import FabricClient
-            client = FabricClient(endpoint=fabric_endpoint)
+            from runtime.fabric.github_adapter import GitHubFabricAdapter
+            client = GitHubFabricAdapter(endpoint=fabric_endpoint)
             health = client.health()
             identity = client.identity()
             

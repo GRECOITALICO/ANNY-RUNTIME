@@ -58,7 +58,7 @@ class FabricError(Exception):
         super().__init__(f"[{error_code}] {message}")
 
 
-class FabricClient:
+class GitHubFabricAdapter:
     """Client for interacting with the Repository Fabric over GitHub.
 
     The fabric_org and fabric_repo are resolved from config at construction.
@@ -84,13 +84,13 @@ class FabricClient:
         else:
             # Log a warning — this should never happen in production
             logger.warning(
-                "FabricClient: fabric_org/fabric_repo not set via config. "
+                "GitHubFabricAdapter: fabric_org/fabric_repo not set via config. "
                 "Falling back to legacy constants. Set config.fabric_org and config.fabric_repo."
             )
             self._org = _LEGACY_FABRIC_ORG
             self._repo = _LEGACY_FABRIC_REPO
 
-        logger.info(f"FabricClient bound to {self._org}/{self._repo}")
+        logger.info(f"GitHubFabricAdapter bound to {self._org}/{self._repo}")
 
     @property
     def org(self) -> str:

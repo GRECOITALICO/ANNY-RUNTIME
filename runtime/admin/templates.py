@@ -665,7 +665,7 @@ def fabric_setup_page(organizations, error=None, csrf_token=""):
             </div>
             <div style="margin-bottom: 24px;">
                 <label style="display:block; margin-bottom: 8px; font-weight: 600;">Fabric Repository</label>
-                <input type="text" name="fabric_repo" value="ANNY-OPERATIONAL" style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); box-sizing: border-box;">
+                <input type="text" name="fabric_repo" placeholder="e.g. ANNY-OPERATIONAL" style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); box-sizing: border-box;">
             </div>
             <button type="submit" class="btn btn-primary login-btn">BIND RUNTIME</button>
         </form>

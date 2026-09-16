@@ -18,7 +18,7 @@ from typing import Optional, Dict, Any
 
 from runtime.identity.runtime_identity import RuntimeIdentity
 from runtime.github.client import GitHubClient, GitHubAuthError
-from runtime.fabric.client import FabricClient, FabricError, FabricAdmissionResult
+from runtime.fabric.github_adapter import GitHubFabricAdapter, FabricError, FabricAdmissionResult
 from runtime.continuity.engine import ContinuityEngine
 
 from .gates import ReadinessGate, GateResult, MANDATORY_GATES
@@ -38,7 +38,7 @@ class ThreePlaneBootstrap:
         self,
         data_dir: str,
         github_client: Optional[GitHubClient],
-        fabric_client: Optional[FabricClient],
+        fabric_client: Optional[GitHubFabricAdapter],
         continuity_engine: ContinuityEngine,
         config=None,
     ):

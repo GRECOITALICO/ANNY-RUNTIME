@@ -176,8 +176,8 @@ def start_admin_server(host: str, port: int):
     github_client = GitHubClient(secret_backend=secret_backend) if github_manager.has_token() else None
 
     # Initialize Fabric client (new GitHub-authenticated client)
-    from runtime.fabric.client import FabricClient
-    fabric_client = FabricClient(github_client=github_client) if github_client else None
+    from runtime.fabric.github_adapter import GitHubFabricAdapter
+    fabric_client = GitHubFabricAdapter(github_client=github_client) if github_client else None
     
     # We use a temp dir for workspaces for now
     ephemeral_workspace_manager = EphemeralWorkspaceManager()

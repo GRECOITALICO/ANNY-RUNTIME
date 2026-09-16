@@ -27,8 +27,8 @@ SYNTHETIC_NAME = "PyTest Synthetic Resource"
 @pytest.fixture(scope="module")
 def client():
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from runtime.adapters.fabric_client import FabricClient
-    return FabricClient(endpoint=FABRIC_ENDPOINT)
+    from runtime.fabric.github_adapter import GitHubFabricAdapter
+    return GitHubFabricAdapter(endpoint=FABRIC_ENDPOINT)
 
 
 # --- Phase 20: health ---
@@ -166,8 +166,8 @@ def test_schema_error():
 # --- Phase 20: not found ---
 def test_not_found():
     """Test that requesting a nonexistent resource returns 404."""
-    from runtime.adapters.fabric_client import FabricClient, FabricError
-    c = FabricClient(endpoint=FABRIC_ENDPOINT)
+    from runtime.fabric.github_adapter import GitHubFabricAdapter, FabricError
+    c = GitHubFabricAdapter(endpoint=FABRIC_ENDPOINT)
     with pytest.raises(FabricError) as exc_info:
         c.get_resource("nonexistent-resource-id-00000")
     assert exc_info.value.error_code == "FABRIC_NOT_FOUND"
@@ -176,8 +176,8 @@ def test_not_found():
 # --- Phase 20: network error ---
 def test_network_error():
     """Test that connecting to an invalid endpoint raises FABRIC_NETWORK_ERROR."""
-    from runtime.adapters.fabric_client import FabricClient, FabricError
-    c = FabricClient(endpoint="http://192.0.2.1:9999")  # RFC 5737 TEST-NET
+    from runtime.fabric.github_adapter import GitHubFabricAdapter, FabricError
+    c = GitHubFabricAdapter(endpoint="http://192.0.2.1:9999")  # RFC 5737 TEST-NET
     with pytest.raises(FabricError) as exc_info:
         c.health()
     assert exc_info.value.error_code == "FABRIC_NETWORK_ERROR"
@@ -186,8 +186,8 @@ def test_network_error():
 # --- Phase 20: Control Plane ---
 def test_control_plane_fabric_status():
     """Control Plane should show CONNECTED only if health responds."""
-    from runtime.adapters.fabric_client import FabricClient
-    c = FabricClient(endpoint=FABRIC_ENDPOINT)
+    from runtime.fabric.github_adapter import GitHubFabricAdapter
+    c = GitHubFabricAdapter(endpoint=FABRIC_ENDPOINT)
     health = c.health()
     assert health["status"] == "up"
     # This confirms that the /fabric page on :3643 would show CONNECTED

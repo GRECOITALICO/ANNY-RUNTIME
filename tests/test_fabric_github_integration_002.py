@@ -6,7 +6,7 @@ import json
 import pytest
 from runtime.github.client import GitHubClient
 from runtime.github.discovery import OrganizationDiscoveryService
-from runtime.adapters.fabric_client import FabricClient, FabricError
+from runtime.fabric.github_adapter import GitHubFabricAdapter, FabricError
 
 FABRIC_ENDPOINT = os.environ.get(
     "FABRIC_ENDPOINT",
@@ -25,7 +25,7 @@ def github_client():
 
 @pytest.fixture(scope="module")
 def fabric_client():
-    return FabricClient(endpoint=FABRIC_ENDPOINT)
+    return GitHubFabricAdapter(endpoint=FABRIC_ENDPOINT)
 
 def test_discovery_and_fabric_integration(github_client, fabric_client):
     disc = OrganizationDiscoveryService(github_client)
@@ -111,7 +111,7 @@ def test_discovery_and_fabric_integration(github_client, fabric_client):
     assert exc.value.error_code == "FABRIC_NOT_FOUND"
     
     # Network Error
-    bad_client = FabricClient(endpoint="http://192.0.2.1:9999")
+    bad_client = GitHubFabricAdapter(endpoint="http://192.0.2.1:9999")
     with pytest.raises(FabricError) as exc:
         bad_client.health()
     assert exc.value.error_code == "FABRIC_NETWORK_ERROR"

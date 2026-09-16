@@ -13,7 +13,7 @@ from runtime.bootstrap.planes import ThreePlaneBootstrap
 from runtime.bootstrap.report import BootstrapReport, ChatGPTBootstrapFormatter
 from runtime.bootstrap.gates import ReadinessGate, MANDATORY_GATES
 from runtime.identity.runtime_identity import RuntimeIdentity
-from runtime.fabric.client import FabricError, FabricAdmissionResult
+from runtime.fabric.github_adapter import FabricError, FabricAdmissionResult
 from runtime.fabric.models import FabricHealthResult, FabricNode, FabricTenant, FabricTrustToken
 from runtime.core.engine import RuntimeEngine
 from runtime.core.config import RuntimeConfig
