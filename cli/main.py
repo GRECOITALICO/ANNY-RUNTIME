@@ -213,7 +213,7 @@ def cmd_server(args):
     try:
         from runtime.admin.server import start_admin_server
         port = getattr(args, 'port', get_admin_port())
-        start_admin_server(host='127.0.0.1', port=port)
+        start_admin_server(host='localhost', port=port)
     except ImportError as e:
         logger.error(f"Cannot start server: {e}")
         sys.exit(1)

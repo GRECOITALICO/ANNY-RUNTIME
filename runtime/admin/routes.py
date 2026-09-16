@@ -176,9 +176,13 @@ class AdminRouter:
 
         try:
             redirect_to = route_handler(form_data)
-            # Check if handler set a direct HTML response
+            # Check if handler set a direct HTML or JSON response
             direct_html = self.context.get('direct_html_response')
-            if direct_html is not None:
+            direct_json = self.context.get('direct_json_response')
+            if direct_json is not None:
+                self._send_json(handler, direct_json)
+                del self.context['direct_json_response']
+            elif direct_html is not None:
                 self._send_html(handler, direct_html)
                 del self.context['direct_html_response']
             else:

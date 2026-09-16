@@ -240,3 +240,9 @@ def start_admin_server(host: str, port: int):
     else:
         logger.error("Failed to start admin server")
         sys.exit(1)
+
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    # By default, use port 7891
+    start_admin_server('localhost', 7891)

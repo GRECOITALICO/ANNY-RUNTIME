@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 ONBOARDING_ROUTES = {
     '/',                 # Dashboard (renders first-run page when no token)
     '/github/token',     # POST: submit GitHub token
+    '/api/status',       # Allow reading status anytime
+    '/api/bootstrap/verify', # Allow triggering verification anytime
 }
 
 class AdminMiddleware:
@@ -103,8 +105,8 @@ class AdminMiddleware:
     def process_post_body(self, path: str, form_data: Dict[str, list], context: Dict[str, Any]) -> bool:
         """Validate CSRF on mutating requests."""
         parsed = urllib.parse.urlparse(path)
-        if parsed.path in self.public_paths or parsed.path.startswith('/api/v1/bridge/'):
-            return True # No CSRF on public routes
+        if parsed.path in self.public_paths or parsed.path.startswith('/api/v1/bridge/') or parsed.path == '/api/bootstrap/verify':
+            return True # No CSRF on public routes or idempotent API triggers
 
         session = context.get('admin_session')
         if not session:
