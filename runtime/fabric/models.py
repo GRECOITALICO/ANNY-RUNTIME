@@ -2,7 +2,7 @@
 Repository Fabric domain models.
 
 These models represent the canonical organizational state held by the
-Repository Fabric (GRECOITALICO/ANNY-OPERATIONAL). They are NEVER
+Repository Fabric (resolved dynamically per deployment). They are NEVER
 generated locally — they are READ from the Fabric and validated.
 """
 from dataclasses import dataclass, field
@@ -23,10 +23,10 @@ class FabricStatus(str, Enum):
 
 @dataclass
 class FabricNode:
-    """Represents NODE-001 — the Repository Fabric control node."""
-    node_id: str          # e.g. "NODE-001"
-    org: str              # e.g. "GRECOITALICO"
-    repo: str             # e.g. "ANNY-OPERATIONAL"
+    """Represents a Repository Fabric control node (node_id resolved from Fabric)."""
+    node_id: str          # e.g. "NODE-001" (resolved from Fabric, not hardcoded)
+    org: str              # e.g. "my-org" (resolved from RuntimeConfig, not hardcoded)
+    repo: str             # e.g. "my-fabric-repo" (resolved from RuntimeConfig, not hardcoded)
     purpose: str          # e.g. "REPOSITORY_FABRIC"
     created_at: str
     status: FabricStatus = FabricStatus.CONNECTED

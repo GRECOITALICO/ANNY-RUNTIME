@@ -21,13 +21,9 @@ from runtime.fabric.models import (
 
 logger = logging.getLogger(__name__)
 
-# -----------------------------------------------------------------------
-# IMPORTANT: These module-level constants are LEGACY / test-fallback only.
-# All production code must pass org and repo from RuntimeConfig.
-# Do NOT use FABRIC_ORG / FABRIC_REPO directly in new code paths.
-# -----------------------------------------------------------------------
-_LEGACY_FABRIC_ORG = "GRECOITALICO"
-_LEGACY_FABRIC_REPO = "ANNY-OPERATIONAL"
+# No module-level org/repo constants are permitted.
+# All production callers MUST supply fabric_org and fabric_repo from RuntimeConfig.
+# Missing configuration MUST yield BLOCKED — never a silent fallback.
 
 
 class FabricAdmissionResult:
