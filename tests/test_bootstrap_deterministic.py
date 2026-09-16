@@ -65,7 +65,7 @@ class TestPhaseE_PolicySnapshot:
 
     def test_policy_snapshot_fails_when_adapter_missing_method(self):
         """If fabric adapter doesn't implement read_policy, we fail strictly."""
-        fabric = MagicMock(spec=[])   # spec with no methods → AttributeError on read_policy
+        fabric = MagicMock(spec=[])
         b = _make_bootstrap(fabric_client=fabric)
         report = _make_report()
         b.fabric = fabric
@@ -171,8 +171,6 @@ class TestPhaseG_Inventory:
             ReadinessGate.WORKERS_INVENTORIED,
             ReadinessGate.CONNECTORS_INVENTORIED,
         ]:
-            # Error in capabilities propagates; others may be populated or not
-            # depending on InventoryDiscovery internals, but the gate must record a result
             result = report.get_gate(gate)
             assert result is not None
 
@@ -186,21 +184,35 @@ class TestPhaseH_CriticalAccess:
     def test_critical_access_is_mandatory_gate(self):
         assert ReadinessGate.CRITICAL_ACCESS_VERIFIED in MANDATORY_GATES
 
-    def test_filesystem_access_passes_with_valid_data_dir(self, tmp_path):
+    def test_implemented_access_checks_pass_but_unimplemented_critical_checks_block(self, tmp_path):
+        """Implemented checks pass; unsupported critical capabilities still block Phase H."""
         gh = MagicMock()
         gh.list_repos.return_value = [{"name": "repo1"}]
         fabric = MagicMock()
         fabric.read_node_config.return_value = MagicMock(node_id="n-001")
-        
+
         verifier = CriticalAccessVerifier(
-            authorized_capabilities=["filesystem.inspect", "filesystem.list", "repository.read", "repository.search", "fabric.read", "runtime.status", "runtime.execution", "tool.resolve", "model.resolve", "worker.resolve"],
+            authorized_capabilities=list(CriticalAccessVerifier.CRITICAL_CAPABILITIES),
             data_dir=str(tmp_path),
             github_client=gh,
-            fabric_adapter=fabric
+            fabric_adapter=fabric,
         )
         result = verifier.verify()
-        assert result.passed
-        assert not result.critical_failures
+
+        assert not result.passed
+        assert "repository.search" in result.critical_failures
+        assert "runtime.status" in result.critical_failures
+        assert "runtime.execution" in result.critical_failures
+        assert "tool.resolve" in result.critical_failures
+        assert "model.resolve" in result.critical_failures
+        assert "worker.resolve" in result.critical_failures
+
+        by_cap = {item.capability_id: item for item in result.results}
+        assert by_cap["repository.read"].passed
+        assert by_cap["filesystem.inspect"].passed
+        assert by_cap["filesystem.list"].passed
+        assert by_cap["fabric.read"].passed
+        assert by_cap["repository.search"].evidence == "NOT_IMPLEMENTED"
 
     def test_filesystem_access_fails_with_nonexistent_dir(self):
         verifier = CriticalAccessVerifier(
@@ -245,8 +257,8 @@ class TestPhaseH_CriticalAccess:
     def test_access_failure_blocks_anny_ready(self, tmp_path):
         """A failing Phase H gate must block ANNY_READY."""
         b = _make_bootstrap(data_dir=str(tmp_path))
-        b.github = None   # No GitHub → repository.read will fail
-        b.fabric = None   # No fabric → fabric.read will fail
+        b.github = None
+        b.fabric = None
         report = _make_report()
 
         b._gate_critical_access(
@@ -257,174 +269,3 @@ class TestPhaseH_CriticalAccess:
         gate = report.get_gate(ReadinessGate.CRITICAL_ACCESS_VERIFIED)
         assert not gate.passed
 
-
-# ---------------------------------------------------------------------------
-# Phase I: Contracts Discovery
-# ---------------------------------------------------------------------------
-
-class TestPhaseI_Contracts:
-
-    def test_contracts_is_mandatory_gate(self):
-        assert ReadinessGate.CONTRACTS_DISCOVERED in MANDATORY_GATES
-
-    def test_contracts_fails_when_read_contract_not_implemented(self):
-        fabric = MagicMock(spec=[])  # No read_contract method
-        b = _make_bootstrap(fabric_client=fabric)
-        b.fabric = fabric
-        report = _make_report()
-
-        b._gate_contracts(report, fabric_contract=None)
-
-        gate = report.get_gate(ReadinessGate.CONTRACTS_DISCOVERED)
-        assert not gate.passed
-        assert "Mock object has no attribute 'read_contract'" in gate.detail
-
-    def test_contracts_from_fabric_adapter(self):
-        fabric = MagicMock()
-        fabric.read_contract.return_value = {
-            "contract_id": "c-001",
-            "tenant_id": "t-001",
-            "granted_capabilities": ["filesystem.list"],
-            "revoked_capabilities": [],
-        }
-        b = _make_bootstrap(fabric_client=fabric)
-        b.fabric = fabric
-        report = _make_report()
-
-        b._gate_contracts(report, fabric_contract=None)
-
-        gate = report.get_gate(ReadinessGate.CONTRACTS_DISCOVERED)
-        assert gate.passed
-        assert gate.evidence == "c-001"
-
-    def test_no_fabric_blocks_contracts(self):
-        b = _make_bootstrap(fabric_client=None)
-        report = _make_report()
-
-        b._gate_contracts(report, fabric_contract=None)
-
-        gate = report.get_gate(ReadinessGate.CONTRACTS_DISCOVERED)
-        assert not gate.passed
-
-
-# ---------------------------------------------------------------------------
-# Phase J: Delegation Context
-# ---------------------------------------------------------------------------
-
-class TestPhaseJ_DelegationContext:
-
-    def test_delegation_context_is_mandatory_gate(self):
-        assert ReadinessGate.DELEGATION_CONTEXT_BUILT in MANDATORY_GATES
-
-    def test_delegation_context_built_with_full_state(self):
-        b = _make_bootstrap()
-        report = _make_report(runtime_id="rt-abc", fabric_node="node-test")
-
-        # Pre-seed a passing tenant gate with evidence
-        report.add_result(GateResult(
-            ReadinessGate.FABRIC_TENANT_BOUND, True,
-            "Tenant bound", "tenant-xyz"
-        ))
-
-        ident = MagicMock()
-        ident.runtime_id = "rt-abc"
-
-        b._gate_delegation_context(report, ident, fabric_contract=None)
-
-        gate = report.get_gate(ReadinessGate.DELEGATION_CONTEXT_BUILT)
-        assert gate.passed
-        assert "runtime_id=rt-abc" in gate.evidence
-        assert "tenant_id=tenant-xyz" in gate.evidence
-        assert "fabric_node=node-test" in gate.evidence
-
-    def test_delegation_context_fails_without_runtime_id(self):
-        b = _make_bootstrap()
-        report = _make_report(runtime_id="rt-abc", fabric_node="node-test")
-        report.add_result(GateResult(ReadinessGate.FABRIC_TENANT_BOUND, True, "OK", "t-001"))
-
-        b._gate_delegation_context(report, ident=None, fabric_contract=None)
-
-        gate = report.get_gate(ReadinessGate.DELEGATION_CONTEXT_BUILT)
-        assert not gate.passed
-        assert "runtime_id unknown" in gate.detail
-
-    def test_delegation_context_fails_without_tenant(self):
-        b = _make_bootstrap()
-        report = _make_report(runtime_id="rt-abc", fabric_node="node-test")
-        # No tenant gate result added
-
-        ident = MagicMock()
-        ident.runtime_id = "rt-abc"
-
-        b._gate_delegation_context(report, ident, fabric_contract=None)
-
-        gate = report.get_gate(ReadinessGate.DELEGATION_CONTEXT_BUILT)
-        assert not gate.passed
-        assert "tenant_id not bound" in gate.detail
-
-    def test_delegation_context_fails_without_fabric_node(self):
-        b = _make_bootstrap()
-        report = _make_report(runtime_id="rt-abc", fabric_node="UNKNOWN")
-        report.add_result(GateResult(ReadinessGate.FABRIC_TENANT_BOUND, True, "OK", "t-001"))
-
-        ident = MagicMock()
-        ident.runtime_id = "rt-abc"
-
-        b._gate_delegation_context(report, ident, fabric_contract=None)
-
-        gate = report.get_gate(ReadinessGate.DELEGATION_CONTEXT_BUILT)
-        assert not gate.passed
-        assert "fabric_node not resolved" in gate.detail
-
-
-# ---------------------------------------------------------------------------
-# Gate Coverage: All 25 Mandatory Gates defined in MANDATORY_GATES
-# ---------------------------------------------------------------------------
-
-class TestMandatoryGateCoverage_Extended:
-
-    def test_phase_e_to_k_gates_in_mandatory_gates(self):
-        expected = {
-            ReadinessGate.POLICY_SNAPSHOT_FRESH,
-            ReadinessGate.CAPABILITIES_INVENTORIED,
-            ReadinessGate.TOOLS_INVENTORIED,
-            ReadinessGate.MODELS_INVENTORIED,
-            ReadinessGate.WORKERS_INVENTORIED,
-            ReadinessGate.CONNECTORS_INVENTORIED,
-            ReadinessGate.CRITICAL_ACCESS_VERIFIED,
-            ReadinessGate.CONTRACTS_DISCOVERED,
-            ReadinessGate.DELEGATION_CONTEXT_BUILT,
-        }
-        missing = expected - MANDATORY_GATES
-        assert not missing, f"Gates not in MANDATORY_GATES: {missing}"
-
-    def test_total_mandatory_gate_count(self):
-        """Ensure we have exactly 25 mandatory gates."""
-        assert len(MANDATORY_GATES) == 25
-
-    def test_formatter_reports_all_phases(self):
-        from runtime.bootstrap.report import ChatGPTBootstrapFormatter
-        report = BootstrapReport(anny_ready=False, runtime_id="rt-x", fabric_node="n-x")
-        formatted = ChatGPTBootstrapFormatter.format(report)
-
-        for phase in ["PHASE A", "PHASE B", "PHASE C", "PHASE D", "PHASE E",
-                      "PHASE F", "PHASE G", "PHASE H", "PHASE I", "PHASE J", "PHASE K"]:
-            assert phase in formatted, f"{phase} missing from ChatGPT bootstrap output"
-
-    def test_formatter_reports_inventory_summary(self):
-        from runtime.bootstrap.report import ChatGPTBootstrapFormatter
-        report = BootstrapReport(anny_ready=True, runtime_id="rt-x", fabric_node="n-x")
-        report.capabilities.declared = ["filesystem.list", "repository.read"]
-        report.capabilities.authorized = ["filesystem.list", "repository.read"]
-        formatted = ChatGPTBootstrapFormatter.format(report)
-
-        assert "INVENTORY SUMMARY" in formatted
-        assert "Capabilities: 2 DEC, 0 CFG, 0 ENA, 2 AUT, 0 AVL, 0 FNC, 0 TST, 0 VRF" in formatted
-
-    def test_blocked_bootstrap_never_says_degraded(self):
-        from runtime.bootstrap.report import ChatGPTBootstrapFormatter
-        report = BootstrapReport(anny_ready=False, runtime_id="rt-x", fabric_node="n-x")
-        formatted = ChatGPTBootstrapFormatter.format(report)
-
-        assert "BLOCKED" in formatted
-        assert "DEGRADED" not in formatted

@@ -14,7 +14,7 @@ RULE: Nothing is assumed from cached state. Every field is resolved
 """
 import logging
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -112,27 +112,20 @@ class InventoryDiscovery:
 
         return inv
 
-    # ------------------------------------------------------------------
-    # Per-Component Discovery
-    # ------------------------------------------------------------------
-
     def _discover_capabilities(self) -> ComponentInventory:
         inv = ComponentInventory()
 
         if self._cap_registry is None:
-            # Attempt to instantiate the canonical registry
             from runtime.execution.capability import CapabilityRegistry
             self._cap_registry = CapabilityRegistry()
 
         all_caps = self._cap_registry.list_all()
 
         granted = set()
+        revoked = set()
         if self._fabric_contract:
             granted = set(self._fabric_contract.granted_capabilities)
             revoked = set(self._fabric_contract.revoked_capabilities)
-        else:
-            # No contract — default: nothing revoked
-            revoked = set()
 
         for cap in all_caps:
             inv.declared.append(cap.capability_id)
@@ -147,20 +140,18 @@ class InventoryDiscovery:
     def _discover_tools(self) -> ComponentInventory:
         inv = ComponentInventory()
 
+        # A registry must be supplied by the runtime wiring. There is no
+        # safe generic ToolRegistry fallback because register_builtins() has
+        # required execution dependencies and cannot be initialized here.
         if self._tool_registry is None:
-            from runtime.tools.registry import ToolRegistry
-            from runtime.tools.builtins import register_builtins
-            self._tool_registry = ToolRegistry()
-            register_builtins(self._tool_registry)
+            raise RuntimeError("tool registry not wired into bootstrap")
 
         for manifest in self._tool_registry.list_tools():
             inv.declared.append(manifest.name)
-            # Tools are enabled if they exist in the registry
             inv.enabled.append(manifest.name)
-            # Authorized = enabled (authorization is enforced at invocation)
             inv.authorized.append(manifest.name)
 
-        # Also inventory MCP tools
+        # Also inventory MCP tools when the MCP registry is available.
         try:
             from runtime.mcp.registry import ToolRegistry as MCPRegistry
             mcp_reg = MCPRegistry()
@@ -170,7 +161,7 @@ class InventoryDiscovery:
                     inv.declared.append(full_id)
                     inv.enabled.append(full_id)
                     inv.authorized.append(full_id)
-        except Exception:
+        except (ImportError, AttributeError):
             pass
 
         return inv
@@ -188,8 +179,11 @@ class InventoryDiscovery:
             if model.state == ModelState.AVAILABLE:
                 inv.enabled.append(model.model_id)
                 inv.authorized.append(model.model_id)
-            elif model.state not in (ModelState.DISABLED, ModelState.QUARANTINED, ModelState.DEPRECATED):
-                # Registered but not yet available (e.g., INSTALL_REQUIRED)
+            elif model.state not in (
+                ModelState.DISABLED,
+                ModelState.QUARANTINED,
+                ModelState.DEPRECATED,
+            ):
                 inv.enabled.append(model.model_id)
 
         return inv
@@ -197,7 +191,6 @@ class InventoryDiscovery:
     def _discover_workers(self) -> ComponentInventory:
         inv = ComponentInventory()
 
-        # L2 organizational workers are defined statically in the canonical topology
         L2_WORKERS = [
             "ANNA",   # DESIGN (Marketing)
             "IRIS",   # PRISM (Product)
@@ -212,7 +205,6 @@ class InventoryDiscovery:
         inv.enabled = list(L2_WORKERS)
         inv.authorized = list(L2_WORKERS)
 
-        # Also inventory runtime execution workers if manager is available
         if self._worker_manager is not None:
             try:
                 active = self._worker_manager.list_active()
@@ -229,7 +221,6 @@ class InventoryDiscovery:
     def _discover_connectors(self) -> ComponentInventory:
         inv = ComponentInventory()
 
-        # Canonical connectors — declared if the module is importable
         connector_checks = [
             ("github", "runtime.github.client", "GitHubClient"),
             ("fabric.github", "runtime.fabric.github_adapter", "GitHubFabricAdapter"),
@@ -248,7 +239,6 @@ class InventoryDiscovery:
             except ImportError:
                 pass
 
-        # Add any statically declared connectors from config
         for cid in self._static_connectors:
             if cid not in inv.declared:
                 inv.declared.append(cid)

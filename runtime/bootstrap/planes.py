@@ -22,15 +22,17 @@ from runtime.fabric.github_adapter import GitHubFabricAdapter, FabricError, Fabr
 from runtime.continuity.engine import ContinuityEngine
 from runtime.core.inventory import InventoryDiscovery, BootstrapInventory
 from runtime.core.access_verifier import CriticalAccessVerifier
+from runtime.core.config import get_admin_port
 
 from .gates import ReadinessGate, GateResult, MANDATORY_GATES
 from .report import BootstrapReport, ComponentInventory
 
 logger = logging.getLogger(__name__)
 
-# Localhost admin control plane — used for RUNTIME_* gate checks
+# Runtime endpoint is configuration-owned. The previous 7891 default diverged from
+# RuntimeConfig's canonical admin port (3643) and caused false reachability failures.
 ADMIN_HOST = "127.0.0.1"
-ADMIN_PORT = 7891
+ADMIN_PORT = get_admin_port()
 
 
 class ThreePlaneBootstrap:
@@ -65,22 +67,13 @@ class ThreePlaneBootstrap:
         """
         report = BootstrapReport(anny_ready=False, runtime_id="UNKNOWN", fabric_node="UNKNOWN")
 
-        # ---------------------------------------------------------
-        # PLANE 1: Local Runtime Identity
-        # ---------------------------------------------------------
         identity = self._gate_runtime_identity(report)
         if identity:
             report.runtime_id = identity.runtime_id
 
-        # ---------------------------------------------------------
-        # PLANE 2: GitHub Connectivity & Auth
-        # ---------------------------------------------------------
         gh_connected = self._gate_github_connected(report)
         gh_bound = self._gate_github_org_bound(report, gh_connected)
 
-        # ---------------------------------------------------------
-        # PLANE 3: Repository Fabric (Requires Identity + GitHub)
-        # ---------------------------------------------------------
         can_proceed_fabric = (identity is not None) and gh_connected and gh_bound
 
         fab_reachable = self._gate_fabric_reachable(report, can_proceed_fabric)
@@ -90,7 +83,6 @@ class ThreePlaneBootstrap:
         fab_tenant = self._gate_fabric_tenant_bound(report, can_proceed_fabric, identity)
 
         if fab_id_verified:
-            # Derive fabric_node from the actual node config
             try:
                 node = self.fabric.read_node_config()
                 report.fabric_node = node.node_id
@@ -100,33 +92,19 @@ class ThreePlaneBootstrap:
         fab_state = self._gate_fabric_state_readable(report, can_proceed_fabric and fab_reachable)
         fab_prov = self._gate_fabric_provenance(report, can_proceed_fabric and fab_reachable, identity)
 
-        # ---------------------------------------------------------
-        # ANNY-RUNTIME Reachability Gates (PLANE 3)
-        # These are MANDATORY and SEPARATE from identity.
-        # RuntimeIdentity.load() does NOT prove these.
-        # ---------------------------------------------------------
         rt_reachable = self._gate_runtime_reachable(report)
         rt_health = self._gate_runtime_health_verified(report, rt_reachable)
         rt_binding = self._gate_runtime_binding_verified(report, rt_reachable, identity)
         rt_admitted = self._gate_runtime_admitted(report, can_proceed_fabric and fab_reachable, identity)
 
-        # ---------------------------------------------------------
-        # PHASE E: Policy Snapshot
-        # ---------------------------------------------------------
         fabric_contract = None
         if can_proceed_fabric and fab_reachable:
             fabric_contract = self._gate_policy_snapshot(report)
         else:
             report.add_result(GateResult(ReadinessGate.POLICY_SNAPSHOT_FRESH, False, "Prerequisites not met"))
 
-        # ---------------------------------------------------------
-        # PHASE F: Cross-Plane Reconciliation
-        # ---------------------------------------------------------
         self._gate_plane_reconciliation(report, can_proceed_fabric, identity, fab_reachable, rt_reachable)
 
-        # ---------------------------------------------------------
-        # PHASE G: Inventory Discovery
-        # ---------------------------------------------------------
         inventory = self._gate_inventory(report, fabric_contract)
         if inventory:
             report.capabilities = _to_component_inventory(inventory.capabilities)
@@ -135,32 +113,15 @@ class ThreePlaneBootstrap:
             report.workers = _to_component_inventory(inventory.workers)
             report.connectors = _to_component_inventory(inventory.connectors)
 
-        # ---------------------------------------------------------
-        # PHASE H: Critical Access Verification
-        # ---------------------------------------------------------
         self._gate_critical_access(
             report,
             authorized_capabilities=report.capabilities.authorized,
         )
 
-        # ---------------------------------------------------------
-        # PHASE I: Contracts Discovery
-        # ---------------------------------------------------------
         self._gate_contracts(report, fabric_contract)
-
-        # ---------------------------------------------------------
-        # PHASE J: Delegation Context
-        # ---------------------------------------------------------
         self._gate_delegation_context(report, identity, fabric_contract)
-
-        # ---------------------------------------------------------
-        # PHASE K: Continuity Coherence
-        # ---------------------------------------------------------
         self._gate_continuity_coherent(report)
 
-        # ---------------------------------------------------------
-        # FINAL VERDICT — ALL mandatory gates must pass
-        # ---------------------------------------------------------
         gate_map = {g.gate: g.passed for g in report.gates}
         all_mandatory_pass = all(
             gate_map.get(gate, False) for gate in MANDATORY_GATES
@@ -175,8 +136,6 @@ class ThreePlaneBootstrap:
             logger.warning(f"Bootstrap BLOCKED. Failed mandatory gates: {failed}")
 
         return report
-
-    # --- Gate Implementations ---
 
     def _gate_runtime_identity(self, report: BootstrapReport) -> Optional[RuntimeIdentity]:
         try:
@@ -194,7 +153,6 @@ class ThreePlaneBootstrap:
         if not self.github:
             report.add_result(GateResult(ReadinessGate.GITHUB_CONNECTED, False, "No GitHub client provided"))
             return False
-
         try:
             principal = self.github.get_authenticated_principal()
             login = principal.get("login", "UNKNOWN")
@@ -211,21 +169,17 @@ class ThreePlaneBootstrap:
         if not gh_connected:
             report.add_result(GateResult(ReadinessGate.GITHUB_ORG_BOUND, False, "GitHub not connected"))
             return False
-
-        # Resolve the required org from config (dynamic, not hardcoded)
         required_org = None
         if self.config:
             required_org = getattr(self.config, 'fabric_org', None)
         if not required_org and self.fabric:
             required_org = self.fabric.org
-
         if not required_org:
             report.add_result(GateResult(
                 ReadinessGate.GITHUB_ORG_BOUND, False,
                 "fabric_org not configured — cannot verify org membership"
             ))
             return False
-
         try:
             orgs = self.github.list_organizations()
             org_names = {org["login"] for org in orgs}
@@ -235,12 +189,11 @@ class ThreePlaneBootstrap:
                     f"Member of {required_org}", required_org
                 ))
                 return True
-            else:
-                report.add_result(GateResult(
-                    ReadinessGate.GITHUB_ORG_BOUND, False,
-                    f"Not a member of {required_org}. Orgs: {sorted(org_names)}"
-                ))
-                return False
+            report.add_result(GateResult(
+                ReadinessGate.GITHUB_ORG_BOUND, False,
+                f"Not a member of {required_org}. Orgs: {sorted(org_names)}"
+            ))
+            return False
         except Exception as e:
             report.add_result(GateResult(ReadinessGate.GITHUB_ORG_BOUND, False, str(e)))
             return False
@@ -249,7 +202,6 @@ class ThreePlaneBootstrap:
         if not can_proceed or not self.fabric:
             report.add_result(GateResult(ReadinessGate.FABRIC_REACHABLE, False, "Prerequisites not met"))
             return False
-
         reachable, latency_ms, error = self.fabric.probe_reachability()
         if reachable:
             report.add_result(GateResult(
@@ -257,17 +209,13 @@ class ThreePlaneBootstrap:
                 f"Fabric reachable ({latency_ms:.0f}ms)", f"{self.fabric.org}/{self.fabric.repo}"
             ))
             return True
-        else:
-            report.add_result(GateResult(ReadinessGate.FABRIC_REACHABLE, False, error))
-            return False
+        report.add_result(GateResult(ReadinessGate.FABRIC_REACHABLE, False, error))
+        return False
 
-    def _gate_fabric_identity_verified(
-        self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity]
-    ) -> bool:
+    def _gate_fabric_identity_verified(self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity]) -> bool:
         if not can_proceed or not self.fabric:
             report.add_result(GateResult(ReadinessGate.FABRIC_IDENTITY_VERIFIED, False, "Prerequisites not met"))
             return False
-
         try:
             node = self.fabric.read_node_config()
             report.add_result(GateResult(
@@ -280,11 +228,9 @@ class ThreePlaneBootstrap:
             return False
 
     def _gate_fabric_node_at_remote_head(self, report: BootstrapReport, can_proceed: bool) -> bool:
-        """Explicitly verify fabric/node.json exists at the remote HEAD (not cached)."""
         if not can_proceed or not self.fabric:
             report.add_result(GateResult(ReadinessGate.FABRIC_NODE_AT_REMOTE_HEAD, False, "Prerequisites not met"))
             return False
-
         exists, sha = self.fabric.node_json_exists_at_remote_head()
         if exists:
             report.add_result(GateResult(
@@ -292,20 +238,16 @@ class ThreePlaneBootstrap:
                 "fabric/node.json confirmed at remote HEAD", sha
             ))
             return True
-        else:
-            report.add_result(GateResult(
-                ReadinessGate.FABRIC_NODE_AT_REMOTE_HEAD, False,
-                f"fabric/node.json not found at remote HEAD of {self.fabric.org}/{self.fabric.repo}"
-            ))
-            return False
+        report.add_result(GateResult(
+            ReadinessGate.FABRIC_NODE_AT_REMOTE_HEAD, False,
+            f"fabric/node.json not found at remote HEAD of {self.fabric.org}/{self.fabric.repo}"
+        ))
+        return False
 
-    def _gate_fabric_trust_verified(
-        self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity]
-    ) -> bool:
+    def _gate_fabric_trust_verified(self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity]) -> bool:
         if not can_proceed or not self.fabric or not ident:
             report.add_result(GateResult(ReadinessGate.FABRIC_TRUST_VERIFIED, False, "Prerequisites not met"))
             return False
-
         try:
             token = self.fabric.issue_trust_token(ident.runtime_id, ident._private_key)
             report.add_result(GateResult(
@@ -317,13 +259,10 @@ class ThreePlaneBootstrap:
             report.add_result(GateResult(ReadinessGate.FABRIC_TRUST_VERIFIED, False, str(e)))
             return False
 
-    def _gate_fabric_tenant_bound(
-        self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity]
-    ) -> bool:
+    def _gate_fabric_tenant_bound(self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity]) -> bool:
         if not can_proceed or not self.fabric or not ident:
             report.add_result(GateResult(ReadinessGate.FABRIC_TENANT_BOUND, False, "Prerequisites not met"))
             return False
-
         try:
             tenant = self.fabric.read_tenant_binding(ident.runtime_id)
             report.add_result(GateResult(
@@ -339,10 +278,8 @@ class ThreePlaneBootstrap:
         if not can_proceed or not self.fabric:
             report.add_result(GateResult(ReadinessGate.FABRIC_STATE_READABLE, False, "Prerequisites not met"))
             return False
-
         try:
             state = self.fabric.read_fabric_state()
-            # Verify it's a non-empty dict — not just a successful HTTP response
             if isinstance(state, dict) and len(state) > 0:
                 report.add_result(GateResult(
                     ReadinessGate.FABRIC_STATE_READABLE, True,
@@ -350,37 +287,30 @@ class ThreePlaneBootstrap:
                     f"keys={list(state.keys())[:5]}"
                 ))
                 return True
-            else:
-                report.add_result(GateResult(
-                    ReadinessGate.FABRIC_STATE_READABLE, False,
-                    "fabric/state.json is empty or malformed"
-                ))
-                return False
+            report.add_result(GateResult(
+                ReadinessGate.FABRIC_STATE_READABLE, False,
+                "fabric/state.json is empty or malformed"
+            ))
+            return False
         except FabricError as e:
             report.add_result(GateResult(ReadinessGate.FABRIC_STATE_READABLE, False, str(e)))
             return False
 
-    def _gate_fabric_provenance(
-        self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity]
-    ) -> bool:
+    def _gate_fabric_provenance(self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity]) -> bool:
         if not can_proceed or not self.fabric:
             report.add_result(GateResult(ReadinessGate.FABRIC_PROVENANCE_VALID, False, "Prerequisites not met"))
             return False
-
-        # Read the version commit SHA from identity or config
         commit_sha = None
         if ident and hasattr(ident, 'origin_commit'):
             commit_sha = ident.origin_commit
         if not commit_sha and self.config and hasattr(self.config, 'version_commit'):
             commit_sha = self.config.version_commit
-
         if not commit_sha:
             report.add_result(GateResult(
                 ReadinessGate.FABRIC_PROVENANCE_VALID, False,
                 "No commit SHA available for provenance check"
             ))
             return False
-
         valid, error = self.fabric.validate_provenance(commit_sha)
         if valid:
             report.add_result(GateResult(
@@ -388,41 +318,39 @@ class ThreePlaneBootstrap:
                 f"Commit {commit_sha[:7]} confirmed at Fabric remote", commit_sha[:7]
             ))
             return True
-        else:
-            report.add_result(GateResult(
-                ReadinessGate.FABRIC_PROVENANCE_VALID, False,
-                error or f"Commit {commit_sha[:7]} not found in Fabric"
-            ))
-            return False
+        report.add_result(GateResult(
+            ReadinessGate.FABRIC_PROVENANCE_VALID, False,
+            error or f"Commit {commit_sha[:7]} not found in Fabric"
+        ))
+        return False
+
+    def _admin_endpoint(self) -> str:
+        host = getattr(self.config, "admin_host", ADMIN_HOST) if self.config else ADMIN_HOST
+        port = getattr(self.config, "admin_port", ADMIN_PORT) if self.config else ADMIN_PORT
+        return f"http://{host}:{port}"
 
     def _gate_runtime_reachable(self, report: BootstrapReport) -> bool:
-        """Verify the ANNY-RUNTIME localhost control plane responds.
-
-        RuntimeIdentity.load() is NOT equivalent to this check.
-        This gate proves the process is up and the HTTP server accepts connections.
-        """
         try:
-            url = f"http://{ADMIN_HOST}:{ADMIN_PORT}/api/status"
+            base = self._admin_endpoint()
+            url = f"{base}/api/status"
             req = urllib.request.Request(url, method="GET")
             req.add_header("X-Bootstrap-Probe", "1")
             with urllib.request.urlopen(req, timeout=3) as resp:
                 if resp.status == 200:
                     report.add_result(GateResult(
                         ReadinessGate.RUNTIME_REACHABLE, True,
-                        f"Admin API responded 200 at {ADMIN_HOST}:{ADMIN_PORT}",
-                        url
+                        f"Admin API responded 200 at {base}", url
                     ))
                     return True
-                else:
-                    report.add_result(GateResult(
-                        ReadinessGate.RUNTIME_REACHABLE, False,
-                        f"Admin API returned HTTP {resp.status}"
-                    ))
-                    return False
+                report.add_result(GateResult(
+                    ReadinessGate.RUNTIME_REACHABLE, False,
+                    f"Admin API returned HTTP {resp.status}"
+                ))
+                return False
         except urllib.error.URLError as e:
             report.add_result(GateResult(
                 ReadinessGate.RUNTIME_REACHABLE, False,
-                f"Admin API not reachable at {ADMIN_HOST}:{ADMIN_PORT}: {e.reason}"
+                f"Admin API not reachable at {self._admin_endpoint()}: {e.reason}"
             ))
             return False
         except Exception as e:
@@ -430,13 +358,11 @@ class ThreePlaneBootstrap:
             return False
 
     def _gate_runtime_health_verified(self, report: BootstrapReport, rt_reachable: bool) -> bool:
-        """Parse the /api/status response to verify health."""
         if not rt_reachable:
             report.add_result(GateResult(ReadinessGate.RUNTIME_HEALTH_VERIFIED, False, "Runtime not reachable"))
             return False
-
         try:
-            url = f"http://{ADMIN_HOST}:{ADMIN_PORT}/api/status"
+            url = f"{self._admin_endpoint()}/api/status"
             req = urllib.request.Request(url, method="GET")
             req.add_header("X-Bootstrap-Probe", "1")
             with urllib.request.urlopen(req, timeout=3) as resp:
@@ -449,24 +375,19 @@ class ThreePlaneBootstrap:
                         f"Runtime state: {state}", state
                     ))
                     return True
-                else:
-                    report.add_result(GateResult(
-                        ReadinessGate.RUNTIME_HEALTH_VERIFIED, False,
-                        f"Runtime in unhealthy state: {state}"
-                    ))
-                    return False
+                report.add_result(GateResult(
+                    ReadinessGate.RUNTIME_HEALTH_VERIFIED, False,
+                    f"Runtime in unhealthy state: {state}"
+                ))
+                return False
         except Exception as e:
             report.add_result(GateResult(ReadinessGate.RUNTIME_HEALTH_VERIFIED, False, str(e)))
             return False
 
-    def _gate_runtime_binding_verified(
-        self, report: BootstrapReport, rt_reachable: bool, ident: Optional[RuntimeIdentity]
-    ) -> bool:
-        """Verify runtime reports matching fabric_org/repo binding."""
+    def _gate_runtime_binding_verified(self, report: BootstrapReport, rt_reachable: bool, ident: Optional[RuntimeIdentity]) -> bool:
         if not rt_reachable:
             report.add_result(GateResult(ReadinessGate.RUNTIME_BINDING_VERIFIED, False, "Runtime not reachable"))
             return False
-
         expected_org = None
         expected_repo = None
         if self.fabric:
@@ -475,22 +396,19 @@ class ThreePlaneBootstrap:
         elif self.config:
             expected_org = getattr(self.config, 'fabric_org', None)
             expected_repo = getattr(self.config, 'fabric_repo', None)
-
         if not expected_org or not expected_repo:
             report.add_result(GateResult(
                 ReadinessGate.RUNTIME_BINDING_VERIFIED, False,
                 "Cannot verify binding: fabric_org/repo not configured"
             ))
             return False
-
         try:
-            url = f"http://{ADMIN_HOST}:{ADMIN_PORT}/api/status"
+            url = f"{self._admin_endpoint()}/api/status"
             req = urllib.request.Request(url, method="GET")
             with urllib.request.urlopen(req, timeout=3) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
                 reported_org = data.get("fabric_org")
                 reported_repo = data.get("fabric_repo")
-
                 if reported_org == expected_org and reported_repo == expected_repo:
                     report.add_result(GateResult(
                         ReadinessGate.RUNTIME_BINDING_VERIFIED, True,
@@ -498,140 +416,89 @@ class ThreePlaneBootstrap:
                         f"{expected_org}/{expected_repo}"
                     ))
                     return True
-                else:
-                    report.add_result(GateResult(
-                        ReadinessGate.RUNTIME_BINDING_VERIFIED, False,
-                        f"Binding mismatch: expected {expected_org}/{expected_repo}, "
-                        f"got {reported_org}/{reported_repo}"
-                    ))
-                    return False
+                report.add_result(GateResult(
+                    ReadinessGate.RUNTIME_BINDING_VERIFIED, False,
+                    f"Binding mismatch: expected {expected_org}/{expected_repo}, "
+                    f"got {reported_org}/{reported_repo}"
+                ))
+                return False
         except Exception as e:
             report.add_result(GateResult(ReadinessGate.RUNTIME_BINDING_VERIFIED, False, str(e)))
             return False
 
-    def _gate_runtime_admitted(
-        self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity]
-    ) -> bool:
-        """Verify the Fabric has issued an explicit ALLOW for this runtime_id.
-
-        Local HMAC trust token ≠ Fabric admission.
-        """
+    def _gate_runtime_admitted(self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity]) -> bool:
         if not can_proceed or not self.fabric or not ident:
             report.add_result(GateResult(ReadinessGate.RUNTIME_ADMITTED, False, "Prerequisites not met"))
             return False
-
         admission = self.fabric.check_admission(ident.runtime_id)
-
         if admission.is_admitted():
             report.add_result(GateResult(
                 ReadinessGate.RUNTIME_ADMITTED, True,
-                f"Fabric ALLOW: {admission.reason}",
-                admission.verdict
+                f"Fabric ALLOW: {admission.reason}", admission.verdict
             ))
             return True
-        else:
-            report.add_result(GateResult(
-                ReadinessGate.RUNTIME_ADMITTED, False,
-                f"Fabric verdict={admission.verdict}: {admission.reason}"
-            ))
-            return False
+        report.add_result(GateResult(
+            ReadinessGate.RUNTIME_ADMITTED, False,
+            f"Fabric verdict={admission.verdict}: {admission.reason}"
+        ))
+        return False
 
-    def _gate_plane_reconciliation(
-        self,
-        report: BootstrapReport,
-        can_proceed: bool,
-        ident: Optional[RuntimeIdentity],
-        fab_reachable: bool,
-        rt_reachable: bool,
-    ) -> bool:
-        """Cross-plane reconciliation: compare runtime identity vs Fabric state."""
+    def _gate_plane_reconciliation(self, report: BootstrapReport, can_proceed: bool, ident: Optional[RuntimeIdentity], fab_reachable: bool, rt_reachable: bool) -> bool:
         if not can_proceed:
             report.add_result(GateResult(ReadinessGate.PLANE_RECONCILIATION, False, "Prerequisites not met"))
             return False
-
-        # Collect reconciliation evidence
         issues = []
-
-        # 1. runtime_id must be set
         if not ident or not ident.runtime_id:
             issues.append("runtime_id missing from identity")
-
-        # 2. Fabric must be reachable
         if not fab_reachable:
             issues.append("Fabric not reachable — cannot reconcile")
-
-        # 3. Runtime must be reachable
         if not rt_reachable:
             issues.append("Runtime not reachable — cannot reconcile")
-
-        # 4. Fabric state and runtime state should agree on runtime_id and fabric binding
         if ident and fab_reachable and rt_reachable:
             try:
                 fabric_state = self.fabric.read_fabric_state()
                 registered = fabric_state.get("registered_runtimes", [])
                 if ident.runtime_id not in registered:
-                    issues.append(
-                        f"{ident.runtime_id} not in fabric state registered_runtimes"
-                    )
-                
-                # Check fabric_org and fabric_repo matching the identity/config
+                    issues.append(f"{ident.runtime_id} not in fabric state registered_runtimes")
                 expected_org = self.fabric.org if self.fabric else (self.config.fabric_org if self.config else None)
                 expected_repo = self.fabric.repo if self.fabric else (self.config.fabric_repo if self.config else None)
-                
                 state_org = fabric_state.get("fabric_org")
                 state_repo = fabric_state.get("fabric_repo")
-                
                 if state_org and state_org != expected_org:
                     issues.append(f"Fabric org mismatch: expected {expected_org}, got {state_org}")
                 if state_repo and state_repo != expected_repo:
                     issues.append(f"Fabric repo mismatch: expected {expected_repo}, got {state_repo}")
-
             except FabricError as e:
                 issues.append(f"Could not read fabric state for reconciliation: {e}")
-
         if not issues:
             report.add_result(GateResult(
                 ReadinessGate.PLANE_RECONCILIATION, True,
                 "All planes agree", ident.runtime_id if ident else "UNKNOWN"
             ))
             return True
-        else:
-            report.add_result(GateResult(
-                ReadinessGate.PLANE_RECONCILIATION, False,
-                "; ".join(issues)
-            ))
-            return False
+        report.add_result(GateResult(ReadinessGate.PLANE_RECONCILIATION, False, "; ".join(issues)))
+        return False
 
     def _gate_continuity_coherent(self, report: BootstrapReport) -> bool:
         if not self.continuity:
             report.add_result(GateResult(ReadinessGate.CONTINUITY_COHERENT, False, "No continuity engine"))
             return False
-
         try:
             status = self.continuity.status
             state = status.get("state", "UNKNOWN")
             if state == "COHERENT":
-                report.add_result(GateResult(
-                    ReadinessGate.CONTINUITY_COHERENT, True,
-                    "Continuity coherent", state
-                ))
+                report.add_result(GateResult(ReadinessGate.CONTINUITY_COHERENT, True, "Continuity coherent", state))
                 return True
-            else:
-                report.add_result(GateResult(
-                    ReadinessGate.CONTINUITY_COHERENT, False,
-                    f"Continuity state: {state}"
-                ))
-                return False
+            report.add_result(GateResult(
+                ReadinessGate.CONTINUITY_COHERENT, False,
+                f"Continuity state: {state}"
+            ))
+            return False
         except Exception as e:
             report.add_result(GateResult(ReadinessGate.CONTINUITY_COHERENT, False, str(e)))
             return False
 
-    # ------------------------------------------------------------------
-    # Phase E: Policy Snapshot
-    # ------------------------------------------------------------------
-
     def _gate_policy_snapshot(self, report: BootstrapReport):
-        """Phase E: Fetch and validate the authoritative Fabric policy snapshot."""
         try:
             from runtime.fabric.models import FabricPolicy
             raw = self.fabric.read_policy()
@@ -639,22 +506,14 @@ class ThreePlaneBootstrap:
             report.policy_revision = policy.revision
             report.add_result(GateResult(
                 ReadinessGate.POLICY_SNAPSHOT_FRESH, True,
-                f"Policy snapshot fetched, revision={policy.revision}",
-                policy.revision
+                f"Policy snapshot fetched, revision={policy.revision}", policy.revision
             ))
-            # Return the contract from the same read if present
             return raw.get("_contract")
-
         except Exception as e:
             report.add_result(GateResult(ReadinessGate.POLICY_SNAPSHOT_FRESH, False, str(e)))
             return None
 
-    # ------------------------------------------------------------------
-    # Phase G: Inventory Discovery
-    # ------------------------------------------------------------------
-
     def _gate_inventory(self, report: BootstrapReport, fabric_contract) -> Optional[BootstrapInventory]:
-        """Phase G: Enumerate capabilities, tools, models, workers, connectors."""
         try:
             discovery = InventoryDiscovery(
                 capability_registry=self._cap_registry,
@@ -664,8 +523,6 @@ class ThreePlaneBootstrap:
                 fabric_contract=fabric_contract,
             )
             inv = discovery.discover()
-
-            all_pass = True
             for gate, name, component in [
                 (ReadinessGate.CAPABILITIES_INVENTORIED, "capabilities", inv.capabilities),
                 (ReadinessGate.TOOLS_INVENTORIED, "tools", inv.tools),
@@ -675,14 +532,11 @@ class ThreePlaneBootstrap:
             ]:
                 count = len(component.declared)
                 enabled = len(component.authorized)
-                passed = count > 0
-                all_pass = all_pass and passed
                 report.add_result(GateResult(
-                    gate, passed,
+                    gate, count > 0,
                     f"{name}: {count} declared, {enabled} authorized",
                     f"{count}/{enabled}"
                 ))
-
             return inv
         except Exception as e:
             for gate in [
@@ -695,14 +549,7 @@ class ThreePlaneBootstrap:
                 report.add_result(GateResult(gate, False, f"Inventory error: {e}"))
             return None
 
-    # ------------------------------------------------------------------
-    # Phase H: Critical Access Verification
-    # ------------------------------------------------------------------
-
-    def _gate_critical_access(
-        self, report: BootstrapReport, authorized_capabilities
-    ) -> bool:
-        """Phase H: Run safe smoke tests against critical capabilities."""
+    def _gate_critical_access(self, report: BootstrapReport, authorized_capabilities) -> bool:
         try:
             verifier = CriticalAccessVerifier(
                 authorized_capabilities=list(authorized_capabilities),
@@ -711,10 +558,8 @@ class ThreePlaneBootstrap:
                 github_client=self.github,
             )
             result = verifier.verify()
-
             detail = f"tested={len(result.results)}, failures={result.critical_failures}"
             evidence = ", ".join(r.evidence for r in result.results if r.passed)
-
             report.add_result(GateResult(
                 ReadinessGate.CRITICAL_ACCESS_VERIFIED,
                 result.passed,
@@ -726,14 +571,8 @@ class ThreePlaneBootstrap:
             report.add_result(GateResult(ReadinessGate.CRITICAL_ACCESS_VERIFIED, False, str(e)))
             return False
 
-    # ------------------------------------------------------------------
-    # Phase I: Contracts Discovery
-    # ------------------------------------------------------------------
-
     def _gate_contracts(self, report: BootstrapReport, fabric_contract) -> bool:
-        """Phase I: Verify operational limits and contracts are discoverable."""
         try:
-            # If we resolved a contract during Phase E, use it
             if fabric_contract is not None:
                 cid = getattr(fabric_contract, "contract_id", "INLINED")
                 report.limits_verified = True
@@ -742,8 +581,6 @@ class ThreePlaneBootstrap:
                     f"Contract: {cid}", cid
                 ))
                 return True
-
-            # Otherwise try to read from fabric
             if self.fabric:
                 raw = self.fabric.read_contract()
                 from runtime.fabric.models import FabricContract
@@ -751,47 +588,27 @@ class ThreePlaneBootstrap:
                 report.limits_verified = True
                 report.add_result(GateResult(
                     ReadinessGate.CONTRACTS_DISCOVERED, True,
-                    f"Contract: {contract.contract_id}",
-                    contract.contract_id
+                    f"Contract: {contract.contract_id}", contract.contract_id
                 ))
                 return True
-            
             report.add_result(GateResult(
                 ReadinessGate.CONTRACTS_DISCOVERED, False,
                 "No fabric client — cannot discover contracts"
             ))
             return False
-            return False
         except Exception as e:
             report.add_result(GateResult(ReadinessGate.CONTRACTS_DISCOVERED, False, str(e)))
             return False
 
-    # ------------------------------------------------------------------
-    # Phase J: Delegation Context
-    # ------------------------------------------------------------------
-
-    def _gate_delegation_context(
-        self, report: BootstrapReport,
-        ident: Optional[RuntimeIdentity],
-        fabric_contract
-    ) -> bool:
-        """Phase J: Verify the delegation context can be constructed.
-
-        The delegation context establishes who issued what authority to whom.
-        Minimum requirements: runtime_id known, tenant_id known, fabric_node known.
-        """
+    def _gate_delegation_context(self, report: BootstrapReport, ident: Optional[RuntimeIdentity], fabric_contract) -> bool:
         issues = []
-
         if not ident or not ident.runtime_id:
             issues.append("runtime_id unknown")
-
         tenant_gate = report.get_gate(ReadinessGate.FABRIC_TENANT_BOUND)
         if not tenant_gate.passed or not tenant_gate.evidence:
             issues.append("tenant_id not bound")
-
         if report.fabric_node == "UNKNOWN":
             issues.append("fabric_node not resolved")
-
         if not issues:
             evidence_parts = [
                 f"runtime_id={ident.runtime_id}",
@@ -804,20 +621,11 @@ class ThreePlaneBootstrap:
                 " | ".join(evidence_parts)
             ))
             return True
-        else:
-            report.add_result(GateResult(
-                ReadinessGate.DELEGATION_CONTEXT_BUILT, False,
-                "; ".join(issues)
-            ))
-            return False
+        report.add_result(GateResult(ReadinessGate.DELEGATION_CONTEXT_BUILT, False, "; ".join(issues)))
+        return False
 
-
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
 
 def _to_component_inventory(inv) -> ComponentInventory:
-    """Convert a core.inventory.ComponentInventory → report.ComponentInventory."""
     return ComponentInventory(
         declared=list(inv.declared),
         configured=list(inv.configured),

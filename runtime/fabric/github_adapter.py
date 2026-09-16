@@ -140,11 +140,9 @@ class GitHubFabricAdapter:
             (exists: bool, sha: Optional[str]) — sha is the blob SHA if found
         """
         try:
-            # Use the Contents API — this always reflects remote HEAD
             endpoint = f"/repos/{self._org}/{self._repo}/contents/fabric/node.json"
             response = self.gh._request(endpoint)
-            import json as _json
-            data = _json.loads(response)
+            data = response if isinstance(response, dict) else json.loads(response)
             return True, data.get("sha")
         except GitHubNotFoundError:
             return False, None
@@ -172,7 +170,6 @@ class GitHubFabricAdapter:
         If absent, checks fabric/node.json for a global policy.
         Returns FabricAdmissionResult with verdict ALLOW | DENY | PENDING | UNKNOWN.
         """
-        # 1. Try runtime-specific admission record
         admission_path = f"fabric/admissions/{runtime_id}.json"
         try:
             content = self.gh.get_file(self._org, self._repo, admission_path)
@@ -181,7 +178,7 @@ class GitHubFabricAdapter:
             reason = data.get("reason", "")
             return FabricAdmissionResult(verdict=verdict, reason=reason, raw=data)
         except GitHubNotFoundError:
-            pass  # Fall through to node-level policy
+            pass
         except Exception as e:
             logger.warning(f"Could not read admission record for {runtime_id}: {e}")
             return FabricAdmissionResult(
@@ -189,7 +186,6 @@ class GitHubFabricAdapter:
                 reason=f"Admission check failed: {e}"
             )
 
-        # 2. Read node.json for default_admission_policy
         try:
             node_content = self.gh.get_file(self._org, self._repo, "fabric/node.json")
             node_data = json.loads(node_content)
@@ -236,10 +232,8 @@ class GitHubFabricAdapter:
             return False, "Invalid commit SHA"
         try:
             endpoint = f"/repos/{self._org}/{self._repo}/commits/{commit_sha}"
-            import json as _json
             response = self.gh._request(endpoint)
-            data = _json.loads(response)
-            # Confirm we got a real commit object back
+            data = response if isinstance(response, dict) else json.loads(response)
             if data.get("sha"):
                 return True, None
             return False, "Commit object malformed"
@@ -256,7 +250,6 @@ class GitHubFabricAdapter:
         except Exception:
             raise FabricError("FABRIC_AUTH_ERROR", "No GitHub token available for trust generation")
 
-        # Read actual node_id from Fabric rather than hardcoding
         try:
             node = self.read_node_config()
             node_id = node.node_id
