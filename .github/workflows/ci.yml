@@ -1,0 +1,31 @@
+name: ANNY Runtime CI
+
+on:
+  push:
+    branches:
+      - main
+      - feat/anny-citizen-runtime-integration-v2
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  citizen-adaptation-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "pytest>=8" "cryptography>=41" "PyYAML>=6"
+
+      - name: Run Citizen adaptation tests
+        run: python -m pytest -q tests/test_citizen_adaptation.py
