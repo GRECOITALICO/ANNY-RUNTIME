@@ -79,7 +79,7 @@ class TestOnboardingToken(unittest.TestCase):
         mock_urlopen.return_value.__enter__.return_value = mock_resp
 
         self.gh_mgr.store_and_validate_token("ghp_secret_token")
-        stored = self.secret_backend.retrieve(self.gh_mgr.GITHUB_TOKEN_REF)
+        stored = self.secret_backend.retrieve(self.gh_mgr.token_ref)
         self.assertEqual(stored, b"ghp_secret_token")
         self.assertNotIn("ghp_secret_token", self.gh_mgr.state.__dict__.values())
 
@@ -189,8 +189,7 @@ class TestOnboardingToken(unittest.TestCase):
 
     @patch('urllib.request.urlopen')
     @patch('runtime.admin.routes.OrganizationDiscoveryService')
-    @patch('runtime.admin.routes.CustomerZeroBootstrapResolver')
-    def test_successful_onboarding_reaches_ready_state(self, mock_resolver_cls, mock_discovery_cls, mock_urlopen):
+    def test_successful_onboarding_reaches_ready_state(self, mock_discovery_cls, mock_urlopen):
         # 1. First run, get session
         context1 = {}
         self.server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context1)
@@ -203,13 +202,12 @@ class TestOnboardingToken(unittest.TestCase):
         mock_resp.headers.get.return_value = "repo, read:org"
         mock_urlopen.return_value.__enter__.return_value = mock_resp
         
-        # 3. Setup mocks for discovery
-        mock_resolver = MagicMock()
-        mock_resolver_cls.return_value = mock_resolver
-        mock_resolver.resolve.return_value = "CONSISTENT_MOCK"
+        # 3. Setup mock engine
+        mock_engine = MagicMock()
+        mock_engine.bootstrap_report = MagicMock(anny_ready=True, fabric_node="NODE-001")
         
         # 4. Submit token
-        context2 = {'admin_session': self.auth_mgr.validate(session_id), 'github_manager': self.gh_mgr, 'auth_manager': self.auth_mgr, 'audit_manager': MagicMock()}
+        context2 = {'admin_session': self.auth_mgr.validate(session_id), 'github_manager': self.gh_mgr, 'auth_manager': self.auth_mgr, 'audit_manager': MagicMock(), 'runtime_engine': mock_engine}
         self.server.router.context = context2
         res = self.server.router.handle_github_token({'github_token': ['ghp_valid']})
         self.assertEqual(res, "/")
@@ -250,8 +248,7 @@ class TestOnboardingToken(unittest.TestCase):
 
     @patch('urllib.request.urlopen')
     @patch('runtime.admin.routes.OrganizationDiscoveryService')
-    @patch('runtime.admin.routes.CustomerZeroBootstrapResolver')
-    def test_onboarding_session_revoked_after_success(self, mock_resolver_cls, mock_discovery_cls, mock_urlopen):
+    def test_onboarding_session_revoked_after_success(self, mock_discovery_cls, mock_urlopen):
         # 1. First run, get session
         context1 = {}
         self.server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context1)
@@ -263,11 +260,11 @@ class TestOnboardingToken(unittest.TestCase):
         mock_resp.headers.get.return_value = "repo, read:org"
         mock_urlopen.return_value.__enter__.return_value = mock_resp
         
-        mock_resolver = MagicMock()
-        mock_resolver_cls.return_value = mock_resolver
-        mock_resolver.resolve.return_value = "CONSISTENT_MOCK"
+        # Setup mock engine
+        mock_engine = MagicMock()
+        mock_engine.bootstrap_report = MagicMock(anny_ready=True, fabric_node="NODE-001")
         
-        context2 = {'admin_session': self.auth_mgr.validate(session_id), 'github_manager': self.gh_mgr, 'auth_manager': self.auth_mgr, 'audit_manager': MagicMock()}
+        context2 = {'admin_session': self.auth_mgr.validate(session_id), 'github_manager': self.gh_mgr, 'auth_manager': self.auth_mgr, 'audit_manager': MagicMock(), 'runtime_engine': mock_engine}
         self.server.router.context = context2
         self.server.router.handle_github_token({'github_token': ['ghp_valid']})
         

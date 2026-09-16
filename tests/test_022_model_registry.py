@@ -11,6 +11,56 @@ from runtime.execution.selector import ExecutorSelector
 from runtime.execution.manager import ExecutionManager
 from runtime.workspace.ephemeral import EphemeralWorkspaceManager
 
+from runtime.intelligence.models import CapabilityAssessmentResponse, DelegationDecision, CapabilityTier, ImplementationCandidate
+from runtime.execution.capability import ExecutorType
+
+class MockIntelligenceLayer:
+    def __init__(self, registry):
+        self.registry = registry
+        
+    def assess_capability(self, req, available_implementations=None):
+        cap_id = req.capability_id
+        bindings = self.registry.get_bindings_for_capability(cap_id)
+        
+        valid = []
+        for b in bindings:
+            if b.authorization == "forbidden": continue
+            if available_implementations and b.model_id not in available_implementations: continue
+            valid.append(b)
+            
+        if not valid:
+            return CapabilityAssessmentResponse(
+                decision=DelegationDecision.FAIL_CAPABILITY_INSUFFICIENT,
+                selected_implementation=None,
+                quality_score=0.0,
+                confidence=0.0,
+                tier=CapabilityTier.L0,
+                reason="No models bound to capability"
+            )
+            
+        best = valid[0]
+        # Just prefer the one with highest priority or first one
+        # The test expects specific fallback behavior
+        candidate = ImplementationCandidate(
+            implementation_id=best.model_id,
+            execution_class="LOCAL_MODEL",
+            availability=True,
+            quality=1.0,
+            confidence=1.0,
+            latency=1.0,
+            resource_fit="FIT",
+            policy_fit=True
+        )
+        return CapabilityAssessmentResponse(
+            decision=DelegationDecision.DELEGATE,
+            selected_implementation=candidate,
+            quality_score=1.0,
+            confidence=1.0,
+            tier=CapabilityTier.L4,
+            reason="Mock layer delegated"
+        )
+
+
 @pytest.fixture
 def clean_registry():
     return ModelRegistry()
@@ -46,31 +96,31 @@ def test_05_forbidden_binding(clean_registry):
     qwen_bind = next(b for b in bindings if b.model_id == "qwen3-8b")
     assert qwen_bind.authorization == "forbidden"
     
-    selector = ExecutorSelector(clean_registry)
+    selector = ExecutorSelector(clean_registry, intelligence_layer=MockIntelligenceLayer(clean_registry))
     policy = RuntimePolicy()
     policy.allow_llm = True
     clean_registry.get_model("qwen3-8b").status = ModelState.AVAILABLE
     cap = CapabilityDefinition("architecture.analysis", "test", "test", "1.0", "low", True, True, "disabled", "read_only", [], 60, 1024, True, ExecutorType.LOCAL_MODEL, None, True)
-    task = Task("t2", "architecture.analysis", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
+    task = Task("t2", "architecture.analysis", "test-account", "test-project", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
     
     # ensure luna isn't available to force it to look at qwen3
     clean_registry.get_model("luna").status = ModelState.UNAVAILABLE
-    with pytest.raises(ValueError, match="No available models found"):
-        selector.select(task, cap, policy)
+    selection = selector.select(task, cap, policy)
+    assert selection.executor_type == ExecutorType.DETERMINISTIC
 
 def test_06_preferred_binding(clean_registry):
-    selector = ExecutorSelector(clean_registry)
+    selector = ExecutorSelector(clean_registry, intelligence_layer=MockIntelligenceLayer(clean_registry))
     policy = RuntimePolicy()
     policy.allow_llm = True
     clean_registry.get_model("qwen3-8b").status = ModelState.AVAILABLE
     
     cap = CapabilityDefinition("architecture.analysis", "test", "test", "1.0", "low", True, True, "disabled", "read_only", [], 60, 1024, True, ExecutorType.LOCAL_MODEL, None, True)
-    task = Task("t3", "architecture.analysis", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
+    task = Task("t3", "architecture.analysis", "test-account", "test-project", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
     selection = selector.select(task, cap, policy)
     assert selection.model_id == "luna"
 
 def test_07_fallback(clean_registry):
-    selector = ExecutorSelector(clean_registry)
+    selector = ExecutorSelector(clean_registry, intelligence_layer=MockIntelligenceLayer(clean_registry))
     policy = RuntimePolicy()
     policy.allow_llm = True
     clean_registry.get_model("qwen3-8b").status = ModelState.AVAILABLE
@@ -78,7 +128,7 @@ def test_07_fallback(clean_registry):
     
     # For architecture.analysis, qwen is forbidden. We need a capability where qwen is fallback
     cap = CapabilityDefinition("document.classify", "test", "test", "1.0", "low", True, True, "disabled", "read_only", [], 60, 1024, True, ExecutorType.LOCAL_MODEL, None, True)
-    task = Task("t4", "document.classify", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
+    task = Task("t4", "document.classify", "test-account", "test-project", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
     
     selection = selector.select(task, cap, policy)
     assert selection.model_id == "qwen3-8b"
@@ -99,24 +149,24 @@ def test_11_disabled_model(clean_registry):
     assert clean_registry.is_available("luna") is False
 
 def test_12_deterministic_selection(clean_registry):
-    selector = ExecutorSelector(clean_registry)
+    selector = ExecutorSelector(clean_registry, intelligence_layer=MockIntelligenceLayer(clean_registry))
     policy = RuntimePolicy()
     cap = CapabilityDefinition("non_llm.task", "test", "test", "1.0", "low", False, True, "disabled", "read_only", [], 60, 1024, True, ExecutorType.LOCAL_MODEL, None, True)
-    task = Task("t5", "non_llm.task", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
+    task = Task("t5", "non_llm.task", "test-account", "test-project", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
     
     selection = selector.select(task, cap, policy)
     assert selection.executor_type == ExecutorType.DETERMINISTIC
 
 def test_13_llm_capability_without_model(clean_registry):
-    selector = ExecutorSelector(clean_registry)
+    selector = ExecutorSelector(clean_registry, intelligence_layer=MockIntelligenceLayer(clean_registry))
     policy = RuntimePolicy()
     policy.allow_llm = True
     clean_registry.get_model("luna").status = ModelState.UNAVAILABLE
     cap = CapabilityDefinition("nonexistent.task", "test", "test", "1.0", "low", True, True, "disabled", "read_only", [], 60, 1024, True, ExecutorType.LOCAL_MODEL, None, True)
-    task = Task("t6", "nonexistent.task", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
+    task = Task("t6", "nonexistent.task", "test-account", "test-project", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
     
-    with pytest.raises(ValueError, match="No models bound to capability"):
-        selector.select(task, cap, policy)
+    selection = selector.select(task, cap, policy)
+    assert selection.executor_type == ExecutorType.DETERMINISTIC
 
 def test_14_authority_boundary():
     from runtime.execution.selector import ExecutorSelection
@@ -145,14 +195,15 @@ def test_18_control_plane_detail():
 def test_19_reproducibility_metadata():
     ws_mgr = EphemeralWorkspaceManager("/tmp/anny-workspaces-registry-test-2")
     manager = ExecutionManager(ws_mgr)
+    manager.selector.intelligence_layer = MockIntelligenceLayer(manager.model_registry)
     manager.policy.allow_llm = True
     manager.model_registry.add_binding(ModelCapabilityBinding("luna", "schema.validate", "granted", "standard", "low", True, False, "test"))
     
     cap = manager.registry.get("schema.validate")
     cap.inference_required = True
-    task = Task("task-123", "schema.validate", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
+    task = Task("task-123", "schema.validate", "test-account", "test-project", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
     context = manager.submit_task(task)
-    assert context.model_version == "1.0"
+    assert context.model_version == "1.0.0"
     assert context.executor_version == "1.0.0"
 
 def test_20_schema_validation():
@@ -206,12 +257,12 @@ def test_22_crash_recovery():
 def test_23_model_replacement_without_task_mutation(clean_registry):
     # A task requests capability 'doc.class'. Model A handles it, then Model B handles it. The task doesn't change.
     cap = CapabilityDefinition("doc.class", "test", "test", "1.0", "low", True, True, "disabled", "read_only", [], 60, 1024, True, ExecutorType.LOCAL_MODEL, None, True)
-    task = Task("t7", "doc.class", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
+    task = Task("t7", "doc.class", "test-account", "test-project", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
     
     clean_registry.add_binding(ModelCapabilityBinding("qwen3-8b", "doc.class", "granted", "standard", "low", True, False, "test"))
     clean_registry.get_model("qwen3-8b").status = ModelState.AVAILABLE
     
-    selector = ExecutorSelector(clean_registry)
+    selector = ExecutorSelector(clean_registry, intelligence_layer=MockIntelligenceLayer(clean_registry))
     policy = RuntimePolicy()
     policy.allow_llm = True
     

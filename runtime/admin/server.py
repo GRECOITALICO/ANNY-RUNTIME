@@ -170,16 +170,14 @@ def start_admin_server(host: str, port: int):
     from runtime.workspace.ephemeral import EphemeralWorkspaceManager
     from runtime.execution.manager import ExecutionManager
     
-    # P0-A & P0-B: Initialize Bootstrap once per runtime lifecycle.
-    from runtime.continuity.operational import OperationalRepositoryProvider
-    from runtime.continuity.bootstrap import CustomerZeroBootstrapResolver
+    # Initialize GitHub client
     from runtime.github.client import GitHubClient
     from runtime.github.discovery import OrganizationDiscoveryService
-
     github_client = GitHubClient(secret_backend=secret_backend) if github_manager.has_token() else None
 
-    from runtime.adapters.fabric_client import FabricClient
-    fabric_client = FabricClient()
+    # Initialize Fabric client (new GitHub-authenticated client)
+    from runtime.fabric.client import FabricClient
+    fabric_client = FabricClient(github_client=github_client) if github_client else None
     
     # We use a temp dir for workspaces for now
     ephemeral_workspace_manager = EphemeralWorkspaceManager()
@@ -189,7 +187,6 @@ def start_admin_server(host: str, port: int):
         github_client=github_client,
         fabric_client=fabric_client
     )
-
         
     disc_repos_raw = []
     if github_client:
@@ -199,13 +196,20 @@ def start_admin_server(host: str, port: int):
         except Exception as e:
             logger.warning(f"Startup discovery failed: {e}")
 
-    # Enforce PRODUCTION environment boundary here
-    provider = OperationalRepositoryProvider(github_client=github_client, environment="PRODUCTION")
-    resolver = CustomerZeroBootstrapResolver(provider=provider, event_bus=None)
-    bootstrap_result = resolver.resolve()
+    # Run Three-Plane Bootstrap via RuntimeEngine
+    from runtime.core.engine import RuntimeEngine
+    from runtime.core.config import RuntimeConfig
+    
+    config = RuntimeConfig(data_dir=str(data_dir))
+    engine = RuntimeEngine(config)
+    
+    try:
+        engine.startup(github_client=github_client, fabric_client=fabric_client)
+    except Exception as e:
+        logger.error(f"Runtime engine startup error: {e}")
     
     bootstrap_snapshot = {
-        'result': bootstrap_result,
+        'result': engine.bootstrap_report,
         'discovered_repos': disc_repos_raw
     }
     
@@ -219,7 +223,7 @@ def start_admin_server(host: str, port: int):
         github_manager=github_manager,
         secret_backend=secret_backend,
         event_bus=None,
-        runtime_engine=None,
+        runtime_engine=engine,
         local_operational_path=None,
         bootstrap_snapshot=bootstrap_snapshot
     )

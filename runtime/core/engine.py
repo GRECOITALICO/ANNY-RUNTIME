@@ -15,6 +15,7 @@ class RuntimeState(Enum):
     DRAINING = auto()
     STOPPED = auto()
     ERROR = auto()
+    ADMIN_MODE = auto()
 
 
 class RuntimeEngine:
@@ -24,9 +25,7 @@ class RuntimeEngine:
         self._config = config
         self._state = RuntimeState.STOPPED
         self._generation = RuntimeGeneration(config.data_dir)
-
-    @property
-    def config(self) -> RuntimeConfig:
+        self.bootstrap_report = None
         return self._config
 
     @property
@@ -37,38 +36,39 @@ class RuntimeEngine:
     def generation(self) -> RuntimeGeneration:
         return self._generation
 
-    def startup(self) -> None:
+    def startup(self, github_client=None, fabric_client=None) -> None:
         """Executes the runtime startup sequence."""
         self._state = RuntimeState.STARTING
         
         try:
             # 1. Load configuration (already handled in instantiation)
             
-            # 2. Load Runtime identity (stub)
-            self._load_identity()
-            
-            # 3. Increment/recover generation
+            # 2. Increment/recover generation
             self._generation.increment()
             
-            # 4. Initialize subsystems (stubs + continuity)
+            # 3. Initialize subsystems (Continuity)
             self._init_subsystems()
             
-            # Load durable continuity state and reconcile
+            # Load durable continuity state
             self.continuity_engine.load()
-            reconciler = Reconciler(self.continuity_engine)
-            status = reconciler.reconcile()
-            self.continuity_status = status
             
-            # 5. Health check
-            health = self.health_check()
-            if health.get("status") == "error":
-                self._state = RuntimeState.ERROR
-                return
+            # 4. Execute Three-Plane Bootstrap
+            from runtime.bootstrap.planes import ThreePlaneBootstrap
+            bootstrap = ThreePlaneBootstrap(
+                data_dir=self.config.data_dir,
+                github_client=github_client,
+                fabric_client=fabric_client,
+                continuity_engine=self.continuity_engine
+            )
+            self.bootstrap_report = bootstrap.resolve()
+            
+            # 5. Determine runtime state
+            if self.bootstrap_report.anny_ready:
+                self._state = RuntimeState.READY
+                self._state = RuntimeState.WAITING_FOR_SESSION
+            else:
+                self._state = RuntimeState.ADMIN_MODE
                 
-            # 6. Set state READY -> WAITING_FOR_SESSION
-            self._state = RuntimeState.READY
-            self._state = RuntimeState.WAITING_FOR_SESSION
-            
         except Exception as e:
             self._state = RuntimeState.ERROR
             raise e

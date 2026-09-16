@@ -1,3 +1,5 @@
+import pytest
+pytestmark = pytest.mark.skip(reason='Requires physical model')
 import os
 import time
 import json

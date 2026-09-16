@@ -4,4 +4,4 @@ llama-cpp-python
 psutil
 azure-identity
 httpx
-mcp>=1.2.0
+mcp

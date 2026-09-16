@@ -52,5 +52,14 @@
     "runtime_required": true,
     "test_only": false,
     "packaging_required": true
+  },
+  {
+    "import": "mcp",
+    "python_package": "mcp",
+    "minimum_version_if_known": "1.0.0",
+    "source_file": "runtime/mcp/registry.py",
+    "runtime_required": true,
+    "test_only": false,
+    "packaging_required": true
   }
 ]

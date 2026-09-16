@@ -77,7 +77,7 @@ class RuntimeDoctor:
         return DiagnosticCheck("Secrets", "PASS", "Secrets backend operational")
 
     def check_fabric(self) -> DiagnosticCheck:
-        return DiagnosticCheck("Fabric", "WARN", "Fabric client stubbed")
+        return DiagnosticCheck("Fabric", "FAIL", "Fabric reachable check deferred to bootstrap")
 
     def check_updater(self) -> DiagnosticCheck:
         return DiagnosticCheck("Updater", "PASS", "Updater available")

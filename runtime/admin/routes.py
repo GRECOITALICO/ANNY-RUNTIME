@@ -25,10 +25,6 @@ from runtime.admin.dto import (
 )
 from runtime.github.client import GitHubClient
 from runtime.github.discovery import OrganizationDiscoveryService
-from runtime.continuity.operational import OperationalRepositoryProvider
-from runtime.continuity.bootstrap import CustomerZeroBootstrapResolver
-from runtime.continuity.reconciler import ContinuityReconciler
-from runtime.continuity.state import ContinuityStatus
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +67,7 @@ class AdminRouter:
             '/audit/provenance': self.handle_audit_provenance,
             '/audit/evidence': self.handle_audit_evidence,
             '/search': self.handle_search,
+            '/api/status': self.handle_api_status,
             '/api/v1/continuity/bootstrap': self.handle_bootstrap_api,
             '/telemetry/live': self.handle_telemetry_live,
             '/telemetry/timeline': self.handle_telemetry_timeline,
@@ -245,6 +242,26 @@ class AdminRouter:
             safe_msg = f"Bootstrap API error: {error_class}"
             self._send_json(handler, {"error": safe_msg, "status": "ERROR"}, status=500)
 
+    def handle_api_status(self, parsed) -> str:
+        """Returns the live status of the 3-plane bootstrap sequence."""
+        engine = self.context.get('runtime_engine')
+        if not engine:
+            self.context['direct_json_response'] = {"anny_ready": False, "error": "No runtime engine"}
+            return '/'
+            
+        report = engine.bootstrap_report
+        if not report:
+            self.context['direct_json_response'] = {"anny_ready": False, "status": engine.state.name}
+            return '/'
+            
+        self.context['direct_json_response'] = {
+            "anny_ready": report.anny_ready,
+            "runtime_id": report.runtime_id,
+            "fabric_node": report.fabric_node,
+            "gates": [{"gate": g.gate.name, "passed": g.passed, "detail": g.detail, "evidence": g.evidence} for g in report.gates]
+        }
+        return '/'
+
     def _get_fabric_client(self):
         gh_mgr = self.context.get('github_manager')
         secret_backend = self.context.get('secret_backend')
@@ -282,22 +299,6 @@ class AdminRouter:
         result = snapshot['result']
         disc_repos_raw = snapshot['discovered_repos']
 
-        reconciler = ContinuityReconciler()
-        recon_status = reconciler.reconcile(
-            canonical_state=result.canonical_state,
-            principal=None,
-            discovered_repos=disc_repos_raw,
-            github_connected=(gh_status_str == "AUTHORIZED"),
-            runtime_ready=True
-        )
-
-        can_state = result.canonical_state
-        mission_id = can_state.current_mission.id if (can_state and can_state.current_mission) else None
-        task_id = can_state.current_task.name if (can_state and can_state.current_task) else None
-        next_action_str = can_state.next_action.action if (can_state and can_state.next_action) else None
-        blockers = [BlockerDTO(id=b.id, description=b.description, severity=b.severity) for b in (can_state.blockers if can_state else [])]
-        l2_count = len(can_state.l2_workers) if (can_state and can_state.l2_workers) else 0
-
         # Determine runtime status from observable state
         runtime_engine = self.context.get('runtime_engine')
         rt_status = "UNKNOWN"
@@ -306,22 +307,26 @@ class AdminRouter:
 
         repo_dtos = [RepositoryDTO(full_name=r.full_name, name=r.name, owner=r.owner, visibility=r.visibility, archived=r.archived, default_branch=r.default_branch) for r in disc_repos_raw]
 
+        # Adapt BootstrapReport to old ContinuityDTO for UI
+        status_val = "READY" if result.anny_ready else "BLOCKED"
+        recon_status = "COHERENT" if result.anny_ready else "INCOHERENT"
+
         return ContinuityDTO(
-            status=result.status.value,
-            canonical_source=can_state.repository_name if can_state else "UNKNOWN",
-            canonical_revision=can_state.revision if can_state else None,
-            current_mission=mission_id,
-            current_task=task_id,
-            next_action=next_action_str,
-            blocker_count=len(blockers),
-            reconciliation_status=recon_status.value,
+            status=status_val,
+            canonical_source="GRECOITALICO/ANNY-OPERATIONAL",
+            canonical_revision=None,
+            current_mission=None,
+            current_task=None,
+            next_action=None,
+            blocker_count=0,
+            reconciliation_status=recon_status,
             github_status=gh_status_str,
             runtime_status=rt_status,
-            fabric_status="NOT_CONFIGURED",
+            fabric_status="CONNECTED" if result.fabric_node else "NOT_CONFIGURED",
             organizations=[],
             repositories=repo_dtos,
-            blockers=blockers,
-            l2_worker_summary=L2WorkerSummaryDTO(count=l2_count, registered_workers=[w.get('name', 'worker') for w in (can_state.l2_workers if can_state and isinstance(can_state.l2_workers, list) else []) if isinstance(w, dict)])
+            blockers=[],
+            l2_worker_summary=L2WorkerSummaryDTO(count=0, registered_workers=[])
         )
 
     # --- GET Handlers ---
@@ -592,14 +597,13 @@ class AdminRouter:
                     disc = OrganizationDiscoveryService(github_client)
                     disc_repos_raw = disc.discover_repositories()
                     
-                    provider = OperationalRepositoryProvider(github_client=github_client, environment="PRODUCTION")
-                    resolver = CustomerZeroBootstrapResolver(provider=provider, event_bus=None)
-                    bootstrap_result = resolver.resolve()
-                    
-                    self.context['bootstrap_snapshot'] = {
-                        'result': bootstrap_result,
-                        'discovered_repos': disc_repos_raw
-                    }
+                    engine = self.context.get('runtime_engine')
+                    if engine:
+                        engine.startup(github_client=github_client, fabric_client=self._get_fabric_client())
+                        self.context['bootstrap_snapshot'] = {
+                            'result': engine.bootstrap_report,
+                            'discovered_repos': disc_repos_raw
+                        }
                 except Exception as e:
                     logger.warning(f"Post-onboarding discovery failed: {e}")
                 
@@ -662,14 +666,13 @@ class AdminRouter:
                     disc = OrganizationDiscoveryService(github_client)
                     disc_repos_raw = disc.discover_repositories()
                     
-                    provider = OperationalRepositoryProvider(github_client=github_client, environment="PRODUCTION")
-                    resolver = CustomerZeroBootstrapResolver(provider=provider, event_bus=None)
-                    bootstrap_result = resolver.resolve()
-                    
-                    self.context['bootstrap_snapshot'] = {
-                        'result': bootstrap_result,
-                        'discovered_repos': disc_repos_raw
-                    }
+                    engine = self.context.get('runtime_engine')
+                    if engine:
+                        engine.startup(github_client=github_client, fabric_client=self._get_fabric_client())
+                        self.context['bootstrap_snapshot'] = {
+                            'result': engine.bootstrap_report,
+                            'discovered_repos': disc_repos_raw
+                        }
                 except Exception as e:
                     logger.warning(f"Post-onboarding discovery failed: {e}")
                 

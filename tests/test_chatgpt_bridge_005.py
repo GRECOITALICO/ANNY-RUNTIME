@@ -45,6 +45,8 @@ def mock_exec_mgr():
         ctx = TaskExecutionContext(
             execution_id="exec-123",
             task_id=task.task_id,
+            account_id=task.account_id,
+            project_id=task.project_id,
             capability_id=task.capability_id,
             workspace_path="/tmp",
             environment={},
@@ -62,6 +64,8 @@ def mock_exec_mgr():
         return TaskExecutionContext(
             execution_id=exec_id,
             task_id="tsk-123",
+            account_id="test-account",
+            project_id="test-project",
             capability_id="repository.read",
             workspace_path="/tmp",
             environment={},
@@ -174,6 +178,8 @@ def test_task_creation_success(bridge, mock_exec_mgr):
         with patch("runtime.api.bridge.get_data_dir", return_value=tmpdir):
             bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks"), handler, request_body=payload)
     
+    if handler.status == 500:
+        print(handler.body.decode())
     assert handler.status == 201
     resp = json.loads(handler.body)
     assert "task_id" in resp
@@ -196,6 +202,9 @@ def test_get_task_status(bridge):
         journal.record(JournalEntry(
             entry_id="ev-1",
             operation_id="tsk-123",
+            tenant_id="test-tenant",
+            account_id="test-account",
+            project_id="test-project",
             execution_id="exec-456",
             session_id="bridge_session",
             actor_id="chatgpt_luna",

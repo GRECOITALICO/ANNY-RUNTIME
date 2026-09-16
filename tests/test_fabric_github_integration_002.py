@@ -1,3 +1,6 @@
+import pytest
+import os
+pytestmark = pytest.mark.skipif(not os.environ.get('ANNY_GITHUB_TOKEN'), reason='Requires GitHub token')
 import os
 import json
 import pytest

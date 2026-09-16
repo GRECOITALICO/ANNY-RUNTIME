@@ -17,6 +17,8 @@ def create_mock_task(cap_id="filesystem.inspect", path="/tmp"):
     return Task(
         task_id="task-019",
         capability_id=cap_id,
+        account_id="test-account",
+        project_id="test-project",
         input={"path": path},
         constraints={},
         deadline=datetime.now(timezone.utc) + timedelta(minutes=1),

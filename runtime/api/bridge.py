@@ -125,7 +125,10 @@ class BridgeRouter:
             else:
                 self._send_error(handler, "NOT_FOUND",
                                  "Unknown bridge endpoint", 404)
-        except Exception:
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise e
             self._send_error(handler, ERROR_EXECUTION_FAILED,
                              "An internal error occurred", 500)
 
@@ -194,6 +197,8 @@ class BridgeRouter:
             task = Task(
                 task_id=task_id,
                 capability_id=capability,
+                account_id="bridge-account",
+                project_id="bridge-project",
                 input=input_data,
                 constraints=constraints,
                 deadline=now + timedelta(seconds=60),
@@ -210,6 +215,9 @@ class BridgeRouter:
             journal.record(JournalEntry(
                 entry_id=f"ev-q-{exec_ctx.execution_id}",
                 operation_id=task_id,
+                tenant_id="test-tenant",
+                account_id="bridge-account",
+                project_id="bridge-project",
                 execution_id=exec_ctx.execution_id,
                 session_id="bridge_session",
                 actor_id="chatgpt_luna",
@@ -225,6 +233,9 @@ class BridgeRouter:
             journal.record(JournalEntry(
                 entry_id=f"ev-r-{exec_ctx.execution_id}",
                 operation_id=task_id,
+                tenant_id="test-tenant",
+                account_id="bridge-account",
+                project_id="bridge-project",
                 execution_id=exec_ctx.execution_id,
                 session_id="bridge_session",
                 actor_id="chatgpt_luna",
@@ -243,6 +254,9 @@ class BridgeRouter:
             journal.record(JournalEntry(
                 entry_id=f"ev-t-{exec_ctx.execution_id}",
                 operation_id=task_id,
+                tenant_id="test-tenant",
+                account_id="bridge-account",
+                project_id="bridge-project",
                 execution_id=exec_ctx.execution_id,
                 session_id="bridge_session",
                 actor_id="chatgpt_luna",
@@ -285,7 +299,10 @@ class BridgeRouter:
                 "intent": latest.metadata.get("intent", ""),
                 "source": latest.metadata.get("source", "chatgpt_luna"),
             })
-        except Exception:
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise e
             self._send_error(handler, ERROR_RESULT_UNAVAIL,
                              "Could not retrieve task", 500)
 
@@ -311,6 +328,9 @@ class BridgeRouter:
                 "source": latest.metadata.get("source", "chatgpt_luna"),
                 "evidence_durability": "DURABLE",
             })
-        except Exception:
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            raise e
             self._send_error(handler, ERROR_RESULT_UNAVAIL,
                              "Could not retrieve execution", 500)

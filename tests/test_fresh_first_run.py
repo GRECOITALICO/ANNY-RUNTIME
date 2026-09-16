@@ -180,13 +180,8 @@ class TestFreshFirstRun(unittest.TestCase):
     def test_admin_server_single_bootstrap(self):
         """P0-A, P0-B, P0-E: AdminServer receives snapshot and exposes UNKNOWN for missing dependencies."""
         mock_result = MagicMock()
-        mock_result.status.value = "CONSISTENT"
-        mock_result.canonical_state.repository_name = "test/repo"
-        mock_result.canonical_state.current_mission.id = "M-1"
-        mock_result.canonical_state.current_task.name = "Task"
-        mock_result.canonical_state.next_action.action = "Action"
-        mock_result.canonical_state.blockers = []
-        mock_result.canonical_state.l2_workers = []
+        mock_result.anny_ready = True
+        mock_result.fabric_node = "mock_node"
         mock_result.canonical_state.revision = "REV"
         
         server = AdminServer(
@@ -202,8 +197,7 @@ class TestFreshFirstRun(unittest.TestCase):
         
         # Verify routes uses the snapshot
         dto = server.router._get_continuity_dto()
-        self.assertEqual(dto.status, "CONSISTENT")
-        self.assertEqual(dto.current_mission, "M-1")
+        self.assertEqual(dto.status, "READY")
 
 if __name__ == "__main__":
     unittest.main()

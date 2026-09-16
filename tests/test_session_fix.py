@@ -110,16 +110,17 @@ class TestSessionFix(unittest.TestCase):
         self.assertFalse(is_valid)
 
     @patch('runtime.admin.routes.OrganizationDiscoveryService')
-    @patch('runtime.admin.routes.CustomerZeroBootstrapResolver')
-    def test_success_revokes_onboarding_session(self, mock_resolver, mock_discovery):
-        mock_resolver.return_value.resolve.return_value = "CONSISTENT_MOCK"
+    def test_success_revokes_onboarding_session(self, mock_discovery):
         context = {}
         self.server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context)
         session_id = context.get('new_session_id')
         
+        mock_engine = MagicMock()
+        mock_engine.bootstrap_report = MagicMock(anny_ready=True, fabric_node="NODE-001")
+        
         form_data = {'github_token': ['ghp_valid']}
         self.server.router.context = dict(self.server.admin_context)
-        self.server.router.context.update({'admin_session': self.auth_mgr.validate(session_id), 'github_manager': self.gh_mgr, 'auth_manager': self.auth_mgr})
+        self.server.router.context.update({'admin_session': self.auth_mgr.validate(session_id), 'github_manager': self.gh_mgr, 'auth_manager': self.auth_mgr, 'runtime_engine': mock_engine})
         
         self.server.router.handle_github_token(form_data)
         
@@ -127,15 +128,16 @@ class TestSessionFix(unittest.TestCase):
         self.assertTrue(self.server.router.context.get('destroy_session'))
 
     @patch('runtime.admin.routes.OrganizationDiscoveryService')
-    @patch('runtime.admin.routes.CustomerZeroBootstrapResolver')
-    def test_success_creates_normal_session(self, mock_resolver, mock_discovery):
-        mock_resolver.return_value.resolve.return_value = "CONSISTENT_MOCK"
+    def test_success_creates_normal_session(self, mock_discovery):
         context = {}
         self.server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context)
         
+        mock_engine = MagicMock()
+        mock_engine.bootstrap_report = MagicMock(anny_ready=True, fabric_node="NODE-001")
+        
         form_data = {'github_token': ['ghp_valid']}
         self.server.router.context = dict(self.server.admin_context)
-        self.server.router.context.update({'admin_session': context.get('admin_session'), 'github_manager': self.gh_mgr, 'auth_manager': self.auth_mgr})
+        self.server.router.context.update({'admin_session': context.get('admin_session'), 'github_manager': self.gh_mgr, 'auth_manager': self.auth_mgr, 'runtime_engine': mock_engine})
         
         self.server.router.handle_github_token(form_data)
         
@@ -146,15 +148,16 @@ class TestSessionFix(unittest.TestCase):
         self.assertEqual(new_session.scope, "ADMIN")
 
     @patch('runtime.admin.routes.OrganizationDiscoveryService')
-    @patch('runtime.admin.routes.CustomerZeroBootstrapResolver')
-    def test_success_redirects_dashboard(self, mock_resolver, mock_discovery):
-        mock_resolver.return_value.resolve.return_value = "CONSISTENT_MOCK"
+    def test_success_redirects_dashboard(self, mock_discovery):
         context = {}
         self.server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context)
         
+        mock_engine = MagicMock()
+        mock_engine.bootstrap_report = MagicMock(anny_ready=True, fabric_node="NODE-001")
+        
         form_data = {'github_token': ['ghp_valid']}
         self.server.router.context = dict(self.server.admin_context)
-        self.server.router.context.update({'admin_session': context.get('admin_session'), 'github_manager': self.gh_mgr, 'auth_manager': self.auth_mgr})
+        self.server.router.context.update({'admin_session': context.get('admin_session'), 'github_manager': self.gh_mgr, 'auth_manager': self.auth_mgr, 'runtime_engine': mock_engine})
         
         redirect_url = self.server.router.handle_github_token(form_data)
         self.assertEqual(redirect_url, "/")
@@ -235,9 +238,10 @@ class TestIntegrationSimulated(unittest.TestCase):
         shutil.rmtree(self.data_dir)
 
     @patch('runtime.admin.routes.OrganizationDiscoveryService')
-    @patch('runtime.admin.routes.CustomerZeroBootstrapResolver')
-    def test_full_http_integration(self, mock_resolver, mock_discovery):
-        mock_resolver.return_value.resolve.return_value = "CONSISTENT_MOCK"
+    def test_full_http_integration(self, mock_discovery):
+        mock_engine = MagicMock()
+        mock_engine.bootstrap_report = MagicMock(anny_ready=True, fabric_node="NODE-001")
+        self.server.admin_context['runtime_engine'] = mock_engine
         
         # REQUEST 1: GET /
         wfile_get = MagicMock()

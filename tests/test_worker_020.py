@@ -18,6 +18,8 @@ def create_task(cid="filesystem.inspect", path="/tmp"):
     return Task(
         task_id="t1", 
         capability_id=cid, 
+        account_id="test-account",
+        project_id="test-project",
         input={"path": path}, 
         constraints={}, 
         deadline=datetime.now(timezone.utc)+timedelta(minutes=1), 

@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock
 from runtime.admin.routes import AdminRouter
 from runtime.admin.dto import ContinuityDTO
-from runtime.continuity.state import ContinuityStatus
+
 
 class DummyHandler:
     def __init__(self):
@@ -57,7 +57,7 @@ def mock_context():
         'github_manager': gh_mgr,
         'execution_manager': exec_mgr,
         'audit_manager': audit_mgr,
-        'bootstrap_snapshot': {'discovered_repos': [], 'result': MagicMock(status=ContinuityStatus.CONSISTENT, canonical_source="test", l2_worker_summary={}, organizations=[], repositories=[], missions=[])},
+        'bootstrap_snapshot': {'discovered_repos': [], 'result': MagicMock(anny_ready=True, runtime_id="RT-1234", fabric_node="NODE-001", gates=[])},
         'admin_session': MagicMock(admin_session_id="test", principal="test")
     }
 

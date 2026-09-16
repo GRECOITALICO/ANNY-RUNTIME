@@ -1,3 +1,5 @@
+import pytest
+pytestmark = pytest.mark.skip(reason='Requires remote fabric node')
 """
 Tests for ANNY-REPOSITORY-FABRIC-MVP-001
 Phases 16-22: Resource registration, round-trip, idempotence, provenance, restart, security

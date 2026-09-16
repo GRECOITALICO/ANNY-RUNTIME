@@ -68,6 +68,14 @@ class ContinuityRecord:
     decision_refs: List[str]
     blocker_refs: List[str]
 
+    # Three-Plane fields — Repository Fabric binding
+    fabric_node: Optional[str]      # e.g. "NODE-001"
+    fabric_tenant: Optional[str]
+    fabric_project: Optional[str]
+    resource_ids: List[str]
+    state_before: Optional[str]     # JSON-serialized state snapshot
+    state_after: Optional[str]      # JSON-serialized state snapshot
+
     current_step: Optional[str]
     last_completed_step: Optional[str]
     next_action: Optional[str]
@@ -113,6 +121,12 @@ class ContinuityRecord:
             artifact_refs=[],
             decision_refs=[],
             blocker_refs=[],
+            fabric_node=None,
+            fabric_tenant=None,
+            fabric_project=None,
+            resource_ids=[],
+            state_before=None,
+            state_after=None,
             current_step=step_id,
             last_completed_step=None,
             next_action=None,
@@ -163,3 +177,11 @@ class EventRecord:
 
     blocker_refs: List[str]
     next_action: Optional[str]
+
+    # Three-Plane fields — Repository Fabric binding
+    fabric_node: Optional[str] = None
+    fabric_tenant: Optional[str] = None
+    fabric_project: Optional[str] = None
+    resource_ids: List[str] = None
+    state_before: Optional[str] = None
+    state_after: Optional[str] = None
