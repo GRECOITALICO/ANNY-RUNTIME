@@ -3,6 +3,9 @@ from typing import Dict, Any
 
 from .config import RuntimeConfig
 from .generation import RuntimeGeneration
+from runtime.continuity.engine import ContinuityEngine
+from runtime.continuity.mutation import RepositoryMutationContract
+from runtime.continuity.reconciler import Reconciler
 
 
 class RuntimeState(Enum):
@@ -47,8 +50,14 @@ class RuntimeEngine:
             # 3. Increment/recover generation
             self._generation.increment()
             
-            # 4. Initialize subsystems (stubs)
+            # 4. Initialize subsystems (stubs + continuity)
             self._init_subsystems()
+            
+            # Load durable continuity state and reconcile
+            self.continuity_engine.load()
+            reconciler = Reconciler(self.continuity_engine)
+            status = reconciler.reconcile()
+            self.continuity_status = status
             
             # 5. Health check
             health = self.health_check()
@@ -105,10 +114,12 @@ class RuntimeEngine:
         pass
 
     def _init_subsystems(self) -> None:
-        pass
+        self.continuity_engine = ContinuityEngine(self.config.data_dir)
+        self.mutation_contract = RepositoryMutationContract(self.continuity_engine)
 
     def _flush_journal(self) -> None:
-        pass
+        if getattr(self, 'continuity_engine', None):
+            self.continuity_engine.flush()
 
     def _persist_state(self) -> None:
         pass
