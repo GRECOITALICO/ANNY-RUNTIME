@@ -217,8 +217,8 @@ def start_admin_server(host: str, port: int):
     ephemeral_workspace_manager = EphemeralWorkspaceManager()
     execution_manager = ExecutionManager(
         workspace_manager=ephemeral_workspace_manager, 
-        audit_manager=audit_manager,
-        github_client=github_client,
+        audit_manager=audit_manager, 
+        github_client=github_client, 
         fabric_client=fabric_client
     )
         
@@ -234,12 +234,13 @@ def start_admin_server(host: str, port: int):
     from runtime.core.engine import RuntimeEngine
     from runtime.core.config import RuntimeConfig
     
-    config = RuntimeConfig(data_dir=str(data_dir))
+    config = RuntimeConfig.load()
+    config.data_dir = str(data_dir)
     engine = RuntimeEngine(config)
     
     server = AdminServer(
-        host=host, 
-        port=port, 
+        host=config.admin_host, 
+        port=config.admin_port, 
         auth_manager=auth_manager, 
         audit_manager=audit_manager, 
         github_manager=github_manager,
@@ -278,5 +279,6 @@ def start_admin_server(host: str, port: int):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    # By default, use port 7891
-    start_admin_server('localhost', 7891)
+    from runtime.core.config import RuntimeConfig
+    config = RuntimeConfig.load()
+    start_admin_server(config.admin_host, config.admin_port)
