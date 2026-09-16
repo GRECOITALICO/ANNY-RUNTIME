@@ -9,6 +9,13 @@ from .gates import ReadinessGate, GateResult
 
 
 @dataclass
+class ComponentInventory:
+    declared: List[str] = field(default_factory=list)
+    enabled: List[str] = field(default_factory=list)
+    authorized: List[str] = field(default_factory=list)
+    tested: List[str] = field(default_factory=list)
+
+@dataclass
 class BootstrapReport:
     """The result of a full 3-plane bootstrap sequence."""
     anny_ready: bool
@@ -17,6 +24,19 @@ class BootstrapReport:
     started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     completed_at: str = None
     gates: List[GateResult] = field(default_factory=list)
+    
+    # State tracking
+    policy_revision: str = "UNKNOWN"
+    admission_status: str = "UNKNOWN"
+    reconciliation_status: str = "UNKNOWN"
+    limits_verified: bool = False
+    
+    # Inventories
+    capabilities: ComponentInventory = field(default_factory=ComponentInventory)
+    tools: ComponentInventory = field(default_factory=ComponentInventory)
+    models: ComponentInventory = field(default_factory=ComponentInventory)
+    workers: ComponentInventory = field(default_factory=ComponentInventory)
+    connectors: ComponentInventory = field(default_factory=ComponentInventory)
 
     def add_result(self, result: GateResult) -> None:
         self.gates.append(result)
@@ -53,23 +73,54 @@ class ChatGPTBootstrapFormatter:
 
         lines = [
             f"ANNY BOOTSTRAP: {status}",
-            f"PLANE_1_GITHUB_CONNECTED: {g(ReadinessGate.GITHUB_CONNECTED)}",
-            f"PLANE_1_GITHUB_ORG_BOUND: {g(ReadinessGate.GITHUB_ORG_BOUND)}",
-            f"PLANE_2_FABRIC_REACHABLE: {g(ReadinessGate.FABRIC_REACHABLE)}",
-            f"PLANE_2_FABRIC_IDENTITY: {g(ReadinessGate.FABRIC_IDENTITY_VERIFIED)}",
-            f"PLANE_2_FABRIC_TRUST: {g(ReadinessGate.FABRIC_TRUST_VERIFIED)}",
-            f"PLANE_2_FABRIC_TENANT: {g(ReadinessGate.FABRIC_TENANT_BOUND)}",
-            f"PLANE_2_FABRIC_STATE: {g(ReadinessGate.FABRIC_STATE_READABLE)}",
-            f"PLANE_2_FABRIC_PROVENANCE: {g(ReadinessGate.FABRIC_PROVENANCE_VALID)}",
-            f"PLANE_2_FABRIC_NODE_HEAD: {g(ReadinessGate.FABRIC_NODE_AT_REMOTE_HEAD)}",
-            f"PLANE_3_RUNTIME_REACHABLE: {g(ReadinessGate.RUNTIME_REACHABLE)}",
-            f"PLANE_3_RUNTIME_HEALTH: {g(ReadinessGate.RUNTIME_HEALTH_VERIFIED)}",
-            f"PLANE_3_RUNTIME_BINDING: {g(ReadinessGate.RUNTIME_BINDING_VERIFIED)}",
-            f"PLANE_3_RUNTIME_ADMITTED: {g(ReadinessGate.RUNTIME_ADMITTED)}",
-            f"CROSS_RECONCILIATION: {g(ReadinessGate.PLANE_RECONCILIATION)}",
-            f"CROSS_CONTINUITY: {g(ReadinessGate.CONTINUITY_COHERENT)}",
+            f"---",
+            f"PHASE A (LOCAL RUNTIME):",
+            f"  RUNTIME_IDENTITY: {g(ReadinessGate.RUNTIME_IDENTITY)}",
+            f"  RUNTIME_REACHABLE: {g(ReadinessGate.RUNTIME_REACHABLE)}",
+            f"  RUNTIME_HEALTH: {g(ReadinessGate.RUNTIME_HEALTH_VERIFIED)}",
+            f"PHASE B (GITHUB):",
+            f"  GITHUB_CONNECTED: {g(ReadinessGate.GITHUB_CONNECTED)}",
+            f"  GITHUB_ORG_BOUND: {g(ReadinessGate.GITHUB_ORG_BOUND)}",
+            f"PHASE C (FABRIC):",
+            f"  FABRIC_REACHABLE: {g(ReadinessGate.FABRIC_REACHABLE)}",
+            f"  FABRIC_STATE_READABLE: {g(ReadinessGate.FABRIC_STATE_READABLE)}",
+            f"  FABRIC_NODE_HEAD: {g(ReadinessGate.FABRIC_NODE_AT_REMOTE_HEAD)}",
+            f"PHASE D (TRUST & ADMISSION):",
+            f"  FABRIC_IDENTITY: {g(ReadinessGate.FABRIC_IDENTITY_VERIFIED)}",
+            f"  FABRIC_TRUST: {g(ReadinessGate.FABRIC_TRUST_VERIFIED)}",
+            f"  FABRIC_TENANT: {g(ReadinessGate.FABRIC_TENANT_BOUND)}",
+            f"  RUNTIME_BINDING: {g(ReadinessGate.RUNTIME_BINDING_VERIFIED)}",
+            f"  RUNTIME_ADMITTED: {g(ReadinessGate.RUNTIME_ADMITTED)}",
+            f"PHASE E (POLICY):",
+            f"  POLICY_SNAPSHOT_FRESH: {g(ReadinessGate.POLICY_SNAPSHOT_FRESH)}",
+            f"PHASE F (RECONCILIATION):",
+            f"  PLANE_RECONCILIATION: {g(ReadinessGate.PLANE_RECONCILIATION)}",
+            f"PHASE G (INVENTORY):",
+            f"  CAPABILITIES_INVENTORIED: {g(ReadinessGate.CAPABILITIES_INVENTORIED)}",
+            f"  TOOLS_INVENTORIED: {g(ReadinessGate.TOOLS_INVENTORIED)}",
+            f"  MODELS_INVENTORIED: {g(ReadinessGate.MODELS_INVENTORIED)}",
+            f"  WORKERS_INVENTORIED: {g(ReadinessGate.WORKERS_INVENTORIED)}",
+            f"  CONNECTORS_INVENTORIED: {g(ReadinessGate.CONNECTORS_INVENTORIED)}",
+            f"PHASE H (ACCESS):",
+            f"  CRITICAL_ACCESS_VERIFIED: {g(ReadinessGate.CRITICAL_ACCESS_VERIFIED)}",
+            f"PHASE I (CONTRACTS):",
+            f"  CONTRACTS_DISCOVERED: {g(ReadinessGate.CONTRACTS_DISCOVERED)}",
+            f"PHASE J (CONTEXT):",
+            f"  DELEGATION_CONTEXT_BUILT: {g(ReadinessGate.DELEGATION_CONTEXT_BUILT)}",
+            f"PHASE K (CONTINUITY):",
+            f"  CONTINUITY_COHERENT: {g(ReadinessGate.CONTINUITY_COHERENT)}",
+            f"---",
+            f"INVENTORY SUMMARY:",
+            f"  Capabilities: {len(report.capabilities.declared)} declared, {len(report.capabilities.authorized)} authorized",
+            f"  Tools: {len(report.tools.declared)} declared, {len(report.tools.authorized)} authorized",
+            f"  Models: {len(report.models.declared)} declared, {len(report.models.authorized)} authorized",
+            f"  Workers: {len(report.workers.declared)} declared, {len(report.workers.authorized)} authorized",
+            f"  Connectors: {len(report.connectors.declared)} declared, {len(report.connectors.authorized)} authorized",
+            f"---",
             f"RUNTIME_ID: {runtime_id}",
             f"FABRIC_NODE: {node_id}",
             f"FABRIC_TENANT: {tenant_id}",
+            f"POLICY_REVISION: {report.policy_revision}",
+            f"LIMITS_VERIFIED: {report.limits_verified}",
         ]
         return "\n".join(lines)

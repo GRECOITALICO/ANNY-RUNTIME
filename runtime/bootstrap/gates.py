@@ -35,8 +35,25 @@ class ReadinessGate(Enum):
     RUNTIME_BINDING_VERIFIED = auto()     # Runtime reports correct fabric_org/repo
     RUNTIME_ADMITTED = auto()             # Fabric has issued ALLOW for this runtime_id
 
-    # Cross-Plane Integrity
+    # Cross-Plane Integrity (Phase F)
     PLANE_RECONCILIATION = auto()
+
+    # Policy and Contracts (Phase E & I)
+    POLICY_SNAPSHOT_FRESH = auto()
+    CONTRACTS_DISCOVERED = auto()
+
+    # Inventories (Phase G)
+    CAPABILITIES_INVENTORIED = auto()
+    TOOLS_INVENTORIED = auto()
+    MODELS_INVENTORIED = auto()
+    WORKERS_INVENTORIED = auto()
+    CONNECTORS_INVENTORIED = auto()
+
+    # Access and Context (Phase H & J)
+    CRITICAL_ACCESS_VERIFIED = auto()
+    DELEGATION_CONTEXT_BUILT = auto()
+
+    # Continuity (Phase K)
     CONTINUITY_COHERENT = auto()
 
 
@@ -57,6 +74,15 @@ MANDATORY_GATES = frozenset({
     ReadinessGate.RUNTIME_BINDING_VERIFIED,
     ReadinessGate.RUNTIME_ADMITTED,
     ReadinessGate.PLANE_RECONCILIATION,
+    ReadinessGate.POLICY_SNAPSHOT_FRESH,
+    ReadinessGate.CONTRACTS_DISCOVERED,
+    ReadinessGate.CAPABILITIES_INVENTORIED,
+    ReadinessGate.TOOLS_INVENTORIED,
+    ReadinessGate.MODELS_INVENTORIED,
+    ReadinessGate.WORKERS_INVENTORIED,
+    ReadinessGate.CONNECTORS_INVENTORIED,
+    ReadinessGate.CRITICAL_ACCESS_VERIFIED,
+    ReadinessGate.DELEGATION_CONTEXT_BUILT,
     ReadinessGate.CONTINUITY_COHERENT,
 })
 

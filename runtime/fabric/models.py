@@ -108,3 +108,39 @@ class FabricProvenanceEntry:
     mission_id: str
     recorded_at: str
     verified: bool = False
+
+@dataclass
+class FabricPolicy:
+    """Policy rules inherited from the Repository Fabric."""
+    revision: str
+    require_admission: bool = True
+    allow_local_models: bool = True
+    allow_remote_models: bool = True
+    max_workspace_size_mb: int = 1024
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "FabricPolicy":
+        return cls(
+            revision=data.get("revision", "UNKNOWN"),
+            require_admission=data.get("require_admission", True),
+            allow_local_models=data.get("allow_local_models", True),
+            allow_remote_models=data.get("allow_remote_models", True),
+            max_workspace_size_mb=data.get("max_workspace_size_mb", 1024),
+        )
+
+@dataclass
+class FabricContract:
+    """Execution boundaries and limits."""
+    contract_id: str
+    tenant_id: str
+    granted_capabilities: List[str] = field(default_factory=list)
+    revoked_capabilities: List[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "FabricContract":
+        return cls(
+            contract_id=data.get("contract_id", "UNKNOWN"),
+            tenant_id=data.get("tenant_id", "UNKNOWN"),
+            granted_capabilities=data.get("granted_capabilities", []),
+            revoked_capabilities=data.get("revoked_capabilities", []),
+        )

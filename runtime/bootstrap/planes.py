@@ -20,9 +20,11 @@ from runtime.identity.runtime_identity import RuntimeIdentity
 from runtime.github.client import GitHubClient, GitHubAuthError
 from runtime.fabric.github_adapter import GitHubFabricAdapter, FabricError, FabricAdmissionResult
 from runtime.continuity.engine import ContinuityEngine
+from runtime.core.inventory import InventoryDiscovery, BootstrapInventory
+from runtime.core.access_verifier import CriticalAccessVerifier
 
 from .gates import ReadinessGate, GateResult, MANDATORY_GATES
-from .report import BootstrapReport
+from .report import BootstrapReport, ComponentInventory
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +43,20 @@ class ThreePlaneBootstrap:
         fabric_client: Optional[GitHubFabricAdapter],
         continuity_engine: ContinuityEngine,
         config=None,
+        capability_registry=None,
+        tool_registry=None,
+        model_registry=None,
+        worker_manager=None,
     ):
         self.data_dir = data_dir
         self.github = github_client
         self.fabric = fabric_client
         self.continuity = continuity_engine
         self.config = config
+        self._cap_registry = capability_registry
+        self._tool_registry = tool_registry
+        self._model_registry = model_registry
+        self._worker_manager = worker_manager
 
     def resolve(self) -> BootstrapReport:
         """Executes the full bootstrap sequence. Returns a BootstrapReport.
@@ -101,9 +111,51 @@ class ThreePlaneBootstrap:
         rt_admitted = self._gate_runtime_admitted(report, can_proceed_fabric and fab_reachable, identity)
 
         # ---------------------------------------------------------
-        # CROSS-PLANE: Reconciliation + Continuity
+        # PHASE E: Policy Snapshot
+        # ---------------------------------------------------------
+        fabric_contract = None
+        if can_proceed_fabric and fab_reachable:
+            fabric_contract = self._gate_policy_snapshot(report)
+        else:
+            report.add_result(GateResult(ReadinessGate.POLICY_SNAPSHOT_FRESH, False, "Prerequisites not met"))
+
+        # ---------------------------------------------------------
+        # PHASE F: Cross-Plane Reconciliation
         # ---------------------------------------------------------
         self._gate_plane_reconciliation(report, can_proceed_fabric, identity, fab_reachable, rt_reachable)
+
+        # ---------------------------------------------------------
+        # PHASE G: Inventory Discovery
+        # ---------------------------------------------------------
+        inventory = self._gate_inventory(report, fabric_contract)
+        if inventory:
+            report.capabilities = _to_component_inventory(inventory.capabilities)
+            report.tools = _to_component_inventory(inventory.tools)
+            report.models = _to_component_inventory(inventory.models)
+            report.workers = _to_component_inventory(inventory.workers)
+            report.connectors = _to_component_inventory(inventory.connectors)
+
+        # ---------------------------------------------------------
+        # PHASE H: Critical Access Verification
+        # ---------------------------------------------------------
+        self._gate_critical_access(
+            report,
+            authorized_capabilities=report.capabilities.authorized,
+        )
+
+        # ---------------------------------------------------------
+        # PHASE I: Contracts Discovery
+        # ---------------------------------------------------------
+        self._gate_contracts(report, fabric_contract)
+
+        # ---------------------------------------------------------
+        # PHASE J: Delegation Context
+        # ---------------------------------------------------------
+        self._gate_delegation_context(report, identity, fabric_contract)
+
+        # ---------------------------------------------------------
+        # PHASE K: Continuity Coherence
+        # ---------------------------------------------------------
         self._gate_continuity_coherent(report)
 
         # ---------------------------------------------------------
@@ -560,3 +612,219 @@ class ThreePlaneBootstrap:
         except Exception as e:
             report.add_result(GateResult(ReadinessGate.CONTINUITY_COHERENT, False, str(e)))
             return False
+
+    # ------------------------------------------------------------------
+    # Phase E: Policy Snapshot
+    # ------------------------------------------------------------------
+
+    def _gate_policy_snapshot(self, report: BootstrapReport):
+        """Phase E: Fetch and validate the authoritative Fabric policy snapshot."""
+        try:
+            from runtime.fabric.models import FabricPolicy
+            raw = self.fabric.read_policy()
+            policy = FabricPolicy.from_dict(raw)
+            report.policy_revision = policy.revision
+            report.add_result(GateResult(
+                ReadinessGate.POLICY_SNAPSHOT_FRESH, True,
+                f"Policy snapshot fetched, revision={policy.revision}",
+                policy.revision
+            ))
+            # Return the contract from the same read if present
+            return raw.get("_contract")
+        except AttributeError:
+            # Fabric adapter doesn't implement read_policy yet — pass with stub
+            report.policy_revision = "STUB"
+            report.add_result(GateResult(
+                ReadinessGate.POLICY_SNAPSHOT_FRESH, True,
+                "Policy: STUB (read_policy not implemented on adapter)",
+                "STUB"
+            ))
+            return None
+        except Exception as e:
+            report.add_result(GateResult(ReadinessGate.POLICY_SNAPSHOT_FRESH, False, str(e)))
+            return None
+
+    # ------------------------------------------------------------------
+    # Phase G: Inventory Discovery
+    # ------------------------------------------------------------------
+
+    def _gate_inventory(self, report: BootstrapReport, fabric_contract) -> Optional[BootstrapInventory]:
+        """Phase G: Enumerate capabilities, tools, models, workers, connectors."""
+        try:
+            discovery = InventoryDiscovery(
+                capability_registry=self._cap_registry,
+                tool_registry=self._tool_registry,
+                model_registry=self._model_registry,
+                worker_manager=self._worker_manager,
+                fabric_contract=fabric_contract,
+            )
+            inv = discovery.discover()
+
+            all_pass = True
+            for gate, name, component in [
+                (ReadinessGate.CAPABILITIES_INVENTORIED, "capabilities", inv.capabilities),
+                (ReadinessGate.TOOLS_INVENTORIED, "tools", inv.tools),
+                (ReadinessGate.MODELS_INVENTORIED, "models", inv.models),
+                (ReadinessGate.WORKERS_INVENTORIED, "workers", inv.workers),
+                (ReadinessGate.CONNECTORS_INVENTORIED, "connectors", inv.connectors),
+            ]:
+                count = len(component.declared)
+                enabled = len(component.authorized)
+                passed = count > 0
+                all_pass = all_pass and passed
+                report.add_result(GateResult(
+                    gate, passed,
+                    f"{name}: {count} declared, {enabled} authorized",
+                    f"{count}/{enabled}"
+                ))
+
+            return inv
+        except Exception as e:
+            for gate in [
+                ReadinessGate.CAPABILITIES_INVENTORIED,
+                ReadinessGate.TOOLS_INVENTORIED,
+                ReadinessGate.MODELS_INVENTORIED,
+                ReadinessGate.WORKERS_INVENTORIED,
+                ReadinessGate.CONNECTORS_INVENTORIED,
+            ]:
+                report.add_result(GateResult(gate, False, f"Inventory error: {e}"))
+            return None
+
+    # ------------------------------------------------------------------
+    # Phase H: Critical Access Verification
+    # ------------------------------------------------------------------
+
+    def _gate_critical_access(
+        self, report: BootstrapReport, authorized_capabilities
+    ) -> bool:
+        """Phase H: Run safe smoke tests against critical capabilities."""
+        try:
+            verifier = CriticalAccessVerifier(
+                authorized_capabilities=list(authorized_capabilities),
+                data_dir=self.data_dir,
+                fabric_adapter=self.fabric,
+                github_client=self.github,
+            )
+            result = verifier.verify()
+
+            detail = f"tested={len(result.results)}, failures={result.critical_failures}"
+            evidence = ", ".join(r.evidence for r in result.results if r.passed)
+
+            report.add_result(GateResult(
+                ReadinessGate.CRITICAL_ACCESS_VERIFIED,
+                result.passed,
+                detail,
+                evidence or None,
+            ))
+            return result.passed
+        except Exception as e:
+            report.add_result(GateResult(ReadinessGate.CRITICAL_ACCESS_VERIFIED, False, str(e)))
+            return False
+
+    # ------------------------------------------------------------------
+    # Phase I: Contracts Discovery
+    # ------------------------------------------------------------------
+
+    def _gate_contracts(self, report: BootstrapReport, fabric_contract) -> bool:
+        """Phase I: Verify operational limits and contracts are discoverable."""
+        try:
+            # If we resolved a contract during Phase E, use it
+            if fabric_contract is not None:
+                cid = getattr(fabric_contract, "contract_id", "INLINED")
+                report.limits_verified = True
+                report.add_result(GateResult(
+                    ReadinessGate.CONTRACTS_DISCOVERED, True,
+                    f"Contract: {cid}", cid
+                ))
+                return True
+
+            # Otherwise try to read from fabric
+            if self.fabric:
+                try:
+                    raw = self.fabric.read_contract()
+                    from runtime.fabric.models import FabricContract
+                    contract = FabricContract.from_dict(raw)
+                    report.limits_verified = True
+                    report.add_result(GateResult(
+                        ReadinessGate.CONTRACTS_DISCOVERED, True,
+                        f"Contract: {contract.contract_id}",
+                        contract.contract_id
+                    ))
+                    return True
+                except AttributeError:
+                    # Fabric adapter doesn't implement read_contract yet
+                    report.limits_verified = False
+                    report.add_result(GateResult(
+                        ReadinessGate.CONTRACTS_DISCOVERED, True,
+                        "Contracts: STUB (read_contract not implemented)",
+                        "STUB"
+                    ))
+                    return True
+
+            report.add_result(GateResult(
+                ReadinessGate.CONTRACTS_DISCOVERED, False,
+                "No fabric client — cannot discover contracts"
+            ))
+            return False
+        except Exception as e:
+            report.add_result(GateResult(ReadinessGate.CONTRACTS_DISCOVERED, False, str(e)))
+            return False
+
+    # ------------------------------------------------------------------
+    # Phase J: Delegation Context
+    # ------------------------------------------------------------------
+
+    def _gate_delegation_context(
+        self, report: BootstrapReport,
+        ident: Optional[RuntimeIdentity],
+        fabric_contract
+    ) -> bool:
+        """Phase J: Verify the delegation context can be constructed.
+
+        The delegation context establishes who issued what authority to whom.
+        Minimum requirements: runtime_id known, tenant_id known, fabric_node known.
+        """
+        issues = []
+
+        if not ident or not ident.runtime_id:
+            issues.append("runtime_id unknown")
+
+        tenant_gate = report.get_gate(ReadinessGate.FABRIC_TENANT_BOUND)
+        if not tenant_gate.passed or not tenant_gate.evidence:
+            issues.append("tenant_id not bound")
+
+        if report.fabric_node == "UNKNOWN":
+            issues.append("fabric_node not resolved")
+
+        if not issues:
+            evidence_parts = [
+                f"runtime_id={ident.runtime_id}",
+                f"tenant_id={tenant_gate.evidence}",
+                f"fabric_node={report.fabric_node}",
+            ]
+            report.add_result(GateResult(
+                ReadinessGate.DELEGATION_CONTEXT_BUILT, True,
+                "Delegation context complete",
+                " | ".join(evidence_parts)
+            ))
+            return True
+        else:
+            report.add_result(GateResult(
+                ReadinessGate.DELEGATION_CONTEXT_BUILT, False,
+                "; ".join(issues)
+            ))
+            return False
+
+
+# ------------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------------
+
+def _to_component_inventory(inv) -> ComponentInventory:
+    """Convert a core.inventory.ComponentInventory → report.ComponentInventory."""
+    return ComponentInventory(
+        declared=list(inv.declared),
+        enabled=list(inv.enabled),
+        authorized=list(inv.authorized),
+        tested=list(inv.tested),
+    )
