@@ -10,14 +10,16 @@ from typing import Dict, Any
 
 from runtime.admin.routes import AdminRouter
 from runtime.admin.middleware import AdminMiddleware
+from runtime.core.config import RuntimeConfig, get_data_dir
+from runtime.core.engine import RuntimeEngine
 
 logger = logging.getLogger(__name__)
 
 
 class AdminRequestHandler(BaseHTTPRequestHandler):
     """Handles admin HTTP requests."""
-    
-    server: 'AdminServer' # Type hint for the custom server instance
+
+    server: 'AdminServer'
 
     def do_GET(self):
         context: Dict[str, Any] = dict(self.server.router.context)
@@ -75,7 +77,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                     del self.server.router.context[key]
             self.server.router.context.update({k: v for k, v in saved_context.items()
                                                if k not in ('admin_session', 'set_cookies', 'new_session_id', 'secure_cookie', 'destroy_session')})
-        
+
     def log_message(self, format, *args):
         logger.debug(f"Admin HTTP: {self.client_address[0]} - {format % args}")
 
@@ -101,13 +103,15 @@ ThreadedHTTPServer = LoopbackIPv4Server
 
 class AdminServer:
     """Manages the threaded HTTP server lifecycle."""
-    
-    def __init__(self, host: str, port: int, auth_manager, audit_manager, github_manager, secret_backend=None, event_bus=None, runtime_engine=None, local_operational_path=None, bootstrap_snapshot=None):
+
+    def __init__(self, host: str, port: int, auth_manager, audit_manager, github_manager,
+                 secret_backend=None, event_bus=None, runtime_engine=None,
+                 local_operational_path=None, bootstrap_snapshot=None):
         self.host = host
         self.port = port
         self.server = None
         self.thread = None
-        
+
         self.admin_context = {
             'auth_manager': auth_manager,
             'audit_manager': audit_manager,
@@ -118,10 +122,10 @@ class AdminServer:
             'local_operational_path': local_operational_path,
             'bootstrap_snapshot': bootstrap_snapshot
         }
-        
+
         self.router = AdminRouter(self.admin_context)
         self.middleware = AdminMiddleware(auth_manager, github_manager=github_manager)
-        
+
     def start(self):
         """Start dual-stack servers (127.0.0.1 + ::1) in background threads."""
         try:
@@ -168,20 +172,22 @@ def start_admin_server(host: str, port: int):
     """Convenience function to instantiate and run the AdminServer."""
     import time
     import sys
-    from runtime.core.config import get_data_dir, RuntimeConfig
     from runtime.identity.runtime_identity import RuntimeIdentity
     from runtime.admin.auth import AdminSessionManager
     from runtime.admin.audit import AdminAuditLog
     from runtime.admin.github import GitHubAuthManager
     from runtime.secrets.backend import FileSecretBackend
-    
+
     data_dir = get_data_dir()
+    config = RuntimeConfig.load()
+    config.data_dir = str(data_dir)
+
     identity_manager = RuntimeIdentity.load(data_dir)
     auth_manager = AdminSessionManager(str(data_dir), identity_manager.runtime_id)
     audit_manager = AdminAuditLog(str(data_dir), identity_manager.runtime_id)
     secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
     github_manager = GitHubAuthManager(secret_backend)
-    
+
     from runtime.workspace.ephemeral import EphemeralWorkspaceManager
     from runtime.execution.manager import ExecutionManager
     from runtime.github.client import GitHubClient
@@ -189,8 +195,8 @@ def start_admin_server(host: str, port: int):
     github_client = GitHubClient(secret_backend=secret_backend) if github_manager.has_token() else None
 
     from runtime.fabric.github_adapter import GitHubFabricAdapter
-    fabric_client = GitHubFabricAdapter(github_client=github_client) if github_client else None
-    
+    fabric_client = GitHubFabricAdapter(github_client=github_client, config=config) if github_client else None
+
     ephemeral_workspace_manager = EphemeralWorkspaceManager()
     execution_manager = ExecutionManager(
         workspace_manager=ephemeral_workspace_manager,
@@ -207,13 +213,8 @@ def start_admin_server(host: str, port: int):
         except Exception as e:
             logger.warning(f"Startup discovery failed: {e}")
 
-    config = RuntimeConfig.load()
-    config.data_dir = str(data_dir)
-    engine = RuntimeEngine(config) if 'RuntimeEngine' in globals() else None
-    if engine is None:
-        from runtime.core.engine import RuntimeEngine
-        engine = RuntimeEngine(config)
-    
+    engine = RuntimeEngine(config)
+
     server = AdminServer(
         host=host,
         port=port,
@@ -226,10 +227,10 @@ def start_admin_server(host: str, port: int):
         local_operational_path=None,
         bootstrap_snapshot={'result': None, 'discovered_repos': disc_repos_raw}
     )
-    
+
     server.admin_context['execution_manager'] = execution_manager
     server.router.context['execution_manager'] = execution_manager
-    
+
     def run_bootstrap():
         try:
             engine.startup(github_client=github_client, fabric_client=fabric_client)
@@ -239,7 +240,7 @@ def start_admin_server(host: str, port: int):
     if server.start():
         t = threading.Thread(target=run_bootstrap, daemon=True)
         t.start()
-        
+
         try:
             while True:
                 time.sleep(1)
@@ -254,6 +255,5 @@ def start_admin_server(host: str, port: int):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    from runtime.core.config import RuntimeConfig
     config = RuntimeConfig.load()
     start_admin_server(config.admin_host, config.admin_port)
