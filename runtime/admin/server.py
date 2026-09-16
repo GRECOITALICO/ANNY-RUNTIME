@@ -92,9 +92,24 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
         logger.debug(f"Admin HTTP: {self.client_address[0]} - {format % args}")
 
 
-class ThreadedHTTPServer(socketserver.ThreadingMixIn, HTTPServer):
-    """Handle requests in a separate thread."""
+class LoopbackIPv4Server(socketserver.ThreadingMixIn, HTTPServer):
+    """Threaded HTTP server bound to 127.0.0.1 (IPv4 loopback)."""
     daemon_threads = True
+
+
+class LoopbackIPv6Server(socketserver.ThreadingMixIn, HTTPServer):
+    """Threaded HTTP server bound to ::1 (IPv6 loopback)."""
+    daemon_threads = True
+    address_family = __import__('socket').AF_INET6
+
+    def server_bind(self):
+        import socket
+        self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+        super().server_bind()
+
+
+# Legacy alias kept for external references
+ThreadedHTTPServer = LoopbackIPv4Server
 
 
 class AdminServer:
@@ -122,30 +137,49 @@ class AdminServer:
         self.middleware = AdminMiddleware(auth_manager, github_manager=github_manager)
         
     def start(self):
-        """Start the server in a background thread."""
+        """Start dual-stack servers (127.0.0.1 + ::1) in background threads."""
+
+        # --- IPv4 (127.0.0.1) ---
         try:
-            self.server = ThreadedHTTPServer((self.host, self.port), AdminRequestHandler)
-            # Inject references into the server instance so handlers can access them
-            self.server.router = self.router
-            self.server.middleware = self.middleware
-            
-            self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-            self.thread.start()
-            logger.info(f"Admin Server started at http://{self.host}:{self.port}")
-            return True
+            self.server4 = LoopbackIPv4Server(('127.0.0.1', self.port), AdminRequestHandler)
+            self.server4.router = self.router
+            self.server4.middleware = self.middleware
+            self.thread4 = threading.Thread(target=self.server4.serve_forever, daemon=True)
+            self.thread4.start()
+            logger.info(f"Admin Server (IPv4) started at http://127.0.0.1:{self.port}")
         except Exception as e:
-            logger.error(f"Failed to start Admin Server on {self.host}:{self.port} - {e}")
+            logger.error(f"Failed to bind IPv4 (127.0.0.1:{self.port}): {e}")
             return False
-            
+
+        # --- IPv6 (::1) — optional: skip if interface not available ---
+        self.server6 = None
+        self.thread6 = None
+        try:
+            self.server6 = LoopbackIPv6Server(('::1', self.port), AdminRequestHandler)
+            self.server6.router = self.router
+            self.server6.middleware = self.middleware
+            self.thread6 = threading.Thread(target=self.server6.serve_forever, daemon=True)
+            self.thread6.start()
+            logger.info(f"Admin Server (IPv6) started at http://[::1]:{self.port}")
+        except Exception as e:
+            logger.warning(f"IPv6 loopback (::1:{self.port}) not available: {e} — IPv4-only mode")
+            self.server6 = None
+            self.thread6 = None
+
+        return True
+
     def stop(self):
-        """Stop the server cleanly."""
-        if self.server:
-            logger.info("Stopping Admin Server...")
-            self.server.shutdown()
-            self.server.server_close()
-            if self.thread:
-                self.thread.join(timeout=2.0)
-            logger.info("Admin Server stopped")
+        """Stop all server sockets cleanly."""
+        logger.info("Stopping Admin Server...")
+        for srv, thr in [(getattr(self, 'server4', None), getattr(self, 'thread4', None)),
+                         (getattr(self, 'server6', None), getattr(self, 'thread6', None))]:
+            if srv:
+                srv.shutdown()
+                srv.server_close()
+            if thr:
+                thr.join(timeout=2.0)
+        logger.info("Admin Server stopped")
+
 
 def start_admin_server(host: str, port: int):
     """Convenience function to instantiate and run the AdminServer."""
