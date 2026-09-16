@@ -10,6 +10,7 @@ from runtime.continuity.reconciler import Reconciler
 
 class RuntimeState(Enum):
     STARTING = auto()
+    VERIFYING = auto()
     READY = auto()
     WAITING_FOR_SESSION = auto()
     DRAINING = auto()
@@ -69,6 +70,30 @@ class RuntimeEngine:
             # 5. Determine runtime state
             if self.bootstrap_report.anny_ready:
                 self._state = RuntimeState.READY
+                self._state = RuntimeState.WAITING_FOR_SESSION
+            else:
+                self._state = RuntimeState.ADMIN_MODE
+                
+        except Exception as e:
+            self._state = RuntimeState.ERROR
+            raise e
+
+    def verify(self, github_client=None, fabric_client=None) -> None:
+        """Manually trigger the deterministic verification pipeline."""
+        self._state = RuntimeState.VERIFYING
+        
+        try:
+            from runtime.bootstrap.planes import ThreePlaneBootstrap
+            bootstrap = ThreePlaneBootstrap(
+                data_dir=self.config.data_dir,
+                github_client=github_client,
+                fabric_client=fabric_client,
+                continuity_engine=getattr(self, 'continuity_engine', None),
+                config=self._config,
+            )
+            self.bootstrap_report = bootstrap.resolve()
+            
+            if self.bootstrap_report.anny_ready:
                 self._state = RuntimeState.WAITING_FOR_SESSION
             else:
                 self._state = RuntimeState.ADMIN_MODE

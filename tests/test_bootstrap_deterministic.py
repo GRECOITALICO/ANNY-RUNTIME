@@ -63,8 +63,8 @@ class TestPhaseE_PolicySnapshot:
         gate = report.get_gate(ReadinessGate.POLICY_SNAPSHOT_FRESH)
         assert gate.passed
 
-    def test_policy_snapshot_stub_passes_when_adapter_missing_method(self):
-        """If fabric adapter doesn't implement read_policy, we pass with STUB."""
+    def test_policy_snapshot_fails_when_adapter_missing_method(self):
+        """If fabric adapter doesn't implement read_policy, we fail strictly."""
         fabric = MagicMock(spec=[])   # spec with no methods → AttributeError on read_policy
         b = _make_bootstrap(fabric_client=fabric)
         report = _make_report()
@@ -73,8 +73,8 @@ class TestPhaseE_PolicySnapshot:
         b._gate_policy_snapshot(report)
 
         gate = report.get_gate(ReadinessGate.POLICY_SNAPSHOT_FRESH)
-        assert gate.passed
-        assert report.policy_revision == "STUB"
+        assert not gate.passed
+        assert "Mock object has no attribute 'read_policy'" in gate.detail
 
     def test_policy_snapshot_failure_blocks_gate(self):
         fabric = MagicMock()
@@ -187,9 +187,16 @@ class TestPhaseH_CriticalAccess:
         assert ReadinessGate.CRITICAL_ACCESS_VERIFIED in MANDATORY_GATES
 
     def test_filesystem_access_passes_with_valid_data_dir(self, tmp_path):
+        gh = MagicMock()
+        gh.list_repos.return_value = [{"name": "repo1"}]
+        fabric = MagicMock()
+        fabric.read_node_config.return_value = MagicMock(node_id="n-001")
+        
         verifier = CriticalAccessVerifier(
-            authorized_capabilities=["filesystem.inspect", "filesystem.list"],
+            authorized_capabilities=["filesystem.inspect", "filesystem.list", "repository.read", "repository.search", "fabric.read", "runtime.status", "runtime.execution", "tool.resolve", "model.resolve", "worker.resolve"],
             data_dir=str(tmp_path),
+            github_client=gh,
+            fabric_adapter=fabric
         )
         result = verifier.verify()
         assert result.passed
@@ -204,15 +211,16 @@ class TestPhaseH_CriticalAccess:
         assert not result.passed
         assert "filesystem.inspect" in result.critical_failures
 
-    def test_no_authorized_capabilities_skips_all_tests(self, tmp_path):
-        """If no critical capabilities are authorized, skip all tests → pass."""
+    def test_no_authorized_capabilities_fails_strictly(self, tmp_path):
+        """Rule 7: If critical capabilities are missing, fail strictly -> BLOCKED."""
         verifier = CriticalAccessVerifier(
             authorized_capabilities=[],
             data_dir=str(tmp_path),
         )
         result = verifier.verify()
-        assert result.passed
-        assert len(result.results) == 0
+        assert not result.passed
+        assert len(result.critical_failures) == 10
+        assert "filesystem.inspect" in result.critical_failures
 
     def test_repository_read_fails_without_github_client(self):
         verifier = CriticalAccessVerifier(
@@ -259,7 +267,7 @@ class TestPhaseI_Contracts:
     def test_contracts_is_mandatory_gate(self):
         assert ReadinessGate.CONTRACTS_DISCOVERED in MANDATORY_GATES
 
-    def test_contracts_stub_passes_when_read_contract_not_implemented(self):
+    def test_contracts_fails_when_read_contract_not_implemented(self):
         fabric = MagicMock(spec=[])  # No read_contract method
         b = _make_bootstrap(fabric_client=fabric)
         b.fabric = fabric
@@ -268,7 +276,8 @@ class TestPhaseI_Contracts:
         b._gate_contracts(report, fabric_contract=None)
 
         gate = report.get_gate(ReadinessGate.CONTRACTS_DISCOVERED)
-        assert gate.passed
+        assert not gate.passed
+        assert "Mock object has no attribute 'read_contract'" in gate.detail
 
     def test_contracts_from_fabric_adapter(self):
         fabric = MagicMock()
@@ -410,7 +419,7 @@ class TestMandatoryGateCoverage_Extended:
         formatted = ChatGPTBootstrapFormatter.format(report)
 
         assert "INVENTORY SUMMARY" in formatted
-        assert "Capabilities: 2 declared, 2 authorized" in formatted
+        assert "Capabilities: 2 DEC, 0 CFG, 0 ENA, 2 AUT, 0 AVL, 0 FNC, 0 TST, 0 VRF" in formatted
 
     def test_blocked_bootstrap_never_says_degraded(self):
         from runtime.bootstrap.report import ChatGPTBootstrapFormatter

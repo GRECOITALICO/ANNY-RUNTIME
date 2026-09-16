@@ -23,9 +23,13 @@ logger = logging.getLogger(__name__)
 class ComponentInventory:
     """The Phase G snapshot of a single component class."""
     declared: List[str] = field(default_factory=list)
+    configured: List[str] = field(default_factory=list)
     enabled: List[str] = field(default_factory=list)
     authorized: List[str] = field(default_factory=list)
+    available: List[str] = field(default_factory=list)
+    functional: List[str] = field(default_factory=list)
     tested: List[str] = field(default_factory=list)
+    verified: List[str] = field(default_factory=list)
 
 
 @dataclass

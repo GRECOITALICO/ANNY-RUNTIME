@@ -82,6 +82,7 @@ class AdminRouter:
             '/admin/restart': self.handle_admin_restart,
             '/admin/diagnostics': self.handle_admin_diagnostics,
             '/admin/update-check': self.handle_admin_update_check,
+            '/api/bootstrap/verify': self.handle_verify_bootstrap,
         }
 
     def _get_csrf(self) -> str:
@@ -244,57 +245,96 @@ class AdminRouter:
             self._send_json(handler, {"error": safe_msg, "status": "ERROR"}, status=500)
 
     def handle_api_status(self, parsed) -> str:
-        """Returns the live status of the 3-plane bootstrap sequence.
-
-        Exposes fabric_org/fabric_repo for the RUNTIME_BINDING_VERIFIED gate
-        and exposes state for RUNTIME_HEALTH_VERIFIED gate.
-        """
+        """Returns the live status of the runtime and bootstrap sequence."""
         engine = self.context.get('runtime_engine')
         if not engine:
             self.context['direct_json_response'] = {
                 "anny_ready": False,
-                "state": "STOPPED",
+                "runtime_state": "STOPPED",
                 "error": "No runtime engine"
             }
             return '/'
 
-        # Expose live state name for health gate
-        state_name = engine.state.name
-
-        # Expose fabric binding for RUNTIME_BINDING_VERIFIED gate
-        fabric_org = None
-        fabric_repo = None
-        if engine.config:
-            fabric_org = getattr(engine.config, 'fabric_org', None)
-            fabric_repo = getattr(engine.config, 'fabric_repo', None)
-
-        report = engine.bootstrap_report
-        if not report:
-            self.context['direct_json_response'] = {
-                "anny_ready": False,
-                "state": state_name,
-                "fabric_org": fabric_org,
-                "fabric_repo": fabric_repo,
-            }
-            return '/'
-
-        self.context['direct_json_response'] = {
-            "anny_ready": report.anny_ready,
-            "state": state_name,
+        state_name = getattr(engine.state, 'name', str(engine.state))
+        
+        # Fabric
+        fabric_org = getattr(engine.config, 'fabric_org', None) if engine.config else None
+        fabric_repo = getattr(engine.config, 'fabric_repo', None) if engine.config else None
+        
+        # GitHub
+        gh_mgr = self.context.get('github_manager')
+        gh_status = gh_mgr.get_status().auth_status if gh_mgr else "UNAUTHORIZED"
+        
+        # Identity/Health
+        auth_mgr = self.context.get('auth_manager')
+        runtime_id = getattr(auth_mgr, 'runtime_id', "UNKNOWN") if auth_mgr else "UNKNOWN"
+        runtime_health = "OK"
+        
+        report = getattr(engine, 'bootstrap_report', None)
+        gates_list = []
+        anny_ready = False
+        fabric_node = "UNKNOWN"
+        timestamp = None
+        if report:
+            anny_ready = getattr(report, 'anny_ready', False)
+            fabric_node = getattr(report, 'fabric_node', "UNKNOWN")
+            timestamp = getattr(report, 'timestamp', None)
+            
+            for g in getattr(report, 'gates', []):
+                name = getattr(g.gate, 'name', str(g.gate)) if hasattr(g, 'gate') else 'UNKNOWN'
+                passed = getattr(g, 'passed', False)
+                evidence = getattr(g, 'evidence', '')
+                status_str = "PASS" if passed else ("BLOCKED" if evidence == 'STUB' else "FAIL")
+                
+                gates_list.append({
+                    "phase": name.split('_')[0] if '_' in name else 'CORE',
+                    "gate": name,
+                    "status": status_str,
+                    "detail": getattr(g, 'detail', ''),
+                    "evidence": evidence
+                })
+            
+        data = {
+            "anny_ready": anny_ready,
+            "runtime_state": state_name,
+            "runtime_health": runtime_health,
+            "github_status": gh_status,
+            "fabric_status": "CONNECTED" if fabric_node and fabric_node != "UNKNOWN" else "NOT_CONFIGURED",
+            "admission_status": "ADMITTED" if anny_ready else "PENDING",
+            "reconciliation_status": "COHERENT" if anny_ready else "PENDING",
+            "timestamp": timestamp,
+            
+            "runtime_id": runtime_id,
+            "runtime_version": "v0.4.0",
+            "github_org": gh_status, 
             "fabric_org": fabric_org,
             "fabric_repo": fabric_repo,
-            "runtime_id": report.runtime_id,
-            "fabric_node": report.fabric_node,
-            "gates": [
-                {
-                    "gate": g.gate.name,
-                    "passed": g.passed,
-                    "detail": g.detail,
-                    "evidence": g.evidence
-                } for g in report.gates
-            ]
+            "fabric_node": fabric_node,
+            "tenant": "N/A",
+            "policy_revision": "N/A",
+            "contract_revision": "N/A",
+            
+            "gates": gates_list,
+            "capabilities": [], 
+            "health": {"engine": state_name, "github": gh_status},
+            "access": [],
+            "tools": [],
+            "models": [],
+            "workers": [],
+            "connectors": [],
+            "continuity": {
+                "mission": "N/A",
+                "task": "N/A",
+                "step": "N/A",
+                "action": "N/A",
+                "blockers": "0",
+                "status": state_name
+            }
         }
+        
+        self.context['direct_json_response'] = data
         return '/'
+
 
     def _get_fabric_client(self):
         """Build a GitHubFabricAdapter using dynamic config — not hardcoded constants."""
@@ -432,111 +472,12 @@ class AdminRouter:
     # --- GET Handlers ---
 
     def handle_dashboard(self, parsed) -> str:
-        query_params = urllib.parse.parse_qs(parsed.query)
-        error = query_params.get('error', [''])[0] or None
-
-        gh_mgr = self.context.get('github_manager')
-        gh_status = gh_mgr.get_status().to_dict() if gh_mgr else {}
-        auth_status = gh_status.get('auth_status', 'UNKNOWN')
-        
-        session = self.context.get('admin_session')
-        
-        is_first_run = gh_mgr and not gh_mgr.has_token()
-        if (auth_status in ('UNAUTHORIZED', 'MISSING')) and is_first_run and session and session.scope == "ONBOARDING_ONLY":
-            return first_run_page(error=error, csrf_token=self._get_csrf())
-        elif auth_status in ('UNAUTHORIZED', 'MISSING'):
-            # It's missing but not a first run? Or they aren't logged in. Wait, middleware handles login.
-            return first_run_page(error=error, csrf_token=self._get_csrf())
-        elif auth_status in ('EXPIRED', 'DEGRADED'):
-            return reconnect_page(self._get_csrf())
-        elif auth_status == 'FAILED':
-            reason = gh_status.get('last_failure_reason', 'Unknown error')
-            return failure_page(reason, self._get_csrf())
-        else:
-            engine = self.context.get('runtime_engine')
-            if engine and engine.config:
-                if not getattr(engine.config, 'fabric_org', None) or not getattr(engine.config, 'fabric_repo', None):
-                    # Fetch organizations
-                    orgs = []
-                    if gh_mgr and gh_mgr.has_token():
-                        try:
-                            from runtime.github.client import GitHubClient
-                            gh_client = GitHubClient(secret_backend=gh_mgr.secret_backend)
-                            principal = gh_status.get('principal')
-                            if principal:
-                                orgs.append({"login": principal})
-                            gh_orgs = gh_client.get("/user/orgs").json()
-                            if isinstance(gh_orgs, list):
-                                orgs.extend(gh_orgs)
-                        except Exception as e:
-                            logger.error(f"Failed to fetch orgs for setup: {e}")
-                    return fabric_setup_page(orgs, error=error, csrf_token=self._get_csrf())
-
-            continuity_dto = self._get_continuity_dto()
-            
-            # Derive identity from observable state, not hardcoded values
-            auth_manager = self.context.get('auth_manager')
-            runtime_id = auth_manager.runtime_id if auth_manager else "UNKNOWN"
-            
-            # Check for actual identity key presence
-            identity_manager = self.context.get('identity_manager')
-            if identity_manager and hasattr(identity_manager, 'get_key_type'):
-                key_type = identity_manager.get_key_type()
-            else:
-                key_type = "UNKNOWN"
-            
-            if identity_manager and hasattr(identity_manager, 'get_status'):
-                id_status = identity_manager.get_status()
-            else:
-                id_status = "UNKNOWN"
-            
-            # --- Universe Overview Counts ---
-            exec_mgr = self.context.get('execution_manager')
-            model_count = len(exec_mgr.model_registry.list_models()) if exec_mgr else 0
-            capability_count = len(exec_mgr.registry.list_all()) if exec_mgr else 0
-            worker_count = len(exec_mgr.worker_manager.workers) if exec_mgr else 0
-            task_count = len(exec_mgr._tasks) if exec_mgr else 0
-            
-            project_count = 0
-            bootstrap_snapshot = self.context.get('bootstrap_snapshot')
-            if bootstrap_snapshot and 'discovered_repos' in bootstrap_snapshot:
-                project_count = len(bootstrap_snapshot['discovered_repos'])
-            
-            mcp_count = 0
-            if exec_mgr and hasattr(exec_mgr, 'mcp_gateway'):
-                mcp_count = len(exec_mgr.mcp_gateway.tool_registry.list_tools())
-            
-            # Provide an instance method to get fabric client or default to None
-            fabric_connected = False
-            resource_count = 0
-            if hasattr(self, '_get_fabric_client'):
-                fabric_client = self._get_fabric_client()
-                if fabric_client:
-                    try:
-                        resources = fabric_client.list_resources()
-                        resource_count = len(resources)
-                        fabric_connected = True
-                    except Exception:
-                        pass
-            
-            status_data = {
-                'github': gh_status,
-                'continuity': continuity_dto.to_dict(),
-                'fabric_connected': fabric_connected,
-                'resource_count': resource_count,
-                'model_count': model_count,
-                'capability_count': capability_count,
-                'worker_count': worker_count,
-                'task_count': task_count,
-                'project_count': project_count,
-                'mcp_count': mcp_count,
-                'identity': {
-                    'runtime_id': runtime_id,
-                    'status': id_status,
-                    'key_type': key_type
-                }
-            }
-            return ready_page(status_data, self._get_csrf())
+        try:
+            from runtime.admin.templates_cc import control_center_page
+            return control_center_page(self._get_csrf())
+        except ImportError:
+            # Fallback if templates_cc.py is missing
+            return "<html><body><h1>ANNY CONTROL CENTER (Loading...)</h1></body></html>"
 
 
     def handle_github(self, parsed) -> str:
@@ -811,7 +752,27 @@ class AdminRouter:
             self.context['direct_json_response'] = {'status': 'FAILED', 'error': str(e)}
             return '/'
 
-
+    def handle_verify_bootstrap(self, form_data) -> str:
+        engine = self.context.get('runtime_engine')
+        if engine:
+            gh_mgr = self.context.get('github_manager')
+            github_client = None
+            if gh_mgr and gh_mgr.has_token():
+                try:
+                    from runtime.github.client import GitHubClient
+                    github_client = GitHubClient(secret_backend=gh_mgr.secret_backend)
+                except Exception:
+                    pass
+            import threading
+            t = threading.Thread(target=engine.verify, kwargs={
+                'github_client': github_client, 
+                'fabric_client': self._get_fabric_client()
+            }, daemon=True)
+            t.start()
+            self.context['direct_json_response'] = {"status": "started"}
+        else:
+            self.context['direct_json_response'] = {"status": "error", "message": "No engine"}
+        return '/'
 
     def handle_github_disconnect(self, form_data) -> str:
         gh_mgr = self.context.get('github_manager')

@@ -11,9 +11,13 @@ from .gates import ReadinessGate, GateResult
 @dataclass
 class ComponentInventory:
     declared: List[str] = field(default_factory=list)
+    configured: List[str] = field(default_factory=list)
     enabled: List[str] = field(default_factory=list)
     authorized: List[str] = field(default_factory=list)
+    available: List[str] = field(default_factory=list)
+    functional: List[str] = field(default_factory=list)
     tested: List[str] = field(default_factory=list)
+    verified: List[str] = field(default_factory=list)
 
 @dataclass
 class BootstrapReport:
@@ -109,18 +113,24 @@ class ChatGPTBootstrapFormatter:
             f"  DELEGATION_CONTEXT_BUILT: {g(ReadinessGate.DELEGATION_CONTEXT_BUILT)}",
             f"PHASE K (CONTINUITY):",
             f"  CONTINUITY_COHERENT: {g(ReadinessGate.CONTINUITY_COHERENT)}",
+        ]
+        
+        def format_comp(name, comp):
+            return f"  {name}: {len(comp.declared)} DEC, {len(comp.configured)} CFG, {len(comp.enabled)} ENA, {len(comp.authorized)} AUT, {len(comp.available)} AVL, {len(comp.functional)} FNC, {len(comp.tested)} TST, {len(comp.verified)} VRF"
+        
+        lines.extend([
             f"---",
             f"INVENTORY SUMMARY:",
-            f"  Capabilities: {len(report.capabilities.declared)} declared, {len(report.capabilities.authorized)} authorized",
-            f"  Tools: {len(report.tools.declared)} declared, {len(report.tools.authorized)} authorized",
-            f"  Models: {len(report.models.declared)} declared, {len(report.models.authorized)} authorized",
-            f"  Workers: {len(report.workers.declared)} declared, {len(report.workers.authorized)} authorized",
-            f"  Connectors: {len(report.connectors.declared)} declared, {len(report.connectors.authorized)} authorized",
+            format_comp("Capabilities", report.capabilities),
+            format_comp("Tools", report.tools),
+            format_comp("Models", report.models),
+            format_comp("Workers", report.workers),
+            format_comp("Connectors", report.connectors),
             f"---",
             f"RUNTIME_ID: {runtime_id}",
             f"FABRIC_NODE: {node_id}",
             f"FABRIC_TENANT: {tenant_id}",
             f"POLICY_REVISION: {report.policy_revision}",
             f"LIMITS_VERIFIED: {report.limits_verified}",
-        ]
+        ])
         return "\n".join(lines)

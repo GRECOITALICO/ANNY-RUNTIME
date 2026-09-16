@@ -78,13 +78,8 @@ class GitHubFabricAdapter:
             self._org = config.fabric_org
             self._repo = config.fabric_repo
         else:
-            # Log a warning — this should never happen in production
-            logger.warning(
-                "GitHubFabricAdapter: fabric_org/fabric_repo not set via config. "
-                "Falling back to legacy constants. Set config.fabric_org and config.fabric_repo."
-            )
-            self._org = _LEGACY_FABRIC_ORG
-            self._repo = _LEGACY_FABRIC_REPO
+            logger.error("GitHubFabricAdapter: fabric_org/fabric_repo not configured. Missing required binding.")
+            raise FabricError("FABRIC_CONFIG_MISSING", "fabric_org and fabric_repo must be provided explicitly or via config.")
 
         logger.info(f"GitHubFabricAdapter bound to {self._org}/{self._repo}")
 
@@ -285,3 +280,29 @@ class GitHubFabricAdapter:
             signature=signature,
             verified=True
         )
+
+    def read_policy(self) -> Dict[str, Any]:
+        """Reads the fabric/policy.json config from the Fabric repo."""
+        try:
+            content = self.gh.get_file(self._org, self._repo, "fabric/policy.json")
+            return json.loads(content)
+        except GitHubNotFoundError:
+            raise FabricError("FABRIC_POLICY_MISSING", "fabric/policy.json not found in Fabric repo")
+        except json.JSONDecodeError as e:
+            raise FabricError("FABRIC_POLICY_MALFORMED", f"fabric/policy.json is malformed JSON: {e}")
+        except Exception as e:
+            logger.error(f"Failed to read fabric policy config: {e}")
+            raise FabricError("FABRIC_POLICY_ERROR", f"Could not read fabric/policy.json: {e}")
+
+    def read_contract(self) -> Dict[str, Any]:
+        """Reads the fabric/contract.json config from the Fabric repo."""
+        try:
+            content = self.gh.get_file(self._org, self._repo, "fabric/contract.json")
+            return json.loads(content)
+        except GitHubNotFoundError:
+            raise FabricError("FABRIC_CONTRACT_MISSING", "fabric/contract.json not found in Fabric repo")
+        except json.JSONDecodeError as e:
+            raise FabricError("FABRIC_CONTRACT_MALFORMED", f"fabric/contract.json is malformed JSON: {e}")
+        except Exception as e:
+            logger.error(f"Failed to read fabric contract config: {e}")
+            raise FabricError("FABRIC_CONTRACT_ERROR", f"Could not read fabric/contract.json: {e}")

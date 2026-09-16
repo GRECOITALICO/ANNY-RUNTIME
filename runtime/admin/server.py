@@ -196,25 +196,13 @@ def start_admin_server(host: str, port: int):
         except Exception as e:
             logger.warning(f"Startup discovery failed: {e}")
 
-    # Run Three-Plane Bootstrap via RuntimeEngine
+    # Start server with None for bootstrap_snapshot initially
     from runtime.core.engine import RuntimeEngine
     from runtime.core.config import RuntimeConfig
     
     config = RuntimeConfig(data_dir=str(data_dir))
     engine = RuntimeEngine(config)
     
-    try:
-        engine.startup(github_client=github_client, fabric_client=fabric_client)
-    except Exception as e:
-        logger.error(f"Runtime engine startup error: {e}")
-    
-    bootstrap_snapshot = {
-        'result': engine.bootstrap_report,
-        'discovered_repos': disc_repos_raw
-    }
-    
-    # Standalone CLI startup does not instantiate event_bus or runtime_engine.
-    # Passing None will be translated to UNKNOWN by AdminServer.
     server = AdminServer(
         host=host, 
         port=port, 
@@ -225,14 +213,23 @@ def start_admin_server(host: str, port: int):
         event_bus=None,
         runtime_engine=engine,
         local_operational_path=None,
-        bootstrap_snapshot=bootstrap_snapshot
+        bootstrap_snapshot={'result': None, 'discovered_repos': disc_repos_raw}
     )
     
     server.admin_context['execution_manager'] = execution_manager
     server.router.context['execution_manager'] = execution_manager
-
     
+    def run_bootstrap():
+        try:
+            engine.startup(github_client=github_client, fabric_client=fabric_client)
+        except Exception as e:
+            logger.error(f"Runtime engine startup error: {e}")
+
     if server.start():
+        import threading
+        t = threading.Thread(target=run_bootstrap, daemon=True)
+        t.start()
+        
         try:
             while True:
                 time.sleep(1)

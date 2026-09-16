@@ -564,7 +564,7 @@ class ThreePlaneBootstrap:
         if not rt_reachable:
             issues.append("Runtime not reachable — cannot reconcile")
 
-        # 4. Fabric state and runtime state should agree on runtime_id
+        # 4. Fabric state and runtime state should agree on runtime_id and fabric binding
         if ident and fab_reachable and rt_reachable:
             try:
                 fabric_state = self.fabric.read_fabric_state()
@@ -573,6 +573,19 @@ class ThreePlaneBootstrap:
                     issues.append(
                         f"{ident.runtime_id} not in fabric state registered_runtimes"
                     )
+                
+                # Check fabric_org and fabric_repo matching the identity/config
+                expected_org = self.fabric.org if self.fabric else (self.config.fabric_org if self.config else None)
+                expected_repo = self.fabric.repo if self.fabric else (self.config.fabric_repo if self.config else None)
+                
+                state_org = fabric_state.get("fabric_org")
+                state_repo = fabric_state.get("fabric_repo")
+                
+                if state_org and state_org != expected_org:
+                    issues.append(f"Fabric org mismatch: expected {expected_org}, got {state_org}")
+                if state_repo and state_repo != expected_repo:
+                    issues.append(f"Fabric repo mismatch: expected {expected_repo}, got {state_repo}")
+
             except FabricError as e:
                 issues.append(f"Could not read fabric state for reconciliation: {e}")
 
@@ -631,15 +644,7 @@ class ThreePlaneBootstrap:
             ))
             # Return the contract from the same read if present
             return raw.get("_contract")
-        except AttributeError:
-            # Fabric adapter doesn't implement read_policy yet — pass with stub
-            report.policy_revision = "STUB"
-            report.add_result(GateResult(
-                ReadinessGate.POLICY_SNAPSHOT_FRESH, True,
-                "Policy: STUB (read_policy not implemented on adapter)",
-                "STUB"
-            ))
-            return None
+
         except Exception as e:
             report.add_result(GateResult(ReadinessGate.POLICY_SNAPSHOT_FRESH, False, str(e)))
             return None
@@ -740,31 +745,22 @@ class ThreePlaneBootstrap:
 
             # Otherwise try to read from fabric
             if self.fabric:
-                try:
-                    raw = self.fabric.read_contract()
-                    from runtime.fabric.models import FabricContract
-                    contract = FabricContract.from_dict(raw)
-                    report.limits_verified = True
-                    report.add_result(GateResult(
-                        ReadinessGate.CONTRACTS_DISCOVERED, True,
-                        f"Contract: {contract.contract_id}",
-                        contract.contract_id
-                    ))
-                    return True
-                except AttributeError:
-                    # Fabric adapter doesn't implement read_contract yet
-                    report.limits_verified = False
-                    report.add_result(GateResult(
-                        ReadinessGate.CONTRACTS_DISCOVERED, True,
-                        "Contracts: STUB (read_contract not implemented)",
-                        "STUB"
-                    ))
-                    return True
-
+                raw = self.fabric.read_contract()
+                from runtime.fabric.models import FabricContract
+                contract = FabricContract.from_dict(raw)
+                report.limits_verified = True
+                report.add_result(GateResult(
+                    ReadinessGate.CONTRACTS_DISCOVERED, True,
+                    f"Contract: {contract.contract_id}",
+                    contract.contract_id
+                ))
+                return True
+            
             report.add_result(GateResult(
                 ReadinessGate.CONTRACTS_DISCOVERED, False,
                 "No fabric client — cannot discover contracts"
             ))
+            return False
             return False
         except Exception as e:
             report.add_result(GateResult(ReadinessGate.CONTRACTS_DISCOVERED, False, str(e)))
@@ -824,7 +820,11 @@ def _to_component_inventory(inv) -> ComponentInventory:
     """Convert a core.inventory.ComponentInventory → report.ComponentInventory."""
     return ComponentInventory(
         declared=list(inv.declared),
+        configured=list(inv.configured),
         enabled=list(inv.enabled),
         authorized=list(inv.authorized),
+        available=list(inv.available),
+        functional=list(inv.functional),
         tested=list(inv.tested),
+        verified=list(inv.verified),
     )
