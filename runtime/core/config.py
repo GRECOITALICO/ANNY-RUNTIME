@@ -13,25 +13,29 @@ def get_install_mode() -> str:
     """Returns the installation mode: 'system' or 'user'."""
     return os.environ.get("ANNY_INSTALL_MODE", "user").lower()
 
+
 def get_data_dir() -> Path:
     """Returns the canonical data directory based on install mode or explicit environment override."""
     env_dir = os.environ.get("ANNY_DATA_DIR")
     if env_dir:
         return Path(env_dir)
-    
+
     if get_install_mode() == "system":
         return Path("/var/lib/anny-runtime")
     return Path.home() / ".anny-runtime"
 
+
 def get_config_dir() -> Path:
     """Returns the directory containing configuration files."""
     return get_data_dir()
+
 
 def get_runtime_dir() -> Path:
     """Returns the path to the runtime executable/installation."""
     if get_install_mode() == "system":
         return Path("/opt/anny-runtime")
     return Path.home() / ".local/share/anny-runtime"
+
 
 def get_admin_port() -> int:
     """Returns the configured admin port."""
@@ -40,11 +44,16 @@ def get_admin_port() -> int:
         default_port = PREFERRED_PORT
     except ImportError:
         default_port = 3643
-        
+
     env_port = os.environ.get("ANNY_ADMIN_PORT")
     if env_port and env_port.isdigit():
         return int(env_port)
     return default_port
+
+
+def get_control_plane_url() -> str:
+    """Returns the optional Control Plane base URL."""
+    return os.environ.get("ANNY_CONTROL_PLANE_URL", "").strip().rstrip("/")
 
 
 @dataclass
@@ -60,17 +69,20 @@ class RuntimeConfig:
     update_check_interval_seconds: int = 86400
     update_channel: str = 'dev'
     log_level: str = 'INFO'
-    
+
     # Fabric config
     fabric_org: str = None
     fabric_repo: str = None
-    
+
+    # Control Plane telemetry/configuration. Bearer tokens remain environment-only.
+    control_plane_url: str = field(default_factory=get_control_plane_url)
+
     # Admin panel configuration
     admin_enabled: bool = True
     admin_host: str = '127.0.0.1'
     admin_port: int = field(default_factory=get_admin_port)
     admin_session_ttl_seconds: int = 1800
-    
+
     platform: str = field(default_factory=detect_platform)
 
     @classmethod
@@ -101,9 +113,9 @@ class RuntimeConfig:
                             config_data[key] = val
             except Exception:
                 pass
-        
+
         valid_keys = cls.__dataclass_fields__.keys()
-        
+
         # Handle nested admin config
         admin_config = config_data.get('admin', {})
         if isinstance(admin_config, dict):
@@ -111,7 +123,7 @@ class RuntimeConfig:
                 flat_key = f'admin_{ak}'
                 if flat_key in valid_keys:
                     config_data[flat_key] = av
-                    
+
         filtered_data = {k: v for k, v in config_data.items() if k in valid_keys}
         return cls(**filtered_data)
 
@@ -120,14 +132,13 @@ class RuntimeConfig:
         import yaml
         config_path = get_config_dir() / "config.yaml"
         get_config_dir().mkdir(parents=True, exist_ok=True)
-        
-        # Serialize fields, avoiding complex nesting for simplicity
+
         data = {k: v for k, v in self.__dict__.items() if not k.startswith('_')}
-        
+
         # Put admin configs into an admin block
         admin_keys = [k for k in data.keys() if k.startswith('admin_')]
         if admin_keys:
             data['admin'] = {k.replace('admin_', ''): data.pop(k) for k in admin_keys}
-            
+
         with open(config_path, "w", encoding="utf-8") as f:
             yaml.dump(data, f, default_flow_style=False)
