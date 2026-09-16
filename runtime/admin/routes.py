@@ -345,28 +345,84 @@ class AdminRouter:
 
         repo_dtos = [RepositoryDTO(full_name=r.full_name, name=r.name, owner=r.owner, visibility=r.visibility, archived=r.archived, default_branch=r.default_branch) for r in disc_repos_raw]
 
-        # Adapt BootstrapReport to old ContinuityDTO for UI
-        status_val = "READY" if result.anny_ready else "BLOCKED"
-        recon_status = "COHERENT" if result.anny_ready else "INCOHERENT"
+        # Adapt result to ContinuityDTO — two possible result types may be present:
+        #   1. runtime.bootstrap.report.BootstrapReport  (ThreePlaneBootstrap output)
+        #   2. runtime.continuity.state.BootstrapResult  (CustomerZeroBootstrapResolver output)
+        from runtime.bootstrap.report import BootstrapReport as ThreePlaneReport
+        if isinstance(result, ThreePlaneReport):
+            # Three-plane bootstrap result
+            status_val = "READY" if result.anny_ready else "BLOCKED"
+            recon_status = "COHERENT" if result.anny_ready else "INCOHERENT"
+            fabric_node = result.fabric_node
+
+            engine = self.context.get('runtime_engine')
+            config = getattr(engine, 'config', None) if engine else None
+            fabric_org = getattr(config, 'fabric_org', None) if config else None
+            fabric_repo = getattr(config, 'fabric_repo', None) if config else None
+            canonical_src = f"{fabric_org}/{fabric_repo}" if (fabric_org and fabric_repo) else "NOT_CONFIGURED"
+            current_mission = None
+            next_action = None
+            blockers = []
+        elif hasattr(result, 'status') and hasattr(result, 'canonical_state') and not hasattr(result, 'anny_ready'):
+            # Continuity BootstrapResult (runtime.continuity.state.BootstrapResult)
+            from runtime.continuity.state import ContinuityStatus
+            cs = result.status
+            if cs == ContinuityStatus.CONSISTENT:
+                status_val = "CONSISTENT"
+                recon_status = "COHERENT"
+            elif cs == ContinuityStatus.BLOCKED:
+                status_val = "BLOCKED"
+                recon_status = "INCOHERENT"
+            elif isinstance(cs, str):
+                status_val = cs
+                recon_status = "COHERENT" if cs == "CONSISTENT" else "UNKNOWN"
+            else:
+                status_val = getattr(cs, 'value', str(cs))
+                recon_status = "UNKNOWN"
+            fabric_node = None
+            canonical_src = "NOT_CONFIGURED"
+            canonical_state = result.canonical_state
+            current_mission = None
+            next_action = None
+            if canonical_state:
+                cm = canonical_state.current_mission
+                current_mission = cm.id if cm else None
+                na = canonical_state.next_action
+                next_action = na.action if na else None
+            blockers = [
+                {"id": getattr(b, 'id', ''), "description": getattr(b, 'description', '')}
+                for b in getattr(result, 'blockers', [])
+            ]
+        else:
+            # Unknown/mock result type — safe defaults
+            anny_ready = getattr(result, 'anny_ready', False)
+            status_val = "READY" if anny_ready else "BLOCKED"
+            recon_status = "COHERENT" if anny_ready else "INCOHERENT"
+            fabric_node = getattr(result, 'fabric_node', None)
+            canonical_src = "NOT_CONFIGURED"
+            current_mission = None
+            next_action = None
+            blockers = []
 
         engine = self.context.get('runtime_engine')
-        config = engine.config if engine else None
-        fabric_org = config.fabric_org if config and hasattr(config, 'fabric_org') else None
-        fabric_repo = config.fabric_repo if config and hasattr(config, 'fabric_repo') else None
-        canonical_src = f"{fabric_org}/{fabric_repo}" if (fabric_org and fabric_repo) else "NOT_CONFIGURED"
+        config = getattr(engine, 'config', None) if engine else None
+        fabric_org = getattr(config, 'fabric_org', None) if config else None
+        fabric_repo = getattr(config, 'fabric_repo', None) if config else None
+        if fabric_org and fabric_repo and canonical_src == "NOT_CONFIGURED":
+            canonical_src = f"{fabric_org}/{fabric_repo}"
 
         return ContinuityDTO(
             status=status_val,
             canonical_source=canonical_src,
             canonical_revision=None,
-            current_mission=None,
+            current_mission=current_mission,
             current_task=None,
-            next_action=None,
-            blocker_count=0,
+            next_action=next_action,
+            blocker_count=len(blockers),
             reconciliation_status=recon_status,
             github_status=gh_status_str,
             runtime_status=rt_status,
-            fabric_status="CONNECTED" if result.fabric_node else "NOT_CONFIGURED",
+            fabric_status="CONNECTED" if fabric_node else "NOT_CONFIGURED",
             organizations=[],
             repositories=repo_dtos,
             blockers=[],
