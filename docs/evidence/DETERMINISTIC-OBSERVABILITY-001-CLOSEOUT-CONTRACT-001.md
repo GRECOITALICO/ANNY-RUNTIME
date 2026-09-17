@@ -85,17 +85,16 @@ the `current_documentation_anchor`.
 
 ## 5. Current Documentation Anchor
 
-The `current_documentation_anchor.commit_sha` identifies the durable Git commit
-that contains the current governing documentation for the milestone.
+The `current_documentation_anchor.commit_sha` signifies the **stable governing-documentation anchor for the milestone**. It identifies the durable Git commit that contains the currently prevailing governing documentation.
 
 **Requirements:**
 - Must exist and be resolvable in GitHub.
 - Must be reachable from `refs/heads/main`.
-- Is updated to the most recent evidence/governance commit after each serial.
+- Must not change due to simple ledger updates; it only changes when the governing contractual documentation actually changes.
 - Is **never** set to a value that does not yet exist (no forward reference).
-- Is **not** required to equal the implementation commit or any specific
-  evidence commit; it is simply the most recent governance commit at time of
-  writing.
+- Is **not** required to be the current ledger state commit.
+- Is **not** required to be the implementation commit.
+- Does **not** require self-reference.
 
 ---
 

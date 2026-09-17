@@ -1,0 +1,16 @@
+{
+"serial": "AG-020",
+"previous_main": "f8a5c77d8bc498618d2ad5338e07b7404cd7ce39",
+"observability": "VERIFIED",
+"substrate": "VERIFIED",
+"sync_001_f": "VERIFIED",
+"anchor_semantics": "STABLE_GOVERNING_DOCUMENTATION",
+"anchor_sha": "f8a5c77d8bc498618d2ad5338e07b7404cd7ce39",
+"contract_tests": {
+"collected": 7,
+"passed": 7,
+"failed": 0,
+"errors": 0
+},
+"decision": "RECONCILED"
+}
