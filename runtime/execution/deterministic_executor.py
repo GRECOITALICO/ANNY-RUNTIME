@@ -2,106 +2,115 @@ import os
 import json
 import time
 import hashlib
+import subprocess
 from datetime import datetime, timezone
 from typing import Dict, Any
 
 from runtime.execution.models import Task, TaskExecutionContext, ExecutionStatus, FailureReason
 from runtime.workspace.ephemeral import EphemeralWorkspaceManager
 
+
 class ExecutorLimitsExceeded(Exception):
     pass
+
 
 class ExecutorSecurityError(Exception):
     pass
 
+
 class DeterministicExecutor:
+    """Execute local deterministic capabilities with bounded, auditable behavior."""
+
     def __init__(self, workspace_manager: EphemeralWorkspaceManager):
         self.workspace_manager = workspace_manager
-        # Hardcoded version for reproducibility
-        self.runtime_version = "1.0.0"
-        self.tool_version = "1.0.0"
+        self.runtime_version = "1.1.0"
+        self.tool_version = "1.1.0"
 
     def execute(self, task: Task, context: TaskExecutionContext) -> None:
-        """
-        Executes a deterministic capability with strict lifecycle management.
-        """
         if context.status != ExecutionStatus.QUEUED:
             context.failure_reason = FailureReason.INVALID_TASK
             context.status = ExecutionStatus.FAILED
             context.error_message = "Execution context is not QUEUED"
             return
-            
+
         context.status = ExecutionStatus.RUNNING
         context.started_at = datetime.now(timezone.utc)
-        
-        # Determine actual capability
-        supported = (
-            "filesystem.inspect", "filesystem.hash", "repository.inspect"
-        )
-        if task.capability_id not in supported:
+        supported = {
+            "filesystem.inspect": self._execute_filesystem_inspect,
+            "filesystem.list": self._execute_filesystem_list,
+            "filesystem.hash": self._execute_filesystem_hash,
+            "repository.inspect": self._execute_repository_inspect,
+            "repository.search": self._execute_repository_search,
+            "repository.read": self._execute_repository_read,
+            "repository.diff": self._execute_repository_diff,
+            "artifact.metadata": self._execute_artifact_metadata,
+        }
+        handler = supported.get(task.capability_id)
+        if handler is None:
             context.status = ExecutionStatus.FAILED
             context.failure_reason = FailureReason.INVALID_TASK
-            context.error_message = f"Unsupported capability: {task.capability_id}"
+            context.error_message = f"Unsupported deterministic capability: {task.capability_id}"
             return
-            
+
         try:
-            if task.capability_id == "filesystem.inspect":
-                self._execute_filesystem_inspect(task, context)
-            elif task.capability_id == "filesystem.hash":
-                self._execute_filesystem_hash(task, context)
-            elif task.capability_id == "repository.inspect":
-                self._execute_repository_inspect(task, context)
-                
+            handler(task, context)
             if context.status == ExecutionStatus.RUNNING:
                 context.status = ExecutionStatus.SUCCEEDED
-        except ExecutorLimitsExceeded as e:
+        except ExecutorLimitsExceeded as exc:
             context.status = ExecutionStatus.LIMIT_EXCEEDED
             context.failure_reason = FailureReason.LIMIT_EXCEEDED
-            context.error_message = str(e)
-        except ExecutorSecurityError as e:
+            context.error_message = str(exc)
+        except ExecutorSecurityError as exc:
             context.status = ExecutionStatus.FAILED
             context.failure_reason = FailureReason.AUTHORIZATION_DENIED
-            context.error_message = str(e)
-        except TimeoutError as e:
+            context.error_message = str(exc)
+        except TimeoutError as exc:
             context.status = ExecutionStatus.TIMED_OUT
             context.failure_reason = FailureReason.TIMEOUT
-            context.error_message = str(e)
-        except Exception as e:
+            context.error_message = str(exc)
+        except Exception as exc:
             context.status = ExecutionStatus.FAILED
             context.failure_reason = FailureReason.EXECUTION_ERROR
-            context.error_message = str(e)
+            context.error_message = str(exc)
         finally:
             context.completed_at = datetime.now(timezone.utc)
             context.duration_ms = int((context.completed_at - context.started_at).total_seconds() * 1000)
             self._finalize_workspace(task, context)
 
-    def _hash_dict(self, d: dict) -> str:
-        s = json.dumps(d, sort_keys=True).encode('utf-8')
-        return hashlib.sha256(s).hexdigest()
-
-    def _execute_filesystem_inspect(self, task: Task, context: TaskExecutionContext):
-        # 1. Enforce Timeout / Deadline
+    def _deadline(self, context: TaskExecutionContext) -> None:
         if datetime.now(timezone.utc) > context.deadline:
-            raise TimeoutError("Deadline exceeded before execution started")
-            
+            raise TimeoutError("Deadline exceeded")
+
+    def _target(self, task: Task) -> str:
         target_path = task.input.get("path")
-        if not target_path:
+        if not isinstance(target_path, str) or not target_path:
             raise ValueError("Missing 'path' in input")
-            
-        # 2. Security Check (Forbidden paths)
+        return os.path.abspath(target_path)
+
+    def _enforce_path(self, path: str) -> None:
         forbidden_paths = [
             "/var/lib/anny-runtime/secrets",
             "/home/anny/.ssh",
-            "/root"
+            "/root",
         ]
+        for forbidden in forbidden_paths:
+            if path == os.path.abspath(forbidden) or path.startswith(os.path.abspath(forbidden) + os.sep):
+                raise ExecutorSecurityError(f"Access to {forbidden} is explicitly denied")
+
+    def _limit_output(self, context: TaskExecutionContext, result: Dict[str, Any]) -> None:
+        encoded = json.dumps(result, sort_keys=True, default=str).encode("utf-8")
+        max_out = context.resource_limits.get("max_output_size", 1024 * 1024)
+        if len(encoded) > max_out:
+            raise ExecutorLimitsExceeded("Output size exceeded maximum limit")
+        context.result = result
+
+    def _execute_filesystem_inspect(self, task: Task, context: TaskExecutionContext) -> None:
+        self._deadline(context)
+        target_path = task.input.get("path")
+        if not isinstance(target_path, str) or not target_path:
+            raise ValueError("Missing 'path' in input")
         abs_target = os.path.abspath(target_path)
-        for fp in forbidden_paths:
-            if abs_target.startswith(os.path.abspath(fp)):
-                raise ExecutorSecurityError(f"Access to {fp} is explicitly denied")
-                
-        # 3. Simulate tool invocation
-        start_time = time.time()
-        
+        self._enforce_path(abs_target)
         if not os.path.exists(abs_target):
             result = {"error": "Path does not exist", "path": target_path}
         else:
@@ -112,137 +121,222 @@ class DeterministicExecutor:
                 "is_file": os.path.isfile(abs_target),
                 "size_bytes": stat.st_size,
                 "mode": oct(stat.st_mode),
-                "mtime": stat.st_mtime
+                "mtime": stat.st_mtime,
             }
-            
-        # 4. Check limits
-        max_out = context.resource_limits.get("max_output_size", 1024 * 1024)
-        result_json = json.dumps(result)
-        if len(result_json.encode('utf-8')) > max_out:
-            raise ExecutorLimitsExceeded("Output size exceeded maximum limit")
-            
-        if datetime.now(timezone.utc) > context.deadline:
-            raise TimeoutError("Deadline exceeded during execution")
-            
-        context.result = result
+        self._limit_output(context, result)
+        self._deadline(context)
 
-    def _execute_filesystem_hash(self, task: Task, context: TaskExecutionContext):
-        if datetime.now(timezone.utc) > context.deadline:
-            raise TimeoutError("Deadline exceeded before execution started")
-            
+    def _execute_filesystem_list(self, task: Task, context: TaskExecutionContext) -> None:
+        self._deadline(context)
         target_path = task.input.get("path")
-        if not target_path:
+        if not isinstance(target_path, str) or not target_path:
             raise ValueError("Missing 'path' in input")
-            
         abs_target = os.path.abspath(target_path)
+        self._enforce_path(abs_target)
+        if not os.path.isdir(abs_target):
+            result = {"error": "Directory does not exist", "path": target_path, "entries": []}
+        else:
+            entries = []
+            for name in sorted(os.listdir(abs_target)):
+                full = os.path.join(abs_target, name)
+                entries.append({
+                    "name": name,
+                    "is_dir": os.path.isdir(full),
+                    "is_file": os.path.isfile(full),
+                    "size_bytes": os.path.getsize(full) if os.path.isfile(full) else None,
+                })
+            result = {"path": target_path, "entries": entries}
+        self._limit_output(context, result)
+
+    def _execute_filesystem_hash(self, task: Task, context: TaskExecutionContext) -> None:
+        self._deadline(context)
+        target_path = task.input.get("path")
+        if not isinstance(target_path, str) or not target_path:
+            raise ValueError("Missing 'path' in input")
+        abs_target = os.path.abspath(target_path)
+        self._enforce_path(abs_target)
         if not os.path.exists(abs_target):
             result = {"error": "Path does not exist", "path": target_path}
         elif os.path.isdir(abs_target):
             result = {"error": "Cannot hash a directory", "path": target_path}
         else:
-            with open(abs_target, "rb") as f:
-                file_hash = hashlib.sha256(f.read()).hexdigest()
-            result = {"path": target_path, "sha256": file_hash}
-            
-        max_out = context.resource_limits.get("max_output_size", 1024 * 1024)
-        if len(json.dumps(result).encode('utf-8')) > max_out:
-            raise ExecutorLimitsExceeded("Output size exceeded maximum limit")
-            
-        context.result = result
+            digest = hashlib.sha256()
+            with open(abs_target, "rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+                    self._deadline(context)
+            result = {"path": target_path, "algorithm": "sha256", "sha256": digest.hexdigest()}
+        self._limit_output(context, result)
 
-    def _execute_repository_inspect(self, task: Task, context: TaskExecutionContext):
-        if datetime.now(timezone.utc) > context.deadline:
-            raise TimeoutError("Deadline exceeded before execution started")
-            
+    def _git(self, repo_path: str, args: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "-C", repo_path, *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+    def _repository_path(self, task: Task) -> str:
         repo_path = task.input.get("path")
-        if not repo_path:
-            raise ValueError("Missing 'path' in input")
-            
+        if not isinstance(repo_path, str) or not repo_path:
+            raise ValueError("Missing repository 'path' in input")
         abs_target = os.path.abspath(repo_path)
+        self._enforce_path(abs_target)
+        if not os.path.exists(os.path.join(abs_target, ".git")):
+            raise ValueError("Path is not a Git repository")
+        return abs_target
+
+    def _execute_repository_inspect(self, task: Task, context: TaskExecutionContext) -> None:
+        self._deadline(context)
+        repo_path = task.input.get("path")
+        if not isinstance(repo_path, str) or not repo_path:
+            raise ValueError("Missing 'path' in input")
+        abs_target = os.path.abspath(repo_path)
+        self._enforce_path(abs_target)
         if not os.path.exists(abs_target):
             result = {"error": "Repository path does not exist", "path": repo_path}
         else:
             is_git = os.path.exists(os.path.join(abs_target, ".git"))
+            head = self._git(abs_target, ["rev-parse", "HEAD"]).stdout.strip() if is_git else None
+            result = {"path": repo_path, "is_git_repository": is_git, "head": head}
+        self._limit_output(context, result)
+
+    def _execute_repository_search(self, task: Task, context: TaskExecutionContext) -> None:
+        self._deadline(context)
+        repo_path = self._repository_path(task)
+        pattern = task.input.get("pattern")
+        if not isinstance(pattern, str) or not pattern:
+            raise ValueError("Missing search 'pattern'")
+        result = self._git(repo_path, ["grep", "-n", "-I", "--", pattern])
+        lines = sorted([line for line in result.stdout.splitlines() if line])
+        self._limit_output(context, {"repository": repo_path, "pattern": pattern, "matches": lines, "exit_code": result.returncode})
+
+    def _execute_repository_read(self, task: Task, context: TaskExecutionContext) -> None:
+        self._deadline(context)
+        repo_path = self._repository_path(task)
+        head = self._git(repo_path, ["rev-parse", "HEAD"]).stdout.strip()
+        branch = self._git(repo_path, ["branch", "--show-current"]).stdout.strip()
+        status = self._git(repo_path, ["status", "--porcelain=v1"]).stdout.splitlines()
+        result = {
+            "repository": repo_path,
+            "head": head,
+            "branch": branch,
+            "dirty": bool(status),
+            "status_entries": sorted(status),
+        }
+        self._limit_output(context, result)
+
+    def _execute_repository_diff(self, task: Task, context: TaskExecutionContext) -> None:
+        self._deadline(context)
+        repo_path = self._repository_path(task)
+        base = task.input.get("base")
+        head = task.input.get("head") or "HEAD"
+        if not isinstance(base, str) or not base:
+            raise ValueError("Missing diff 'base'")
+        result = self._git(repo_path, ["diff", "--no-ext-diff", "--unified=3", base, head])
+        diff_text = result.stdout
+        self._limit_output(context, {
+            "repository": repo_path,
+            "base": base,
+            "head": head,
+            "exit_code": result.returncode,
+            "diff": diff_text,
+        })
+
+    def _execute_artifact_metadata(self, task: Task, context: TaskExecutionContext) -> None:
+        self._deadline(context)
+        target_path = task.input.get("path")
+        if not isinstance(target_path, str) or not target_path:
+            raise ValueError("Missing artifact 'path' in input")
+        abs_target = os.path.abspath(target_path)
+        self._enforce_path(abs_target)
+        if not os.path.exists(abs_target):
+            result = {"error": "Artifact does not exist", "path": target_path}
+        else:
+            stat = os.stat(abs_target)
             result = {
-                "path": repo_path,
-                "is_git_repository": is_git,
-                "status": "clean" if is_git else "unknown"
+                "path": target_path,
+                "is_file": os.path.isfile(abs_target),
+                "is_dir": os.path.isdir(abs_target),
+                "size_bytes": stat.st_size,
+                "mtime": stat.st_mtime,
+                "sha256": self._sha256_path(abs_target) if os.path.isfile(abs_target) else None,
             }
-            
-        max_out = context.resource_limits.get("max_output_size", 1024 * 1024)
-        if len(json.dumps(result).encode('utf-8')) > max_out:
-            raise ExecutorLimitsExceeded("Output size exceeded maximum limit")
-            
-        context.result = result
+        self._limit_output(context, result)
 
+    def _sha256_path(self, path: str) -> str:
+        digest = hashlib.sha256()
+        with open(path, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
+    def _hash_dict(self, value: dict) -> str:
+        encoded = json.dumps(value, sort_keys=True, default=str).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
 
-    def _finalize_workspace(self, task: Task, context: TaskExecutionContext):
-        """
-        Write Observability, Reproducibility, Evidence, and Result to the workspace.
-        """
+    def _finalize_workspace(self, task: Task, context: TaskExecutionContext) -> None:
         ws_path = context.workspace_path
         if not os.path.exists(ws_path):
             return
-            
-        # result.json
-        res_file = os.path.join(ws_path, "result", "result.json")
-        res_data = {
+
+        os.makedirs(os.path.join(ws_path, "logs"), exist_ok=True)
+        os.makedirs(os.path.join(ws_path, "evidence"), exist_ok=True)
+        os.makedirs(os.path.join(ws_path, "result"), exist_ok=True)
+        os.makedirs(os.path.join(ws_path, "metadata"), exist_ok=True)
+
+        result_file = os.path.join(ws_path, "result", "result.json")
+        result_data = {
             "status": context.status.value,
             "failure_reason": context.failure_reason.value if context.failure_reason else None,
             "error_message": context.error_message,
-            "data": context.result
+            "data": context.result,
         }
-        with open(res_file, "w") as f:
-            json.dump(res_data, f, indent=2)
-            
-        # observability.json
-        obs_file = os.path.join(ws_path, "logs", "observability.json")
-        obs_data = {
+        with open(result_file, "w", encoding="utf-8") as handle:
+            json.dump(result_data, handle, indent=2, sort_keys=True, default=str)
+
+        observability = {
             "execution_started": context.started_at.isoformat() if context.started_at else None,
             "execution_completed": context.completed_at.isoformat() if context.completed_at else None,
             "duration_ms": context.duration_ms,
             "exit_code": 0 if context.status == ExecutionStatus.SUCCEEDED else 1,
             "workspace_size": self.workspace_manager.get_workspace_size(ws_path),
-            "result_size": os.path.getsize(res_file) if os.path.exists(res_file) else 0,
+            "result_size": os.path.getsize(result_file),
+            "capability_id": task.capability_id,
             "events": [
                 "execution_started",
-                "tool_invoked: filesystem.inspect",
-                "tool_completed: filesystem.inspect",
-                "execution_completed"
-            ]
+                f"capability_invoked: {task.capability_id}",
+                "execution_completed",
+            ],
         }
-        with open(obs_file, "w") as f:
-            json.dump(obs_data, f, indent=2)
-            
-        # reproducibility.json
+        with open(os.path.join(ws_path, "logs", "observability.json"), "w", encoding="utf-8") as handle:
+            json.dump(observability, handle, indent=2, sort_keys=True)
+
         input_hash = self._hash_dict(task.input)
-        output_hash = self._hash_dict(res_data)
-        evidence_hash = self._hash_dict(obs_data) # Simplified: evidence is obs data for now
-        
-        rep_file = os.path.join(ws_path, "metadata", "reproducibility.json")
-        rep_data = {
+        output_hash = self._hash_dict(result_data)
+        evidence_hash = self._hash_dict(observability)
+        context.input_hash = input_hash
+        context.result_hash = output_hash
+        context.evidence_ref = os.path.join(ws_path, "evidence", "evidence.json")
+
+        reproducibility = {
             "task_id": task.task_id,
             "execution_id": context.execution_id,
             "runtime_version": self.runtime_version,
             "tool_version": self.tool_version,
+            "capability_id": task.capability_id,
             "input_hash": input_hash,
             "output_hash": output_hash,
-            "evidence_hash": evidence_hash
+            "evidence_hash": evidence_hash,
         }
-        with open(rep_file, "w") as f:
-            json.dump(rep_data, f, indent=2)
-            
-        # evidence.json
-        ev_file = os.path.join(ws_path, "evidence", "evidence.json")
-        with open(ev_file, "w") as f:
-            json.dump({"observability": obs_data, "reproducibility": rep_data}, f, indent=2)
-            
-        # Workspace size limit check during finalize
+        with open(os.path.join(ws_path, "metadata", "reproducibility.json"), "w", encoding="utf-8") as handle:
+            json.dump(reproducibility, handle, indent=2, sort_keys=True)
+        with open(context.evidence_ref, "w", encoding="utf-8") as handle:
+            json.dump({"observability": observability, "reproducibility": reproducibility}, handle, indent=2, sort_keys=True)
+
         max_ws = context.resource_limits.get("max_workspace_size", 10 * 1024 * 1024)
-        if obs_data["workspace_size"] > max_ws:
+        if observability["workspace_size"] > max_ws:
             context.status = ExecutionStatus.LIMIT_EXCEEDED
             context.failure_reason = FailureReason.LIMIT_EXCEEDED
             context.error_message = "Workspace size limit exceeded"
-            
-        # Depending on policy, cleanup could happen here, but we leave it to the caller to extract results first.
