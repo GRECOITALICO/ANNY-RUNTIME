@@ -48,26 +48,25 @@ class TelemetryAggregator:
             "average_duration": 0.0
         }
         
-        def _parse_ts(ts_str):
-            if not ts_str:
-                return datetime.min.replace(tzinfo=timezone.utc)
+        valid_events = []
+        for event in events:
+            if not event.timestamp:
+                continue
             try:
-                dt = dateutil.parser.isoparse(ts_str)
+                dt = dateutil.parser.isoparse(event.timestamp)
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
                 else:
                     dt = dt.astimezone(timezone.utc)
-                return dt
+                event._parsed_dt = dt
+                valid_events.append(event)
             except (ValueError, TypeError, dateutil.parser.ParserError):
-                return datetime.min.replace(tzinfo=timezone.utc)
-
-        def safe_timestamp(e):
-            return _parse_ts(e.timestamp)
+                continue
 
         execution_states: Dict[str, Dict[str, Any]] = {}
         # Collector query returns newest-first by insertion. Sort chronologically by timestamp
         # to ensure terminal states (SUCCEEDED) are not overwritten by earlier states (QUEUED).
-        for event in sorted(events, key=safe_timestamp):
+        for event in sorted(valid_events, key=lambda e: e._parsed_dt):
             if not event.execution_id:
                 continue
                 
@@ -78,11 +77,11 @@ class TelemetryAggregator:
                     "status": "UNKNOWN",
                     "duration_ms": None,
                     "timestamp": event.timestamp,
-                    "_parsed_timestamp": safe_timestamp(event)
+                    "_parsed_timestamp": event._parsed_dt
                 }
             
             state = execution_states[event.execution_id]
-            ev_parsed = safe_timestamp(event)
+            ev_parsed = event._parsed_dt
             
             # Update values if present in newer events
             if event.department_id:
@@ -126,8 +125,9 @@ class TelemetryAggregator:
             if state["duration_ms"] is not None:
                 global_stats["durations"].append(state["duration_ms"])
                 
-            if not global_stats["latest_execution"] or state["_parsed_timestamp"] > _parse_ts(global_stats["latest_execution"]):
+            if not global_stats["latest_execution"] or state["_parsed_timestamp"] > global_stats.get("_latest_execution_dt", datetime.min.replace(tzinfo=timezone.utc)):
                 global_stats["latest_execution"] = state["timestamp"]
+                global_stats["_latest_execution_dt"] = state["_parsed_timestamp"]
 
             # Department
             departments[dept]["total"] += 1
@@ -144,18 +144,23 @@ class TelemetryAggregator:
             if state["duration_ms"] is not None:
                 departments[dept]["durations"].append(state["duration_ms"])
                 
-            if not departments[dept]["latest_execution"] or state["_parsed_timestamp"] > _parse_ts(departments[dept]["latest_execution"]):
+            if not departments[dept]["latest_execution"] or state["_parsed_timestamp"] > departments[dept].get("_latest_execution_dt", datetime.min.replace(tzinfo=timezone.utc)):
                 departments[dept]["latest_execution"] = state["timestamp"]
+                departments[dept]["_latest_execution_dt"] = state["_parsed_timestamp"]
 
         # Calculate averages
         if global_stats["durations"]:
             global_stats["average_duration"] = sum(global_stats["durations"]) / len(global_stats["durations"])
         del global_stats["durations"]
+        if "_latest_execution_dt" in global_stats:
+            del global_stats["_latest_execution_dt"]
         
         for dept, stats in departments.items():
             if stats["durations"]:
                 stats["average_duration"] = sum(stats["durations"]) / len(stats["durations"])
             del stats["durations"]
+            if "_latest_execution_dt" in stats:
+                del stats["_latest_execution_dt"]
 
         return {
             "global": global_stats,

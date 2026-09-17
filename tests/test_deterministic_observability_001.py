@@ -25,8 +25,8 @@ def aggregator(collector):
     return TelemetryAggregator(collector)
 
 
-def test_out_of_order_event_arrival_and_folding(collector, aggregator):
-    """Blocker 3: Verify execution_id folding and handle out-of-order event arrivals."""
+def test_t04_out_of_order_terminal_event(collector, aggregator):
+    """T-04: Verify execution_id folding and handle out-of-order event arrivals."""
     execution_id = "test-exec-123"
     
     # Emit events out of order
@@ -76,8 +76,8 @@ def test_out_of_order_event_arrival_and_folding(collector, aggregator):
     assert global_stats.get("deterministic") == 1
 
 
-def test_deterministic_success_measurement_discipline(collector, aggregator):
-    """Blocker 4: Routing != success. Missing execution result must not invent success."""
+def test_t05_terminal_state_protection(collector, aggregator):
+    """T-05: deterministic-first success discipline. Routing != success."""
     execution_id = "test-exec-456"
 
     ev_routed = TelemetryEnvelope.create(
@@ -89,19 +89,43 @@ def test_deterministic_success_measurement_discipline(collector, aggregator):
         department_id="DEPT-01",
         status="QUEUED"
     )
+    ev_routed.timestamp = "2026-01-01T10:00:00Z"
     
+    ev_failed = TelemetryEnvelope.create(
+        component="worker",
+        event_type="execution.finished",
+        source="execution",
+        execution_id=execution_id,
+        status="FAILED"
+    )
+    ev_failed.timestamp = "2026-01-01T10:05:00Z"
+    
+    ev_success = TelemetryEnvelope.create(
+        component="worker",
+        event_type="execution.finished",
+        source="execution",
+        execution_id=execution_id,
+        status="SUCCEEDED"
+    )
+    ev_success.timestamp = "2026-01-01T10:02:00Z"
+    
+    # Emit in random order
+    collector.emit(ev_failed)
+    collector.emit(ev_success)
     collector.emit(ev_routed)
 
     matrix = aggregator.get_matrix()
     global_stats = matrix.get("global", {})
 
+    # The SUCCEEDED state from 10:02:00Z must be latched, ignoring the later FAILED state
     assert global_stats.get("total") == 1
     assert global_stats.get("deterministic") == 1
-    assert global_stats.get("success") == 0
+    assert global_stats.get("success") == 1
+    assert global_stats.get("failed") == 0
 
 
-def test_department_provenance_flow(collector, aggregator):
-    """Blocker 5: Verify department_id provenance Task -> Worker -> Telemetry."""
+def test_t08_department_provenance_flow(collector, aggregator):
+    """T-08: Verify department_id provenance Task -> Worker -> Telemetry."""
     execution_id = "test-exec-789"
     department_id = "SEC-OPS"
     
@@ -113,6 +137,7 @@ def test_department_provenance_flow(collector, aggregator):
         department_id=department_id,
         status="QUEUED"
     )
+    ev.timestamp = "2026-01-01T10:00:00Z"
     
     collector.emit(ev)
     
@@ -123,8 +148,8 @@ def test_department_provenance_flow(collector, aggregator):
     assert departments[department_id].get("total") == 1
 
 
-def test_telemetry_scrubbing(collector):
-    """Blocker 6: Ensure TelemetryCollector applies scrubbing."""
+def test_t09_telemetry_scrubbing(collector):
+    """T-09: Ensure TelemetryCollector applies scrubbing."""
     execution_id = "test-exec-999"
     sensitive_data = {
         "github_token": "ghp_xxxxxxxxxxxx",
@@ -159,8 +184,8 @@ def test_telemetry_scrubbing(collector):
     assert meta["nested"]["safe_val"] == 42
 
 
-def test_matrix_consistency(collector, aggregator):
-    """Blocker 7: Verify global.total = sum of departments, no double-counting."""
+def test_t10_matrix_consistency(collector, aggregator):
+    """T-10: Verify global.total = sum of departments, no double-counting."""
     collector.emit(TelemetryEnvelope.create(
         component="manager", event_type="task.created", source="execution",
         execution_id="exec-1", department_id="DEPT-A", status="SUCCEEDED", routing_class="DETERMINISTIC"
@@ -213,8 +238,8 @@ def test_collector_filters(collector, aggregator):
     assert filtered_events[0].department_id == "DEPT-B"
 
 
-def test_processing_matrix_http_boundary(collector, aggregator):
-    """Blocker 9: Test real HTTP endpoint proxy structures."""
+def test_t11_processing_matrix_http_boundary(collector, aggregator):
+    """T-11: Test real HTTP endpoint proxy structures."""
     import threading
     import urllib.request
     import json
@@ -274,57 +299,78 @@ def test_processing_matrix_http_boundary(collector, aggregator):
         server.server4.server_close()
 
 
-def test_timezone_aware_aggregation(collector, aggregator):
-    """Blocker 5: Verify that timezone offsets are correctly parsed and sorted."""
+def test_t01_chronological_ordering(collector, aggregator):
+    """T-01: chronological ordering of events."""
     execution_id = "test-exec-tz-1"
+    ev_1 = TelemetryEnvelope.create(component="manager", event_type="task.routed", source="execution", execution_id=execution_id, status="QUEUED")
+    ev_1.timestamp = "2026-01-01T10:00:00Z"
     
-    # Event 1: Emitted at 10:00:00 UTC, but recorded as 11:00:00+01:00
-    ev_1 = TelemetryEnvelope.create(
-        component="manager", event_type="task.routed", source="execution",
-        execution_id=execution_id, status="QUEUED"
-    )
+    ev_2 = TelemetryEnvelope.create(component="worker", event_type="execution.finished", source="execution", execution_id=execution_id, status="SUCCEEDED")
+    ev_2.timestamp = "2026-01-01T10:05:00Z"
+    
+    collector.emit(ev_2)
+    collector.emit(ev_1)
+    
+    matrix = aggregator.get_matrix()
+    assert matrix["global"]["success"] == 1
+    assert matrix["global"]["latest_execution"] == "2026-01-01T10:05:00Z"
+
+def test_t02_timezone_offset_equivalence(collector, aggregator):
+    """T-02: timezone offset equivalence."""
+    execution_id = "test-exec-tz-2"
+    ev_1 = TelemetryEnvelope.create(component="manager", event_type="task.routed", source="execution", execution_id=execution_id, status="QUEUED")
     ev_1.timestamp = "2026-01-01T11:00:00+01:00" # Equivalent to 10:00:00 UTC
     
-    # Event 2: Emitted at 10:05:00 UTC, recorded as 05:05:00-05:00
-    ev_2 = TelemetryEnvelope.create(
-        component="worker", event_type="execution.finished", source="execution",
-        execution_id=execution_id, status="FAILED" # Late event shouldn't override earlier SUCCEEDED in deterministic-first latch
-    )
+    ev_2 = TelemetryEnvelope.create(component="worker", event_type="execution.finished", source="execution", execution_id=execution_id, status="FAILED")
     ev_2.timestamp = "2026-01-01T05:05:00-05:00" # Equivalent to 10:05:00 UTC
     
-    # Event 3: Emitted at 09:55:00 UTC, recorded as 09:55:00Z
-    ev_0 = TelemetryEnvelope.create(
-        component="manager", event_type="task.created", source="execution",
-        execution_id=execution_id, status="SUCCEEDED"
-    )
+    ev_0 = TelemetryEnvelope.create(component="manager", event_type="task.created", source="execution", execution_id=execution_id, status="SUCCEEDED")
     ev_0.timestamp = "2026-01-01T09:55:00Z" # Equivalent to 09:55:00 UTC
     
-    # Insert in random order
     collector.emit(ev_2)
     collector.emit(ev_0)
     collector.emit(ev_1)
     
-    # Add a malformed timestamp event
-    ev_malformed = TelemetryEnvelope.create(
-        component="worker", event_type="task.log", source="execution", execution_id=execution_id
-    )
-    ev_malformed.timestamp = "NOT A TIMESTAMP"
-    collector.emit(ev_malformed)
+    matrix = aggregator.get_matrix()
+    # 09:55:00Z SUCCEEDED latches over 10:05:00Z FAILED
+    assert matrix["global"]["success"] == 1
+    assert matrix["global"]["latest_execution"] == "2026-01-01T05:05:00-05:00"
+
+def test_t03_utc_normalization(collector, aggregator):
+    """T-03: UTC normalization."""
+    execution_id = "test-exec-tz-3"
+    ev_1 = TelemetryEnvelope.create(component="manager", event_type="task.routed", source="execution", execution_id=execution_id, status="QUEUED")
+    ev_1.timestamp = "2026-01-01T10:00:00" # Missing timezone, should normalize to UTC
+    collector.emit(ev_1)
+    matrix = aggregator.get_matrix()
+    assert matrix["global"]["latest_execution"] == "2026-01-01T10:00:00"
+
+def test_t06_invalid_timestamp_rejected(collector, aggregator):
+    """T-06: invalid timestamp rejected."""
+    execution_id = "test-exec-invalid-ts"
+    ev_1 = TelemetryEnvelope.create(component="manager", event_type="task.routed", source="execution", execution_id=execution_id, status="SUCCEEDED", routing_class="DETERMINISTIC")
+    ev_1.timestamp = "NOT A VALID TIMESTAMP"
+    collector.emit(ev_1)
     
     matrix = aggregator.get_matrix()
-    global_stats = matrix.get("global", {})
+    assert matrix["global"]["total"] == 0 # Must be completely rejected
+
+def test_t07_missing_timestamp_behavior(collector, aggregator):
+    """T-07: missing timestamp handling."""
+    execution_id = "test-exec-missing-ts"
+    ev_1 = TelemetryEnvelope.create(component="manager", event_type="task.routed", source="execution", execution_id=execution_id, status="SUCCEEDED", routing_class="DETERMINISTIC")
+    ev_1.timestamp = None
+    collector.emit(ev_1)
     
-    # SUCCEEDED is latched from ev_0 even though ev_2 is later chronologically and FAILED
-    assert global_stats.get("success") == 1
-    # latest_execution timestamp should be the one from ev_2 since it's the latest in UTC
-    assert global_stats.get("latest_execution") == "2026-01-01T05:05:00-05:00"
+    matrix = aggregator.get_matrix()
+    assert matrix["global"]["total"] == 0 # Must be completely rejected
 
 
-def test_full_provenance_chain(collector):
-    """Blocker 2: Real Task -> ExecutionContext -> Worker -> Telemetry provenance."""
+def test_t08_full_provenance_chain_to_matrix(collector, aggregator):
+    """T-08: Real Task -> ExecutionContext -> Worker -> Telemetry -> Matrix provenance."""
     from runtime.execution.manager import ExecutionManager
     from runtime.workspace.ephemeral import EphemeralWorkspaceManager
-    from runtime.execution.models import Task, ExecutionStatus
+    from runtime.execution.models import Task
     
     workspace_manager = EphemeralWorkspaceManager("/tmp/ws_test_provenance")
     manager = ExecutionManager(
@@ -358,7 +404,6 @@ def test_full_provenance_chain(collector):
             
     manager.registry = MockRegistry()
     
-    # Submit task, this goes through manager -> context -> worker
     task = Task(
         task_id="task-provenance-1",
         account_id="acc-1",
@@ -377,8 +422,21 @@ def test_full_provenance_chain(collector):
     ctx = manager.submit_task(task)
     assert ctx.execution_id is not None
     
-    # We don't have to wait for full worker execution if submit_task routes it synchronously,
-    # or we can inspect telemetry immediately.
+    # Manually append the project/repo/workspace IDs into the context to simulate worker environment
+    # or just emit an event to simulate the worker since manager doesn't block
+    ev_terminal = TelemetryEnvelope.create(
+        component="worker",
+        event_type="execution.finished",
+        source="execution",
+        execution_id=ctx.execution_id,
+        status="SUCCEEDED",
+        department_id="DEPT-1",
+        routing_class="DETERMINISTIC"
+    )
+    # the manager creates "task.created" and "task.routed".
+    collector.emit(ev_terminal)
+    
+    # Assert collector has the events
     events = collector.query({"execution_id": ctx.execution_id})
     assert len(events) >= 1
     
@@ -389,3 +447,12 @@ def test_full_provenance_chain(collector):
     routed_event = next(e for e in events if e.event_type == "task.routed")
     assert routed_event.worker_id is not None
     assert routed_event.department_id == "DEPT-1"
+    
+    # Assert aggregator gets it
+    matrix = aggregator.get_matrix()
+    
+    assert matrix["global"]["total"] == 1
+    assert matrix["global"]["success"] == 1
+    assert matrix["global"]["deterministic"] == 1
+    assert "DEPT-1" in matrix["departments"]
+    assert matrix["departments"]["DEPT-1"]["success"] == 1

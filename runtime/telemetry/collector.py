@@ -98,6 +98,8 @@ class TelemetryCollector:
                         break
                         
                 if match:
+                    if "timestamp" not in data:
+                        data["timestamp"] = None
                     results.append(TelemetryEnvelope(**data))
                     if len(results) >= limit:
                         break
