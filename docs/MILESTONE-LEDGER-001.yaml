@@ -113,8 +113,8 @@ milestones:
     next_action: execute focused deterministic and routing-observability tests, then reconcile failures
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
-    status: VERIFIED
-    commit_sha: 7845bb4c665ac9be747bf11bf531e5dbc46d0a22
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: 3b1e6bf77e2ba4b044ee6cbb37a0133e6b821d95
     supporting_commits:
       - 6173a87b4ca21d1865649bf3bd82ff58588aa547
       - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
@@ -122,10 +122,10 @@ milestones:
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
       - b5a0b12f8ca962719316f6bec4e666a3c030efb7
-    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-CLOSEOUT.md
-    blocker: none
-    legacy_cleanup_gate: executed
-    next_action: advance to DETERMINISTIC-SYSTEM-001 execution or next scheduled P0 track
+    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-CLOSEOUT.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-001.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-002.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-003.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-004.md
+    blocker: AG-007 implementation is present but verification contract is not satisfied; invalid timestamp rejection is not implemented, O-02 minimum coverage is incomplete, full provenance does not reach matrix aggregation, legacy review/triage/closeout schemas are incomplete, Control Center runtime remains NOT_ESTABLISHED, and the prior ledger SHA was not the actual final commit
+    legacy_cleanup_gate: required
+    next_action: re-execute DETERMINISTIC-OBSERVABILITY-001-REVERIFY against current main and reconcile all contracted outputs before advancing
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -142,19 +142,20 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: 75404b4c618da6ec84ee3e8265f6005250ee6607
-  note: post-closeout audit 003 confirms AG-006 remediation is absent from main; F remains VERIFIED; observability remains IMPLEMENTED_NOT_VERIFIED
+  commit_sha: c61d0cc08048ba7cab9f0ca0249f9a6db247c476
+  note: post-closeout audit 004 reconciles AG-007; observability remains IMPLEMENTED_NOT_VERIFIED; F remains VERIFIED
 next_p0:
   id: DETERMINISTIC-OBSERVABILITY-001-REVERIFY
   objective: execute and verify the actual observability remediation on current main before advancing
   required_outputs:
     - timezone-aware chronological aggregation implementation
-    - Task->ExecutionContext->Worker->Telemetry provenance regression evidence
+    - invalid timestamp rejection behavior with explicit regression test
+    - Task->ExecutionContext->Worker->Telemetry->matrix provenance regression evidence
     - actual HTTP runtime boundary evidence or explicit downgrade of claim
     - Control Center runtime evidence or explicit downgrade of claim
-    - path-by-path legacy cleanup evidence
+    - path-by-path legacy cleanup evidence in the contracted table form
     - current focused/full-suite test evidence with exact command/date/time/result
-    - durable pre-existing failure triage only for failures observed in current execution
+    - durable pre-existing failure triage only for failures observed in current execution, using the required per-failure schema
     - reconciled closeout final SHA and ledger SHA
     - only then VERIFIED status if all gates pass
   following_gate:
