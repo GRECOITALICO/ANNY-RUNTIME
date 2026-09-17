@@ -74,25 +74,26 @@ Configured GitHub release discovery:
 
 `fead26357e279daea1c6256a8675d6101afd005a`
 
+Governed Sync candidate integrity verification:
+
+`5efd8c07e0b5f8e58a27d2c3df313d42bcbc603c`
+
 Latest milestone ledger update:
 
-`940a2eb710faea93d9baa8bcd8fe925f9bead34c`
+`88b5a55908c454233fe4aea4e5257d6bc479ed6c`
 
 ## Current P0 next action
 
-`SYNC-IMPLEMENTATION-001-E`
+`SYNC-IMPLEMENTATION-001-F`
 
-Implement candidate verification before any Stage or Activate capability.
+Verify the actual runtime path / end-to-end evidence required by the ledger, and make Sync asynchronous/live to implement explicit Stage/Activate/Rollback contracts.
 
 Required boundary:
 
 ```text
-DISCOVER
-   -> CANDIDATE IDENTITY
-   -> CHECKSUM / SIGNATURE / PROVENANCE VERIFY
-   -> EVIDENCE
-   -> VERIFIED
-   -> only then allow future STAGE
+EVIDENCE
+   -> STAGE
+   -> ACTIVATE
 ```
 
 Do not confuse:
