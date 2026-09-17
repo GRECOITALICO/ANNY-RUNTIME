@@ -1,0 +1,173 @@
+"""Governed SYNC transaction service.
+
+The service intentionally fails closed when an authoritative source or verifier is
+not available. It never activates a runtime as part of SYNC-only execution.
+"""
+
+from __future__ import annotations
+
+import json
+import secrets
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional
+
+from .models import SyncResult, SyncState
+
+
+DiscoverFn = Callable[[], Dict[str, Any]]
+VerifyFn = Callable[[Dict[str, Any]], Dict[str, Any]]
+
+
+class SyncService:
+    """Execute and persist one governed SYNC transaction at a time."""
+
+    def __init__(
+        self,
+        data_dir: str | Path,
+        *,
+        local_version: str = "UNKNOWN",
+        discover: Optional[DiscoverFn] = None,
+        verify: Optional[VerifyFn] = None,
+    ) -> None:
+        self.data_dir = Path(data_dir)
+        self.local_version = local_version
+        self.discover = discover
+        self.verify_candidate = verify
+        self._active: Optional[SyncResult] = None
+        self._latest: Optional[SyncResult] = self._load_latest()
+
+    @property
+    def latest(self) -> Optional[SyncResult]:
+        return self._latest
+
+    def status(self) -> Dict[str, Any]:
+        if self._active is not None:
+            return self._active.to_dict()
+        if self._latest is not None:
+            return self._latest.to_dict()
+        return {
+            "sync_id": None,
+            "trace_id": None,
+            "requested_at": None,
+            "sync_state": SyncState.IDLE.value,
+            "stage": "NONE",
+            "source": "UNKNOWN",
+            "local_version": self.local_version,
+            "candidate_version": None,
+            "discovered_revision": None,
+            "comparison": "UNKNOWN",
+            "verification": "UNKNOWN",
+            "activation_performed": False,
+            "error_classification": None,
+            "evidence_id": None,
+            "details": {},
+        }
+
+    def start(self) -> Dict[str, Any]:
+        if self._active is not None and self._active.sync_state == SyncState.SYNCING:
+            return {
+                "status": "already_running",
+                "sync_state": SyncState.SYNCING.value,
+                "sync_id": self._active.sync_id,
+                "trace_id": self._active.trace_id,
+            }
+
+        now = datetime.now(timezone.utc).isoformat()
+        result = SyncResult(
+            sync_id=f"sync-{secrets.token_hex(12)}",
+            trace_id=f"trace-{secrets.token_hex(12)}",
+            requested_at=now,
+            sync_state=SyncState.SYNCING,
+            local_version=self.local_version,
+        )
+        self._active = result
+        self._persist(result)
+        try:
+            self._discover_compare_verify(result)
+        except Exception as exc:  # fail closed and persist the failure
+            result.sync_state = SyncState.FAILED
+            result.stage = "REPORT"
+            result.error_classification = exc.__class__.__name__
+            result.details = {"message": str(exc)[:500]}
+        finally:
+            self._active = None
+            self._latest = result
+            self._persist(result)
+
+        return {"status": "started", "sync_state": SyncState.SYNCING.value, "sync_id": result.sync_id, "trace_id": result.trace_id}
+
+    def _discover_compare_verify(self, result: SyncResult) -> None:
+        result.stage = "DISCOVER"
+        if self.discover is None:
+            result.sync_state = SyncState.BLOCKED
+            result.source = "UNKNOWN"
+            result.error_classification = "AUTHORITATIVE_SOURCE_UNAVAILABLE"
+            result.stage = "REPORT"
+            result.details = {"reason": "No authoritative discovery provider is configured."}
+            return
+
+        discovered = self.discover() or {}
+        result.source = str(discovered.get("source", "UNKNOWN"))
+        result.discovered_revision = discovered.get("revision")
+        result.candidate_version = discovered.get("candidate_version")
+
+        if not discovered.get("authorized", False):
+            result.sync_state = SyncState.BLOCKED
+            result.error_classification = "AUTHORITY_UNVERIFIED"
+            result.stage = "REPORT"
+            result.details = {"reason": "Source was discovered without sufficient authority evidence."}
+            return
+
+        result.stage = "COMPARE"
+        candidate = result.candidate_version
+        if not candidate or candidate == self.local_version:
+            result.comparison = "NO_CHANGE"
+            result.verification = "NOT_REQUIRED"
+            result.sync_state = SyncState.VERIFIED
+            result.stage = "REPORT"
+            result.details = {"reason": "No verified candidate requiring change was discovered."}
+            return
+
+        result.comparison = "CANDIDATE_AVAILABLE"
+        result.stage = "VERIFY"
+        if self.verify_candidate is None:
+            result.sync_state = SyncState.UNKNOWN
+            result.error_classification = "CANDIDATE_VERIFIER_UNAVAILABLE"
+            result.stage = "REPORT"
+            return
+
+        verification = self.verify_candidate(discovered) or {}
+        if not verification.get("verified", False):
+            result.sync_state = SyncState.BLOCKED
+            result.verification = str(verification.get("status", "FAILED"))
+            result.error_classification = str(verification.get("error", "CANDIDATE_NOT_VERIFIED"))
+            result.stage = "REPORT"
+            return
+
+        result.verification = "VERIFIED"
+        result.sync_state = SyncState.VERIFIED
+        result.stage = "REPORT"
+        result.details = {"activation_performed": False}
+
+    def _persist(self, result: SyncResult) -> None:
+        path = self.data_dir / "sync"
+        path.mkdir(parents=True, exist_ok=True)
+        record = path / "sync_records.jsonl"
+        with record.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(result.to_dict(), sort_keys=True) + "\n")
+            handle.flush()
+
+    def _load_latest(self) -> Optional[SyncResult]:
+        record = self.data_dir / "sync" / "sync_records.jsonl"
+        if not record.exists():
+            return None
+        try:
+            line = next((line for line in reversed(record.read_text(encoding="utf-8").splitlines()) if line.strip()), None)
+            if not line:
+                return None
+            raw = json.loads(line)
+            raw["sync_state"] = SyncState(raw["sync_state"])
+            return SyncResult(**raw)
+        except Exception:
+            return None
