@@ -103,7 +103,7 @@ milestones:
     legacy_cleanup_gate: executed
   - id: DETERMINISTIC-EXECUTION-SUBSTRATE-001
     name: GOVERNED_LOCAL_DETERMINISTIC_EXECUTION
-    status: IMPLEMENTED_NOT_VERIFIED
+    status: VERIFIED
     commit_sha: bb26f74a3b4588af3ba4fd4e2deaed721415e50e
     supporting_commits:
       - a0ac78e49069ee922f399b91050432189750b76f
@@ -114,11 +114,12 @@ milestones:
       - e572e0c26004bdee4e473f8561da0bf55cd6ab25
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
     evidence: expanded deterministic capabilities, workspace substrate, department/routing classification, policy propagation, and focused tests
-    verification_note: AG-018 failure reconciliation complete; 3/3 defects fixed; test execution reached 37/37 passed; decision is READY_FOR_FINAL_VERIFICATION
+    verification_note: AG-019 final verification complete; 37/37 tests passed; decision is VERIFIED
     evidence_files:
       - docs/evidence/DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY-AG-017.json
       - docs/evidence/DETERMINISTIC-EXECUTION-SUBSTRATE-001-FAILURE-RECONCILIATION-AG-018.json
-    next_action: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY-FINAL
+      - docs/evidence/DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY-FINAL-AG-019.json
+    next_action: DETERMINISTIC-SYSTEM-001-VERIFY
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
     status: VERIFIED
@@ -170,6 +171,6 @@ current_documentation_anchor:
   commit_sha: 6584a518514d88229992ffba7950b84b41dbd314
   note: AG-013 post-closeout audit 009 is the latest governing documentation; observability is VERIFIED; substrate is the next gate
 next_p0:
-  id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY-FINAL
-  objective: run final verification over deterministic execution substrate now that tests are clean
+  id: DETERMINISTIC-SYSTEM-001-VERIFY
+  objective: verify the consolidated deterministic system contract
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
