@@ -1,0 +1,11 @@
+{
+"serial": "AG-021",
+"milestone": "DOCUMENTATION-ANCHOR",
+"previous_main": "7128a80b95172780a730dd46849d50f4b8e910fd",
+"ag_020_reported_anchor": "f8a5c77d8bc498618d2ad5338e07b7404cd7ce39",
+"previous_contract_json_anchor": "6584a518514d88229992ffba7950b84b41dbd314",
+"canonical_current_documentation_anchor": "7128a80b95172780a730dd46849d50f4b8e910fd",
+"anchor_reason": "The canonical anchor must resolve to the commit containing the current governing documentation.",
+"next_action": "DETERMINISTIC-SYSTEM-001-VERIFY",
+"decision": "RECONCILED"
+}

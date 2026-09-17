@@ -168,8 +168,8 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: f8a5c77d8bc498618d2ad5338e07b7404cd7ce39
-  note: stable governing documentation anchor for the verified states (AG-019 final verification)
+  commit_sha: 7128a80b95172780a730dd46849d50f4b8e910fd
+  note: contains the current governing contractual documentation that defines the stable semantics
 next_p0:
   id: DETERMINISTIC-SYSTEM-001-VERIFY
   objective: verify the consolidated deterministic system contract
