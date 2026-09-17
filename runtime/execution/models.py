@@ -1,5 +1,5 @@
 import enum
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 
@@ -51,6 +51,9 @@ class WorkerDefinition:
     state: WorkerState = WorkerState.CREATED
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
+    department_id: Optional[str] = None
+    routing_class: Optional[str] = None
+    capability_family: Optional[str] = None
 
 @dataclass
 class Task:
@@ -65,6 +68,7 @@ class Task:
     evidence_policy: str
     requested_by: str
     created_at: datetime
+    department_id: Optional[str] = None
 
 @dataclass
 class TaskExecutionContext:
@@ -80,8 +84,6 @@ class TaskExecutionContext:
     resource_limits: Dict[str, Any]
     network_policy: str
     write_policy: str
-    
-    # Internal tracking
     status: ExecutionStatus = ExecutionStatus.QUEUED
     result: Optional[Dict[str, Any]] = None
     failure_reason: Optional[FailureReason] = None
@@ -89,8 +91,6 @@ class TaskExecutionContext:
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     duration_ms: Optional[int] = None
-    
-    # Execution Record (Phase 11)
     executor_type: Optional[str] = None
     executor_id: Optional[str] = None
     executor_version: Optional[str] = None
@@ -100,11 +100,12 @@ class TaskExecutionContext:
     input_hash: Optional[str] = None
     result_hash: Optional[str] = None
     evidence_ref: Optional[str] = None
-    
-    # Evaluation (Phase 12)
     execution_score: Optional[int] = None
     validation_status: Optional[str] = None
     review_status: Optional[str] = None
+    routing_class: Optional[str] = None
+    capability_family: Optional[str] = None
+    department_id: Optional[str] = None
 
 class ModelState(str, enum.Enum):
     REGISTERED = "REGISTERED"
