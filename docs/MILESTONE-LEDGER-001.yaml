@@ -5,6 +5,9 @@ rules:
   - VERIFIED/CERTIFIED milestones are the only trusted resume points
   - historical test counts are not current test evidence
   - every new milestone must record commit_sha and next_action
+  - every milestone that replaces or introduces an implementation path must perform a legacy-surface review before closeout
+  - obsolete duplicate paths, stale compatibility branches, unsafe mock fallbacks, superseded routes, and stale tests must be removed in the same milestone when the replacement is verified and deletion is safe
+  - if legacy deletion is not yet safe, the milestone must record the exact blocker and an explicit retirement gate; no undocumented fallback may remain
 milestones:
   - id: M-001
     name: THREE_PLANE_BOOTSTRAP
@@ -82,6 +85,13 @@ milestones:
     evidence: CandidateVerifier implementation, candidate identity/provenance modeling, missing-proof negative tests, and durable evidence
     focused_test_result: 10_passed_in_0.12s
     blocker: end-to-end HTTP/browser runtime boundary verification remains pending; broader suite lacks required mcp environment dependency
+  - id: SYNC-IMPLEMENTATION-001-F
+    name: ASYNCHRONOUS_SYNC_LIFECYCLE_AND_GOVERNED_ACTIVATION_CONTRACT
+    status: NOT_ESTABLISHED_ON_REMOTE_MAIN
+    commit_sha: 6e18660b2be66615d21b6c1dec0f3f5d0f8fb0ef
+    evidence: durable audit showing claimed F implementation is absent from remote main; current SyncService remains synchronous and only exposes the original verification lifecycle
+    blocker: implement and verify explicit STAGE/ACTIVATE/ROLLBACK lifecycle, asynchronous execution/concurrency protection, HTTP contracts, UI gating, and legacy cleanup before closeout
+    legacy_cleanup_gate: required
   - id: DETERMINISTIC-EXECUTION-SUBSTRATE-001
     name: GOVERNED_LOCAL_DETERMINISTIC_EXECUTION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -118,12 +128,17 @@ milestones:
       - deaa9e5c4defe831c164e390cdf6481570411de7
     evidence: consolidated deterministic system contract covering capability boundary, three processing planes, department provenance, evidence, observability, roadmap and claims discipline
     verification_note: documentation is durable; implementation/test/runtime-boundary verification remains separate
+legacy_cleanup_policy:
+  document: docs/LEGACY-CLEANUP-POLICY-001.md
+  commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
+  status: ACTIVE
+  rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: 6173a87b4ca21d1865649bf3bd82ff58588aa547
-  note: actual Processing Matrix implementation checkpoint; verification evidence still pending
+  commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
+  note: legacy cleanup policy is now durable; implementation verification remains separate
 next_p0:
   id: DETERMINISTIC-OBSERVABILITY-001-VERIFY
-  objective: run current observability tests and runtime-boundary verification against the actual Processing Matrix implementation, then reconcile failures before returning to deterministic substrate verification or SYNC-F
+  objective: run current observability tests and runtime-boundary verification against the actual Processing Matrix implementation, reconcile failures, and maintain legacy cleanup in the same milestone cycle before closing or superseding any implementation path
   required_outputs:
     - current observability test file committed and executed
     - current focused test results
@@ -134,7 +149,8 @@ next_p0:
     - no-secret telemetry evidence
     - Processing Matrix HTTP/browser evidence
     - durable closeout evidence
+    - legacy surface inventory and cleanup/removal evidence
   following_gate:
     id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
-    objective: verify deterministic processing and its evidence chain with current tests
-resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, execute only the current next_p0 action after prerequisites are re-established
+    objective: verify deterministic processing and its evidence chain with current tests, including removal of obsolete execution fallbacks
+resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
