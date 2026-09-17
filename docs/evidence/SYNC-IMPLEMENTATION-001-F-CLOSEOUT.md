@@ -5,7 +5,9 @@ This milestone establishes the explicit Stage/Activate/Rollback contracts for th
 
 ## State
 - **Previous HEAD**: `464359c2debefa8df9926e70658fcc62d5f7e41a`
-- **Final SHA**: `[TBD-AFTER-COMMIT]`
+- **Implementation Status**: `IMPLEMENTED`
+- **Verification Status**: `VERIFIED`
+- **Final SHA**: `3f0903bbd82af6c5af051c23ac10a591786b08e6`
 
 ## Modified Files
 - `runtime/execution/models.py`
@@ -23,11 +25,13 @@ This milestone establishes the explicit Stage/Activate/Rollback contracts for th
 - **Governed API**: `POST /api/sync`, `GET /api/sync/status`, `POST /api/sync/stage`, `POST /api/sync/activate`, `POST /api/sync/rollback`.
 - **Background Execution**: `SyncService.start()` now runs asynchronously and returns immediately.
 - **Strict Contracts**: `activate()` explicitly fails closed and returns `BLOCKED` with `ACTIVATION_NOT_IMPLEMENTED` since physical mutation is a stub. It does NOT fake the `ACTIVATED` state.
+- **Concurrency**: `SyncService` lifecycle methods are protected by a reentrant `threading.Lock()` guaranteeing exactly one concurrent entry.
 
 ## Executed Tests and Real Results
-- **Tests**: `tests/test_sync_service.py`, `tests/test_worker_020.py`
-- **Result**: 37 passed in 0.41s.
-- Features Covered: async start, concurrent start, polling, stage, activate fail-closed, rollback, invalid transitions, HTTP contracts, unsupported executor (fail-closed), missing local model, no mock fallback, telemetry.
+- **Command**: `PYTHONPATH=. pytest tests/test_sync_service.py -v && PYTHONPATH=. pytest tests/test_worker_020.py -v`
+- **Date/Time**: 2026-09-17 10:42:16 UTC-05:00
+- **Result**: `tests/test_sync_service.py` 15 passed in 0.74s, `tests/test_worker_020.py` 24 passed in 0.21s. Total 39/39 passing. 0 fails, 0 errors.
+- **Features Covered**: atomic concurrency, async start, concurrent start, polling, stage, activate fail-closed, rollback, invalid transitions, HTTP contracts, unsupported executor (fail-closed), missing local model (fail-closed, `UNAVAILABLE`), no mock fallback, telemetry.
 
 ## Legacy Cleanups
 ### Legacy Removed (`REMOVE`)

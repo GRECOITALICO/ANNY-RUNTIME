@@ -87,14 +87,15 @@ milestones:
     blocker: end-to-end HTTP/browser runtime boundary verification remains pending; broader suite lacks required mcp environment dependency
   - id: SYNC-IMPLEMENTATION-001-F
     name: ASYNCHRONOUS_SYNC_LIFECYCLE_AND_GOVERNED_ACTIVATION_CONTRACT
-    status: IMPLEMENTED_NOT_VERIFIED
-    commit_sha: 4f21a64c6a06fb1618b4b7d424c0fc51fc98a806
+    status: VERIFIED
+    commit_sha: 3f0903bbd82af6c5af051c23ac10a591786b08e6
     supporting_commits:
+      - 4f21a64c6a06fb1618b4b7d424c0fc51fc98a806
       - f07bc87487d350dd0eea11112475608c341c8320
       - 6544678129e96e031c5040fdb21d09e51c8651ad
-    evidence: implementation is present on main; post-closeout audit found unresolved mock fallback, unproven atomic concurrency, and no independent current test execution evidence
-    blocker: remove qwen_mock.json fallback, add atomic Sync concurrency protection and race test, execute focused tests on current main, reconcile final SHA in evidence, then re-verify
-    legacy_cleanup_gate: required
+    evidence: docs/evidence/SYNC-IMPLEMENTATION-001-F-CLOSEOUT.md
+    blocker: none
+    legacy_cleanup_gate: executed
   - id: DETERMINISTIC-EXECUTION-SUBSTRATE-001
     name: GOVERNED_LOCAL_DETERMINISTIC_EXECUTION
     status: IMPLEMENTED_NOT_VERIFIED
