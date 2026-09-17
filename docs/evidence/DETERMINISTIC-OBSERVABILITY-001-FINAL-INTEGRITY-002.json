@@ -1,0 +1,12 @@
+{
+  "serial": "AG-011",
+  "milestone": "DETERMINISTIC-OBSERVABILITY-001",
+  "branch": "main",
+  "starting_head": "3cd82ecb20be9c140dab9e37d3018479d4efedce",
+  "final_head": "3bbb1314aff2efa57741f97f6f113a5cc3be0b63",
+  "worktree_clean": true,
+  "status_short": "",
+  "diff_head_empty": true,
+  "ledger_commit_sha": "3bbb1314aff2efa57741f97f6f113a5cc3be0b63",
+  "decision": "IMPLEMENTED_NOT_VERIFIED"
+}
