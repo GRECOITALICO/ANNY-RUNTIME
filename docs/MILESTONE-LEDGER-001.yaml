@@ -127,10 +127,22 @@ milestones:
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
       - b5a0b12f8ca962719316f6bec4e666a3c030efb7
-    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-005.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-006.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-007.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-008.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-AG-008-CLOSEOUT.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-TEST-RUN-009.json; docs/LEGACY-CLEANUP-REVIEW-001.md; docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
-    blocker: AG-011 exposed a contract-design flaw: the prior closeout rule required the milestone implementation commit field to equal the final evidence commit, creating self-reference. AG-011 also introduced a non-resolvable milestone SHA and regressed SYNC-IMPLEMENTATION-001-F. Contract repair is required before verification.
+    evidence_closeout_commits:
+      - 1dfc4f91b11c0392d25a205844f5bbf5179bcda8
+      - cf9ab4148ac565e63ad9b3f7ea65c6ca7472a417
+      - 31a1d0c83a7e1bf357c917f5da94b66ee5dd613c
+    evidence_files:
+      - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-005.md
+      - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-006.md
+      - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-007.md
+      - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-008.md
+      - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-AG-008-CLOSEOUT.md
+      - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-TEST-RUN-009.json
+      - docs/LEGACY-CLEANUP-REVIEW-001.md
+      - docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
     legacy_cleanup_gate: executed
-    next_action: DETERMINISTIC-OBSERVABILITY-001-CONTRACT-REPAIR
+    blocker: none
+    next_action: DETERMINISTIC-OBSERVABILITY-001-VERIFY
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED

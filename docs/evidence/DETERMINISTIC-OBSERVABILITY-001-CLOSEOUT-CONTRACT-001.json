@@ -1,0 +1,30 @@
+{
+  "serial": "AG-012",
+  "milestone": "DETERMINISTIC-OBSERVABILITY-001",
+  "implementation_commit_sha": "c8f21e7888227cc64a02ec9c9bd008e3ed463307",
+  "evidence_closeout_commits": [
+    "1dfc4f91b11c0392d25a205844f5bbf5179bcda8",
+    "cf9ab4148ac565e63ad9b3f7ea65c6ca7472a417",
+    "31a1d0c83a7e1bf357c917f5da94b66ee5dd613c"
+  ],
+  "current_documentation_anchor": "31a1d0c83a7e1bf357c917f5da94b66ee5dd613c",
+  "self_reference_required": false,
+  "contract_status": "REPAIRED",
+  "verification_status": "PENDING",
+  "contract_tests": {
+    "test_implementation_commit_resolves": "PASS",
+    "test_evidence_closeout_commit_resolves": "PASS",
+    "test_implementation_is_ancestor_of_closeout": "PASS",
+    "test_closeout_is_reachable_from_main": "PASS",
+    "test_current_documentation_anchor_resolves": "PASS",
+    "test_verified_prior_milestone_not_regressed": "PASS",
+    "test_self_referential_commit_hash_is_not_required": "PASS"
+  },
+  "regression_guard": {
+    "SYNC-IMPLEMENTATION-001-F": {
+      "status": "VERIFIED",
+      "commit_sha": "3f0903bbd82af6c5af051c23ac10a591786b08e6",
+      "regression": false
+    }
+  }
+}
