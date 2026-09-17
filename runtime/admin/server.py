@@ -10,6 +10,7 @@ from typing import Dict, Any
 
 from runtime.admin.routes import AdminRouter
 from runtime.admin.middleware import AdminMiddleware
+from runtime.sync.service import SyncService
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,26 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
         try:
             self.server.middleware.process_response(context)
             self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
+
+            # Canonical governed Sync status endpoint. Authentication/middleware has
+            # already run; the endpoint is intentionally outside the HTML router so
+            # SYNC cannot be confused with bootstrap verification or update-check.
+            if self.path.split('?', 1)[0] == '/api/sync/status':
+                sync_service = self.server.router.context.get('sync_service')
+                if sync_service is None:
+                    self.server.router._send_json(self, {
+                        'sync_state': 'UNKNOWN',
+                        'error_classification': 'SYNC_SERVICE_UNAVAILABLE',
+                    }, status=503)
+                else:
+                    self.server.router._send_json(self, sync_service.status())
+                return
+
             self.server.router.dispatch_get(self.path, self)
         finally:
             # Restore persistent context, preserving any handler-set keys
             for key in list(self.server.router.context.keys()):
-                if key not in saved_context and key not in ('bootstrap_snapshot',):
+                if key not in saved_context and key not in ('bootstrap_snapshot', 'sync_service'):
                     del self.server.router.context[key]
             self.server.router.context.update({k: v for k, v in saved_context.items()
                                                if k not in ('admin_session', 'set_cookies', 'new_session_id', 'secure_cookie')})
@@ -75,6 +91,21 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
         saved_context = dict(self.server.router.context)
         self.server.router.context.update(context)
         try:
+            # Canonical governed Sync transaction. It runs only after the normal
+            # authentication + POST-body/CSRF middleware path has accepted the request.
+            if self.path.split('?', 1)[0] == '/api/sync':
+                sync_service = self.server.router.context.get('sync_service')
+                if sync_service is None:
+                    self.server.router._send_json(self, {
+                        'status': 'failed',
+                        'sync_state': 'FAILED',
+                        'error_classification': 'SYNC_SERVICE_UNAVAILABLE',
+                    }, status=503)
+                else:
+                    self.server.router._send_json(self, sync_service.start())
+                self.server.middleware.process_response(self.server.router.context)
+                return
+
             # Execute POST handler
             self.server.router.dispatch_post(self.path, form_data, self)
             # Post-process (cookies) — re-read context since handler may have set new_session_id
@@ -82,7 +113,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
         finally:
             # Restore persistent context
             for key in list(self.server.router.context.keys()):
-                if key not in saved_context and key not in ('bootstrap_snapshot',):
+                if key not in saved_context and key not in ('bootstrap_snapshot', 'sync_service'):
                     del self.server.router.context[key]
             self.server.router.context.update({k: v for k, v in saved_context.items()
                                                if k not in ('admin_session', 'set_cookies', 'new_session_id', 'secure_cookie', 'destroy_session')})
@@ -115,7 +146,7 @@ ThreadedHTTPServer = LoopbackIPv4Server
 class AdminServer:
     """Manages the threaded HTTP server lifecycle."""
     
-    def __init__(self, host: str, port: int, auth_manager, audit_manager, github_manager, secret_backend=None, event_bus=None, runtime_engine=None, local_operational_path=None, bootstrap_snapshot=None):
+    def __init__(self, host: str, port: int, auth_manager, audit_manager, github_manager, secret_backend=None, event_bus=None, runtime_engine=None, local_operational_path=None, bootstrap_snapshot=None, sync_service=None):
         self.host = host
         self.port = port
         self.server = None
@@ -130,7 +161,8 @@ class AdminServer:
             'event_bus': event_bus if event_bus else "UNKNOWN",
             'runtime_engine': runtime_engine if runtime_engine else "UNKNOWN",
             'local_operational_path': local_operational_path,
-            'bootstrap_snapshot': bootstrap_snapshot
+            'bootstrap_snapshot': bootstrap_snapshot,
+            'sync_service': sync_service,
         }
         
         self.router = AdminRouter(self.admin_context)
@@ -237,6 +269,16 @@ def start_admin_server(host: str, port: int):
     config = RuntimeConfig(data_dir=str(data_dir))
     engine = RuntimeEngine(config)
     
+    # Sync starts with no update source bound yet. This is deliberate: until the
+    # authoritative source + verifier contract is wired, Sync must resolve BLOCKED,
+    # never pretend to have synchronized a candidate.
+    sync_service = SyncService(
+        data_dir=data_dir,
+        local_version="v0.4.0",
+        discover=None,
+        verify=None,
+    )
+
     server = AdminServer(
         host=host, 
         port=port, 
@@ -247,7 +289,8 @@ def start_admin_server(host: str, port: int):
         event_bus=None,
         runtime_engine=engine,
         local_operational_path=None,
-        bootstrap_snapshot={'result': None, 'discovered_repos': disc_repos_raw}
+        bootstrap_snapshot={'result': None, 'discovered_repos': disc_repos_raw},
+        sync_service=sync_service,
     )
     
     server.admin_context['execution_manager'] = execution_manager
@@ -278,5 +321,3 @@ def start_admin_server(host: str, port: int):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    # By default, use port 7891
-    start_admin_server('localhost', 7891)
