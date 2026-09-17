@@ -46,28 +46,36 @@ milestones:
     commit_sha: 4bd544756ea04c89f3a2dc2889bb2e63e632be8a
     supporting_commits:
       - c5d8e8babcaba0f9a552deb7239a7eccf7daf8e2
-      - 8ba195044e2593cf144576bdb71b364dc81b7e7b
-    evidence: fail-closed SyncService, durable sanitized state, authenticated server integration, unit tests added
-    verification_note: local execution against the exact remote source was unavailable because the execution environment could not resolve GitHub; no green CI run is claimed
+    evidence: fail-closed SyncService, durable sanitized state, unit tests added
+    verification_note: repository-wide current test execution was unavailable; no green CI is claimed
   - id: SYNC-IMPLEMENTATION-001-B
     name: CANONICAL_SYNC_API
     status: IMPLEMENTED_NOT_VERIFIED
     commit_sha: 8ba195044e2593cf144576bdb71b364dc81b7e7b
-    evidence: POST /api/sync and GET /api/sync/status handled after authentication/POST middleware
-    blocker: Control Center first-level SYNC UI still needs wiring; authoritative update source and candidate verifier are not configured
+    evidence: POST /api/sync and GET /api/sync/status integrated after authentication/POST middleware
+    blocker: end-to-end HTTP verification still pending
+  - id: SYNC-IMPLEMENTATION-001-C
+    name: CONTROL_CENTER_SYNC_SURFACE
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: 6242aa8995b6cf6862376b37d1286d3a5e9750f6
+    supporting_commits:
+      - 85c628ce014963daa00aff37371715c2a9e9c1e9
+    evidence: visible first-level SYNC NOW control, durable status panel, live status polling, CSRF-aware request
+    blocker: browser/runtime end-to-end verification pending; authoritative source and candidate verifier not configured
 current_documentation_anchor:
   commit_sha: 7798b0655f94394b53c23f024e68605bf92eef72
   note: compact reconstruction card; documentation checkpoint
 next_p0:
-  id: SYNC-IMPLEMENTATION-001-C
-  objective: expose first-level Control Center SYNC controls and live status without confusing Sync with Verify/Stage/Activate
+  id: SYNC-IMPLEMENTATION-001-D
+  objective: bind authoritative source discovery and candidate verification without weakening fail-closed semantics
   required_outputs:
-    - visible SYNC control in primary Control Center
-    - live SYNC state/status polling
-    - trace/evidence presentation
-    - no implicit activation
-    - UI negative/blocked/unknown states
+    - authoritative source identity
+    - candidate discovery
+    - cryptographic/integrity verification
+    - verified source revision/version
+    - source-unavailable and invalid-candidate negative tests
+    - durable evidence IDs
   following_gate:
-    id: SYNC-IMPLEMENTATION-001-D
-    objective: bind authoritative source discovery and candidate verification
-resume_rule: read latest commit, rerun bootstrap, verify SYNC-IMPLEMENTATION-001-A/B evidence, then execute only the next P0 action after prerequisites are re-established
+    id: SYNC-IMPLEMENTATION-001-E
+    objective: make Sync asynchronous/live, add explicit Stage/Activate/Rollback contracts and end-to-end tests
+resume_rule: read latest commit, rerun bootstrap, verify SYNC-IMPLEMENTATION-001-A/B/C evidence, then execute only the next P0 action after prerequisites are re-established
