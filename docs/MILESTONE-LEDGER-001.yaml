@@ -77,9 +77,21 @@ milestones:
     commit_sha: 441e828
     evidence: CandidateVerifier implementation, CandidateIdentity modeling, missing-proof negative tests, verification boundaries
     blocker: end-to-end runtime verification remains pending
+  - id: DETERMINISTIC-EXECUTION-SUBSTRATE-001
+    name: GOVERNED_LOCAL_DETERMINISTIC_EXECUTION
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: bb26f74a3b4588af3ba4fd4e2deaed721415e50e
+    supporting_commits:
+      - a0ac78e49069ee922f399b91050432189750b76f
+      - 855d38f8661e33d6be42a3e153414a7e3ad8afa9
+      - 55d9c6230f6a3862972c4058a427c10fd278bf46
+      - 7d059d09597f15f581f1153b55af5a9968599ceb
+    evidence: expanded local deterministic capability metadata and executor, bounded ephemeral workspace layout, execution evidence, focused tests added, external research recorded
+    verification_note: focused tests have been added but have not been executed in this session; no green test result is claimed
+    next_action: run focused deterministic execution tests and reconcile failures before promoting status
 current_documentation_anchor:
-  commit_sha: 3530af7
-  note: latest Sync verification evidence checkpoint
+  commit_sha: bb26f74a3b4588af3ba4fd4e2deaed721415e50e
+  note: deterministic execution strategy and research checkpoint
 next_p0:
   id: SYNC-IMPLEMENTATION-001-F
   objective: verify the actual runtime path / end-to-end evidence required by the ledger, and make Sync asynchronous/live to implement explicit Stage/Activate/Rollback contracts
@@ -90,4 +102,4 @@ next_p0:
   following_gate:
     id: SYNC-IMPLEMENTATION-001-G
     objective: certify and release governed Sync capabilities
-resume_rule: read latest commit, rerun bootstrap, verify SYNC-IMPLEMENTATION-001-A/B/C/D/E evidence, then execute only the next P0 action after prerequisites are re-established
+resume_rule: read latest commit, rerun bootstrap, verify SYNC-IMPLEMENTATION-001-A/B/C/D/E evidence, verify deterministic execution substrate evidence, then execute only the next P0 action after prerequisites are re-established
