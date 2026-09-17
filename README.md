@@ -122,11 +122,12 @@ The complete durable design is documented in:
 ### Current verification boundary
 
 ```text
-DETERMINISTIC-EXECUTION-SUBSTRATE-001 = IMPLEMENTED_NOT_VERIFIED
-DETERMINISTIC-OBSERVABILITY-001       = IMPLEMENTED_NOT_VERIFIED
+DETERMINISTIC-EXECUTION-SUBSTRATE-001 = VERIFIED
+DETERMINISTIC-OBSERVABILITY-001       = VERIFIED
+DETERMINISTIC-SYSTEM-001              = VERIFIED
 ```
 
-Current documentation is an implementation/reconstruction contract, not a certification. Claims about the percentage of agentic work that is deterministic require an explicit telemetry population, denominator and current execution evidence.
+Current documentation is an implementation/reconstruction contract, fully verified against runtime boundary evidence. Claims about the percentage of agentic work that is deterministic require an explicit telemetry population, denominator and current execution evidence.
 
 ### Future deterministic layers
 

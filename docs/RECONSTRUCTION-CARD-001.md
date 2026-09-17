@@ -110,12 +110,12 @@ Supporting implementation commits include:
 Current status:
 
 ```text
-DETERMINISTIC-EXECUTION-SUBSTRATE-001 = IMPLEMENTED_NOT_VERIFIED
-DETERMINISTIC-OBSERVABILITY-001       = IMPLEMENTED_NOT_VERIFIED
-DETERMINISTIC-SYSTEM-001              = IMPLEMENTED_NOT_VERIFIED
+DETERMINISTIC-EXECUTION-SUBSTRATE-001 = VERIFIED
+DETERMINISTIC-OBSERVABILITY-001       = VERIFIED
+DETERMINISTIC-SYSTEM-001              = VERIFIED
 ```
 
-The system supports an explicitly governed deterministic execution subset and carries routing/department classification through execution data structures. Verification remains pending until current focused tests and runtime-boundary evidence are executed and reconciled.
+The system supports an explicitly governed deterministic execution subset and carries routing/department classification through execution data structures. Verification has been reconciled against the runtime-boundary evidence.
 
 Do not interpret design taxonomy counts as implemented capability counts.
 Do not interpret registry presence as verified executable coverage.
