@@ -162,6 +162,12 @@ milestones:
       - deaa9e5c4defe831c164e390cdf6481570411de7
     evidence: docs/evidence/DETERMINISTIC-SYSTEM-001-VERIFY-AG-022.json
     verification_note: deterministic capabilities, telemetry, boundary, and observability fully verified against runtime boundary.
+  - id: RUNTIME-READINESS-001
+    name: DISTRIBUTION_READINESS_GATE
+    status: NOT_READY
+    blocker: Missing formal installation, runtime OS integration, configuration system, release identity, and pending 28 test failures.
+    evidence: docs/evidence/RUNTIME-READINESS-001-GAP-PLAN-AG-025.json
+    verification_note: AG-025 verification found missing operational readiness mechanisms.
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
@@ -171,6 +177,6 @@ current_documentation_anchor:
   commit_sha: 0325f33e9d4bb7944a19bed8a3483df4de1643dc
   note: contains the current governing contractual documentation that defines the stable semantics
 next_p0:
-  id: RUNTIME-READINESS-001
-  objective: enter runtime readiness preparation
+  id: RUNTIME-READINESS-001-REMEDIATION
+  objective: resolve operational readiness blockers defined in AG-025 gap plan
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established

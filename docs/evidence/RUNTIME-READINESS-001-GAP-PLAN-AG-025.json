@@ -1,0 +1,23 @@
+{
+  "serial": "AG-025",
+  "gate": "RUNTIME-READINESS-001",
+  "status": "NOT_READY",
+  "evidence": "docs/evidence/RUNTIME-READINESS-001-VERIFY-AG-025.json",
+  "blockers": [
+    "INSTALLABILITY: No explicit install procedure (setup.py, install.sh) found in root.",
+    "CONFIGURATION: No formal configuration files (.env, config.json) exist for runtime.",
+    "OS_SERVICE_INTEGRATION: Only browser broker systemd unit exists; no runtime unit.",
+    "DOCUMENTATION_CONSISTENCY: README.md and RECONSTRUCTION-CARD-001.md contain stale IMPLEMENTED_NOT_VERIFIED labels for verified milestones.",
+    "HEALTH_LIVENESS: No formal health/status endpoint or lifecycle mechanism (STARTING->RUNNING).",
+    "RELEASE_IDENTITY: No formal release definition mapped to a durable commit for distribution."
+  ],
+  "remediation": [
+    "Update documentation to remove stale labels and reflect VERIFIED status.",
+    "Create formal setup.py or install procedure.",
+    "Implement explicit configuration loader and defaults.",
+    "Add systemd integration for the main Runtime process.",
+    "Implement health/readiness endpoints.",
+    "Define explicit release identity and distribution artifacts."
+  ],
+  "next_serial": "AG-026"
+}

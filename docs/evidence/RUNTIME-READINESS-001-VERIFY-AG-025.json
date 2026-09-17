@@ -1,0 +1,44 @@
+{
+  "serial": "AG-025",
+  "starting_head": "e9eb9973c25c2c4da2060a38fe98d185711ce2ba",
+  "actual_verification_head": "e9eb9973c25c2c4da2060a38fe98d185711ce2ba",
+  "prior_verified_milestones": {
+    "SYNC-IMPLEMENTATION-001-F": "VERIFIED",
+    "DETERMINISTIC-OBSERVABILITY-001": "VERIFIED",
+    "DETERMINISTIC-EXECUTION-SUBSTRATE-001": "VERIFIED",
+    "DETERMINISTIC-SYSTEM-001": "VERIFIED"
+  },
+  "installability": "NOT_ESTABLISHED",
+  "startup_lifecycle": "NOT_ESTABLISHED",
+  "os_integration": "NOT_ESTABLISHED",
+  "configuration": "NOT_ESTABLISHED",
+  "security": "PARTIAL",
+  "github": "PARTIAL",
+  "sync": "PARTIAL",
+  "deterministic": "PASS",
+  "control_center": "PARTIAL",
+  "health_readiness_liveness": "NOT_ESTABLISHED",
+  "persistence": "PARTIAL",
+  "test_counts": {
+    "collected": 559,
+    "passed": 505,
+    "failed": 28,
+    "errors": 0,
+    "skipped": 26
+  },
+  "clean_install": "NOT_ESTABLISHED",
+  "restart": "NOT_ESTABLISHED",
+  "distribution_artifacts": "PARTIAL",
+  "release_identity": "NOT_ESTABLISHED",
+  "legacy_review": "FAIL",
+  "blockers": [
+    "INSTALLABILITY: No explicit install procedure (setup.py, install.sh) found in root.",
+    "CONFIGURATION: No formal configuration files (.env, config.json) exist for runtime.",
+    "OS_SERVICE_INTEGRATION: Only browser broker systemd unit exists; no runtime unit.",
+    "DOCUMENTATION_CONSISTENCY: README.md and RECONSTRUCTION-CARD-001.md contain stale IMPLEMENTED_NOT_VERIFIED labels for verified milestones.",
+    "HEALTH_LIVENESS: No formal health/status endpoint or lifecycle mechanism (STARTING->RUNNING).",
+    "RELEASE_IDENTITY: No formal release definition mapped to a durable commit for distribution.",
+    "TESTS: 28 test failures remaining."
+  ],
+  "decision": "NOT_READY"
+}
