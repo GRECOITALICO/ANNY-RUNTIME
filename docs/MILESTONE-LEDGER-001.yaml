@@ -19,7 +19,7 @@ milestones:
   - id: M-002-R2-PHYSICAL
     name: OPERATIONAL_CONTINUITY
     status: IMPLEMENTED
-    commit_sha: 0d1e37164a827d7adcc0f4c3defdaf55a13ff3
+    commit_sha: 0d1e37164a827d7adcc0f4c3defdafad55a13ff3
     evidence: two-phase continuity mutation and reconciliation support
   - id: ANNY-BOOTSTRAP-DETERMINISTIC-001
     name: DETERMINISTIC_BOOTSTRAP
@@ -39,21 +39,35 @@ milestones:
     status: CONTRACT_DEFINED
     commit_sha: f1043b322bf33b88587e2a68131e658e774e6688
     evidence: SYNC contract document
-    implementation_status: PENDING
-    blocker: updater methods remain stubs and canonical sync API is not yet established
+    implementation_status: SUPERSEDED_BY_IMPLEMENTATION
+  - id: SYNC-IMPLEMENTATION-001-A
+    name: GOVERNED_SYNC_CORE
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: 4bd544756ea04c89f3a2dc2889bb2e63e632be8a
+    supporting_commits:
+      - c5d8e8babcaba0f9a552deb7239a7eccf7daf8e2
+      - 8ba195044e2593cf144576bdb71b364dc81b7e7b
+    evidence: fail-closed SyncService, durable sanitized state, authenticated server integration, unit tests added
+    verification_note: local execution against the exact remote source was unavailable because the execution environment could not resolve GitHub; no green CI run is claimed
+  - id: SYNC-IMPLEMENTATION-001-B
+    name: CANONICAL_SYNC_API
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: 8ba195044e2593cf144576bdb71b364dc81b7e7b
+    evidence: POST /api/sync and GET /api/sync/status handled after authentication/POST middleware
+    blocker: Control Center first-level SYNC UI still needs wiring; authoritative update source and candidate verifier are not configured
 current_documentation_anchor:
-  commit_sha: 6f2d8dff8e3c3f2592a567b1461569ee83e96a6f
-  note: this commit contains the reconstruction playbook and is a documentation checkpoint, not a functional milestone
+  commit_sha: 7798b0655f94394b53c23f024e68605bf92eef72
+  note: compact reconstruction card; documentation checkpoint
 next_p0:
-  id: SYNC-IMPLEMENTATION-001
-  objective: implement real governed SYNC end-to-end without implicit activation
+  id: SYNC-IMPLEMENTATION-001-C
+  objective: expose first-level Control Center SYNC controls and live status without confusing Sync with Verify/Stage/Activate
   required_outputs:
-    - canonical sync service/state machine
-    - POST /api/sync
-    - GET /api/sync/status
-    - first-level Control Center SYNC UI
-    - durable sync trace/evidence
-    - negative/fail-closed tests
-    - explicit separation of SYNC/STAGE/ACTIVATE
-    - verified rollback path or explicit documented non-availability
-resume_rule: read latest commit, rerun bootstrap, verify SYNC-CONTROL-001, then execute only SYNC-IMPLEMENTATION-001 after prerequisites are re-established
+    - visible SYNC control in primary Control Center
+    - live SYNC state/status polling
+    - trace/evidence presentation
+    - no implicit activation
+    - UI negative/blocked/unknown states
+  following_gate:
+    id: SYNC-IMPLEMENTATION-001-D
+    objective: bind authoritative source discovery and candidate verification
+resume_rule: read latest commit, rerun bootstrap, verify SYNC-IMPLEMENTATION-001-A/B evidence, then execute only the next P0 action after prerequisites are re-established
