@@ -1,0 +1,11 @@
+{
+  "serial": "AG-023",
+  "starting_head": "b71afbbe3c0073352bbcd8ad161e56c0d9622e44",
+  "actual_current_head": "0325f33e9d4bb7944a19bed8a3483df4de1643dc",
+  "previous_documented_status": "IMPLEMENTED_NOT_VERIFIED",
+  "canonical_status": "VERIFIED",
+  "previous_documentation_anchor": "e4d3ce550c5c0f8c8b2226a16645c39a9c2a9d21",
+  "new_documentation_anchor": "0325f33e9d4bb7944a19bed8a3483df4de1643dc",
+  "ag_022_decision": "VERIFIED",
+  "decision": "RECONCILED"
+}
