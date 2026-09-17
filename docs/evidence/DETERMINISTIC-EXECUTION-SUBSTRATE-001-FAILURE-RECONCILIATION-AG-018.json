@@ -1,0 +1,43 @@
+{
+"serial": "AG-018",
+"milestone": "DETERMINISTIC-EXECUTION-SUBSTRATE-001",
+"implementation_commit_sha": "bb26f74a3b4588af3ba4fd4e2deaed721415e50e",
+"previous_verification": {
+"serial": "AG-017",
+"collected": 37,
+"passed": 34,
+"failed": 3,
+"errors": 0
+},
+"failures": [
+{
+"nodeid": "tests/test_deterministic_local_execution.py::test_filesystem_list_is_deterministic_and_sorted",
+"classification": "TEST_DEFECT",
+"root_cause": "Test passed 'tmp_path' directly to filesystem.list while _execute created 'runtime' inside 'tmp_path', causing 'runtime' to appear in the directory listing unexpectedly.",
+"evidence": "AssertionError: assert ['a.txt', 'b.txt', 'runtime'] == ['a.txt', 'b.txt']",
+"resolution": "Updated test to isolate target directory ('target') from 'tmp_path' so workspace execution artifacts don't pollute the file list.",
+"resolved": true
+},
+{
+"nodeid": "tests/test_deterministic_local_execution.py::test_repository_read_and_diff",
+"classification": "IMPLEMENTATION_DEFECT",
+"root_cause": "The repository.diff capability unconditionally passed 'head' to git diff, defaulting to 'HEAD'. This prevented git from diffing against the working tree (which requires omitting head).",
+"evidence": "AssertionError: assert 'file.txt' in ''",
+"resolution": "Modified runtime/execution/deterministic_executor.py to omit the 'head' argument when diffing against the working tree, allowing 'git diff base'.",
+"resolved": true
+},
+{
+"nodeid": "tests/test_control_plane_universe_001.py::test_control_plane_universe_handlers",
+"classification": "TEST_DEFECT",
+"root_cause": "Mock admin_session in test lacked a 'csrf_token' string property, causing it to return a MagicMock which crashed string replace(). Additionally, the test asserted an outdated dashboard title.",
+"evidence": "TypeError: replace() argument 2 must be str, not MagicMock. After fixing type, AssertionError on title.",
+"resolution": "Provided explicit csrf_token in mock context and updated the test assertion from 'ANNY Control Plane' to 'ANNY CONTROL CENTER' to match the canonical dashboard.",
+"resolved": true
+}
+],
+"regression_check": {
+"observability": "VERIFIED",
+"sync_001_f": "VERIFIED"
+},
+"decision": "RECONCILIATION_COMPLETE"
+}

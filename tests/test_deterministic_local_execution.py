@@ -57,9 +57,11 @@ def test_registry_marks_local_families_and_blocks_fabric_write():
 
 
 def test_filesystem_list_is_deterministic_and_sorted(tmp_path):
-    (tmp_path / "b.txt").write_text("b", encoding="utf-8")
-    (tmp_path / "a.txt").write_text("a", encoding="utf-8")
-    task = _task("filesystem.list", {"path": str(tmp_path)})
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "b.txt").write_text("b", encoding="utf-8")
+    (target / "a.txt").write_text("a", encoding="utf-8")
+    task = _task("filesystem.list", {"path": str(target)})
     context, workspace = _execute(tmp_path / "runtime", task)
     assert context.status == ExecutionStatus.SUCCEEDED
     assert [item["name"] for item in context.result["entries"]] == ["a.txt", "b.txt"]

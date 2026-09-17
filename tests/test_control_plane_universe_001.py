@@ -52,13 +52,12 @@ def mock_context():
     
     audit_mgr = MagicMock()
     audit_mgr.get_events.return_value = [("id", "time", "level", "cat", "mod", "type", "SUCCESS", "msg", "data", "inst", "rt")]
-
     return {
         'github_manager': gh_mgr,
         'execution_manager': exec_mgr,
         'audit_manager': audit_mgr,
         'bootstrap_snapshot': {'discovered_repos': [], 'result': MagicMock(anny_ready=True, runtime_id="RT-1234", fabric_node="NODE-001", gates=[])},
-        'admin_session': MagicMock(admin_session_id="test", principal="test")
+        'admin_session': MagicMock(admin_session_id="test", principal="test", csrf_token="test_csrf")
     }
 
 def test_control_plane_universe_routing(mock_context):
@@ -98,7 +97,7 @@ def test_control_plane_universe_handlers(mock_context):
     
     # Test Dashboard (Overview)
     html = router.handle_dashboard(ParsedUrl("/"))
-    assert "ANNY Control Plane" in html
+    assert "ANNY CONTROL CENTER" in html
     
     # Test Topology
     html = router.handle_infrastructure_topology(ParsedUrl("/infrastructure/runtime"))

@@ -231,15 +231,18 @@ class DeterministicExecutor:
         self._deadline(context)
         repo_path = self._repository_path(task)
         base = task.input.get("base")
-        head = task.input.get("head") or "HEAD"
+        head = task.input.get("head")
         if not isinstance(base, str) or not base:
             raise ValueError("Missing diff 'base'")
-        result = self._git(repo_path, ["diff", "--no-ext-diff", "--unified=3", base, head])
+        args = ["diff", "--no-ext-diff", "--unified=3", base]
+        if head:
+            args.append(head)
+        result = self._git(repo_path, args)
         diff_text = result.stdout
         self._limit_output(context, {
             "repository": repo_path,
             "base": base,
-            "head": head,
+            "head": head or "",
             "exit_code": result.returncode,
             "diff": diff_text,
         })
