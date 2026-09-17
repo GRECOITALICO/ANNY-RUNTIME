@@ -136,12 +136,13 @@ milestones:
       - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-006.md
       - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-007.md
       - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-008.md
+      - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-009.md
       - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-AG-008-CLOSEOUT.md
       - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-TEST-RUN-009.json
       - docs/LEGACY-CLEANUP-REVIEW-001.md
       - docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
     legacy_cleanup_gate: executed
-    blocker: none
+    blocker: AG-013 verification is not durably corroborated on main; the claimed 13/13 and 7/7 results remain claimant-reported because no AG-013-specific verification result artifact is published, and the contract JSON still declares verification_status: PENDING.
     next_action: DETERMINISTIC-OBSERVABILITY-001-VERIFY
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
@@ -160,19 +161,19 @@ legacy_cleanup_policy:
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
   commit_sha: eb622dcb939ba087b6fba9c2674598157128b0bc
-  note: AG-012 contract repair commit; separates impl/evidence identity, removes self-reference mandate, adds 7 contract tests (all PASS)
+  note: AG-012 contract repair commit; AG-013 post-closeout audit 009 now records that verification remains uncorroborated; observability remains IMPLEMENTED_NOT_VERIFIED; substrate remains blocked
 next_p0:
-  id: DETERMINISTIC-OBSERVABILITY-001-CONTRACT-REPAIR
-  objective: repair the durable closeout contract so implementation identity, evidence closeout identity, branch inclusion, and documentation anchor are independently verifiable without self-reference
+  id: DETERMINISTIC-OBSERVABILITY-001-VERIFY
+  objective: independently verify observability using the repaired closeout contract, then only after VERIFIED advance to DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
   required_outputs:
-    - repaired durable ledger schema and contract text
-    - explicit implementation_commit_sha semantics
-    - explicit evidence_closeout_commits semantics
-    - ancestry and active-branch verification rule
-    - regression guard preserving VERIFIED status of prior milestones
-    - revised observability closeout verification procedure
-    - no SHA-1 fixed-point or self-referential hash search
+    - implementation commit resolution and ancestry validation
+    - evidence closeout commit resolution and main reachability
+    - current documentation anchor validation
+    - observability focused suite execution with durable result
+    - full provenance, timestamp filtering, HTTP boundary, and matrix verification re-run or durably revalidated
+    - legacy-surface review confirmation
+    - final VERIFIED decision only if every contractual gate passes
   following_gate:
-    id: DETERMINISTIC-OBSERVABILITY-001-VERIFY
-    objective: independently verify observability using the repaired closeout contract, then only after VERIFIED advance to DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
+    id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
+    objective: verify governed local deterministic execution and its tests after observability is established as VERIFIED
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
