@@ -37,7 +37,7 @@ milestones:
   - id: SYNC-CONTROL-001
     name: FIRST_CLASS_SYNC_CONTRACT
     status: CONTRACT_DEFINED
-    commit_sha: f1043b322bf33b88587e2a68131e658e774e6688
+    commit_sha: f1043b322bf33b88587a2e68131e658e774e6688
     evidence: SYNC contract document
     implementation_status: SUPERSEDED_BY_IMPLEMENTATION
   - id: SYNC-IMPLEMENTATION-001-A
@@ -100,14 +100,14 @@ milestones:
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
     status: IMPLEMENTED_NOT_VERIFIED
-    commit_sha: 96f2ff658deb7566b7f328894353282c77798c4e
+    commit_sha: 6173a87b4ca21d1865649bf3bd82ff58588aa547
     supporting_commits:
       - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
       - e572e0c26004bdee4e473f8561da0bf55cd6ab25
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
-    evidence: processing-plane contract, department-level observability, canonical telemetry fields, and Processing Matrix requirements
-    blocker: dashboard aggregation, task-level event emission, and end-to-end processing matrix display still need verification
+    evidence: Processing Matrix API and Control Center surface, TelemetryCollector propagation into execution, routing/department provenance, and aggregator implementation
+    blocker: declared observability test file and closeout evidence artifact are absent from current main; current focused/E2E verification is therefore not established
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -119,20 +119,22 @@ milestones:
     evidence: consolidated deterministic system contract covering capability boundary, three processing planes, department provenance, evidence, observability, roadmap and claims discipline
     verification_note: documentation is durable; implementation/test/runtime-boundary verification remains separate
 current_documentation_anchor:
-  commit_sha: deaa9e5c4defe831c164e390cdf6481570411de7
-  note: consolidated deterministic system and reconstruction documentation checkpoint
+  commit_sha: 6173a87b4ca21d1865649bf3bd82ff58588aa547
+  note: actual Processing Matrix implementation checkpoint; verification evidence still pending
 next_p0:
-  id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
-  objective: execute and verify deterministic processing plus routing/department observability tests before expanding the execution substrate further
+  id: DETERMINISTIC-OBSERVABILITY-001-VERIFY
+  objective: run current observability tests and runtime-boundary verification against the actual Processing Matrix implementation, then reconcile failures before returning to deterministic substrate verification or SYNC-F
   required_outputs:
+    - current observability test file committed and executed
     - current focused test results
     - deterministic routing evidence
-    - local-model routing evidence
+    - local-model routing evidence where available
     - frontier-model routing evidence where available
     - department-level aggregation evidence
     - no-secret telemetry evidence
     - Processing Matrix HTTP/browser evidence
+    - durable closeout evidence
   following_gate:
-    id: SYNC-IMPLEMENTATION-001-F
-    objective: verify the actual runtime Sync path, make Sync asynchronous/live, and implement explicit Stage/Activate/Rollback contracts
+    id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
+    objective: verify deterministic processing and its evidence chain with current tests
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, execute only the current next_p0 action after prerequisites are re-established
