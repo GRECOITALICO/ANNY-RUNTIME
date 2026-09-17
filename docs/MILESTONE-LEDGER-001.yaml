@@ -121,10 +121,10 @@ milestones:
       - e572e0c26004bdee4e473f8561da0bf55cd6ab25
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
-    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-CLOSEOUT.md; post-closeout audit: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-001.md
-    blocker: current test execution not independently established; provenance test does not exercise Task->ExecutionContext->Worker->Telemetry; HTTP test is direct AdminRouter invocation rather than live HTTP; Control Center runtime evidence absent; timestamp ordering is raw string sort; legacy closeout and ledger reconciliation incomplete; referenced preexisting failure triage artifact absent
+    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-CLOSEOUT.md; post-closeout audit 001: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-001.md; post-closeout audit 002: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-002.md
+    blocker: AG-005 remediation is not present on current main; timezone-aware aggregator fix, full provenance integration, real HTTP runtime verification, Control Center runtime evidence, legacy review artifact, and pre-existing failure triage artifact are not established
     legacy_cleanup_gate: required
-    next_action: remediate post-closeout audit blockers, execute current focused and runtime-boundary verification, reconcile closeout and ledger, then re-verify
+    next_action: execute AG-005 remediation on current main, run current focused/runtime-boundary verification, reconcile closeout and ledger, then re-verify
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -141,18 +141,19 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: 1bc092f8cc6cf3f27b428fb614e0e5b563083a79
-  note: post-closeout audit of DETERMINISTIC-OBSERVABILITY-001 reopened verification; F remains VERIFIED; implementation exists but current runtime/evidence reconciliation is not established
+  commit_sha: 64378b0bc95557b30f658ef3098f8179f58c051e
+  note: post-closeout audit 002 confirms AG-005 remediation is absent from main; F remains VERIFIED; observability remains IMPLEMENTED_NOT_VERIFIED
 next_p0:
   id: DETERMINISTIC-OBSERVABILITY-001-REVERIFY
-  objective: remediate the post-closeout audit blockers and re-verify deterministic processing observability before advancing to the execution-substrate gate
+  objective: execute and verify the actual AG-005 remediation on current main before advancing
   required_outputs:
-    - current focused test execution evidence with exact command/date/time/result
+    - timezone-aware chronological aggregation implementation
     - Task->ExecutionContext->Worker->Telemetry provenance regression evidence
     - actual HTTP runtime boundary evidence or explicit downgrade of claim
     - Control Center runtime evidence or explicit downgrade of claim
-    - timezone-aware chronological aggregation behavior and regression test
     - path-by-path legacy cleanup evidence
+    - current focused/full-suite test evidence with exact command/date/time/result
+    - durable pre-existing failure triage only for failures observed in current execution
     - reconciled closeout final SHA and ledger SHA
     - only then VERIFIED status if all gates pass
   following_gate:
