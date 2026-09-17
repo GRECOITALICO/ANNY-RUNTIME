@@ -11,15 +11,17 @@ from runtime.execution.capability import CapabilityDefinition
 from runtime.execution.selector import ExecutorSelection
 from runtime.execution.interfaces import ContextPackage, ModelExecutor
 from runtime.execution.deterministic_executor import DeterministicExecutor, ExecutorSecurityError, ExecutorLimitsExceeded
+from runtime.telemetry.telemetry import TelemetryEnvelope, TelemetryDomain
 
 logger = logging.getLogger(__name__)
 
 
 class WorkerManager:
-    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None):
+    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None, telemetry_collector=None):
         self.workspace_manager = workspace_manager
         self.audit_manager = audit_manager
         self.mcp_gateway = mcp_gateway
+        self.telemetry_collector = telemetry_collector
         self.workers: Dict[str, WorkerDefinition] = {}
         self.deterministic_executor = DeterministicExecutor(workspace_manager)
 
@@ -34,36 +36,32 @@ class WorkerManager:
         return "UNKNOWN"
 
     def _emit_telemetry(self, event_type: str, worker: WorkerDefinition, extra: Dict[str, Any] = None):
-        if not self.audit_manager:
+        if not self.telemetry_collector:
             return
 
-        payload = {
-            "worker_id": worker.worker_id,
-            "execution_id": worker.execution_id,
-            "task_id": worker.task_id,
-            "capability_id": worker.capability_id,
-            "capability_family": worker.capability_family,
-            "executor_type": worker.executor_type,
-            "routing_class": worker.routing_class,
-            "executor_id": worker.executor_id,
-            "model_id": worker.model_id,
-            "department_id": worker.department_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
+        envelope = TelemetryEnvelope.create(
+            component="worker",
+            event_type=event_type,
+            source="execution",
+            execution_id=worker.execution_id,
+            task_id=worker.task_id,
+            worker_id=worker.worker_id,
+            capability_id=worker.capability_id,
+            capability_family=worker.capability_family,
+            executor_type=worker.executor_type,
+            routing_class=worker.routing_class,
+            executor_id=worker.executor_id,
+            model_id=worker.model_id,
+            department_id=worker.department_id or "UNKNOWN",
+            workspace_id=worker.workspace_id,
+            status=worker.state.value,
+            metadata=extra or {}
+        )
 
         if worker.started_at and worker.finished_at:
-            payload["duration"] = int((worker.finished_at - worker.started_at).total_seconds() * 1000)
+            envelope.duration_ms = int((worker.finished_at - worker.started_at).total_seconds() * 1000)
 
-        if extra:
-            payload.update(extra)
-
-        self.audit_manager.record(
-            "system",
-            event_type,
-            "WorkerManager",
-            "SUCCESS",
-            str(payload),
-        )
+        self.telemetry_collector.emit(envelope)
 
     def create_worker(self, context: TaskExecutionContext, selection: ExecutorSelection, task: Task) -> WorkerDefinition:
         worker_id = f"wrk-{uuid.uuid4().hex[:8]}"
@@ -98,7 +96,7 @@ class WorkerManager:
         )
 
         self.workers[worker_id] = worker
-        self._emit_telemetry("worker_created", worker)
+        self._emit_telemetry("task.routed", worker)
         return worker
 
     def get_worker(self, worker_id: str) -> Optional[WorkerDefinition]:
@@ -116,11 +114,9 @@ class WorkerManager:
             raise ValueError(f"Worker {worker_id} is in state {worker.state}, cannot start")
 
         worker.state = WorkerState.STARTING
-        self._emit_telemetry("worker_starting", worker)
-
         worker.started_at = datetime.now(timezone.utc)
         worker.state = WorkerState.RUNNING
-        self._emit_telemetry("worker_started", worker)
+        self._emit_telemetry("execution.started", worker)
 
         try:
             if datetime.now(timezone.utc) > worker.deadline:
@@ -185,26 +181,26 @@ class WorkerManager:
             if context.status == ExecutionStatus.SUCCEEDED:
                 worker.state = WorkerState.SUCCEEDED
                 worker.finished_at = datetime.now(timezone.utc)
-                self._emit_telemetry("worker_completed", worker, {"result_hash": context.result_hash})
+                self._emit_telemetry("execution.completed", worker, {"result_hash": context.result_hash})
             elif context.status == ExecutionStatus.TIMED_OUT:
                 worker.state = WorkerState.TIMED_OUT
                 worker.finished_at = datetime.now(timezone.utc)
-                self._emit_telemetry("worker_timed_out", worker)
+                self._emit_telemetry("execution.timeout", worker)
             elif context.status == ExecutionStatus.LIMIT_EXCEEDED:
                 worker.state = WorkerState.LIMIT_EXCEEDED
                 worker.finished_at = datetime.now(timezone.utc)
-                self._emit_telemetry("worker_failed", worker, {"exit_code": "LIMIT_EXCEEDED"})
+                self._emit_telemetry("execution.blocked", worker, {"exit_code": "LIMIT_EXCEEDED"})
             else:
                 worker.state = WorkerState.FAILED
                 worker.finished_at = datetime.now(timezone.utc)
-                self._emit_telemetry("worker_failed", worker, {"exit_code": context.failure_reason.value if context.failure_reason else "UNKNOWN"})
+                self._emit_telemetry("execution.failed", worker, {"exit_code": context.failure_reason.value if context.failure_reason else "UNKNOWN"})
 
         except TimeoutError:
             worker.state = WorkerState.TIMED_OUT
             worker.finished_at = datetime.now(timezone.utc)
             context.status = ExecutionStatus.TIMED_OUT
             context.failure_reason = FailureReason.TIMEOUT
-            self._emit_telemetry("worker_timed_out", worker)
+            self._emit_telemetry("execution.timeout", worker)
 
         except ExecutorLimitsExceeded as e:
             worker.state = WorkerState.LIMIT_EXCEEDED
@@ -212,7 +208,7 @@ class WorkerManager:
             context.status = ExecutionStatus.LIMIT_EXCEEDED
             context.failure_reason = FailureReason.LIMIT_EXCEEDED
             context.error_message = str(e)
-            self._emit_telemetry("worker_failed", worker, {"exit_code": "LIMIT_EXCEEDED"})
+            self._emit_telemetry("execution.blocked", worker, {"exit_code": "LIMIT_EXCEEDED"})
 
         except ExecutorSecurityError as e:
             worker.state = WorkerState.FAILED
@@ -220,7 +216,7 @@ class WorkerManager:
             context.status = ExecutionStatus.FAILED
             context.failure_reason = FailureReason.AUTHORIZATION_DENIED
             context.error_message = str(e)
-            self._emit_telemetry("worker_failed", worker, {"exit_code": "SECURITY_ERROR"})
+            self._emit_telemetry("execution.blocked", worker, {"exit_code": "SECURITY_ERROR"})
 
         except Exception as e:
             logger.error(f"Worker {worker_id} crashed unexpectedly: {e}")
@@ -229,7 +225,7 @@ class WorkerManager:
             context.status = ExecutionStatus.FAILED
             context.failure_reason = FailureReason.EXECUTION_ERROR
             context.error_message = f"Worker crash: {str(e)}"
-            self._emit_telemetry("worker_failed", worker, {"exit_code": "CRASH", "reason": str(e)})
+            self._emit_telemetry("execution.failed", worker, {"exit_code": "CRASH", "reason": str(e)})
 
     def cancel_worker(self, worker_id: str):
         worker = self.workers.get(worker_id)
@@ -238,7 +234,7 @@ class WorkerManager:
         if worker.state in (WorkerState.CREATED, WorkerState.STARTING, WorkerState.RUNNING):
             worker.state = WorkerState.CANCELLED
             worker.finished_at = datetime.now(timezone.utc)
-            self._emit_telemetry("worker_cancelled", worker)
+            self._emit_telemetry("execution.cancelled", worker)
 
     def terminate_worker(self, worker_id: str):
         worker = self.workers.get(worker_id)
@@ -246,4 +242,4 @@ class WorkerManager:
             return
         if worker.state in (WorkerState.CREATED, WorkerState.STARTING, WorkerState.RUNNING):
             worker.state = WorkerState.TERMINATED
-            self._emit_telemetry("worker_terminated", worker)
+            self._emit_telemetry("execution.terminated", worker)

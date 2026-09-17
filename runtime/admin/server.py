@@ -236,12 +236,19 @@ def start_admin_server(host: str, port: int):
     from runtime.fabric.github_adapter import GitHubFabricAdapter
     fabric_client = GitHubFabricAdapter(github_client=github_client) if github_client else None
     
+    from runtime.telemetry.collector import TelemetryCollector
+    from runtime.telemetry.aggregator import TelemetryAggregator
+    
+    telemetry_collector = TelemetryCollector(str(data_dir))
+    telemetry_aggregator = TelemetryAggregator(telemetry_collector)
+
     ephemeral_workspace_manager = EphemeralWorkspaceManager()
     execution_manager = ExecutionManager(
         workspace_manager=ephemeral_workspace_manager,
         audit_manager=audit_manager,
         github_client=github_client,
-        fabric_client=fabric_client
+        fabric_client=fabric_client,
+        telemetry_collector=telemetry_collector
     )
         
     disc_repos_raw = []
@@ -290,6 +297,10 @@ def start_admin_server(host: str, port: int):
     
     server.admin_context['execution_manager'] = execution_manager
     server.router.context['execution_manager'] = execution_manager
+    server.admin_context['telemetry_collector'] = telemetry_collector
+    server.router.context['telemetry_collector'] = telemetry_collector
+    server.admin_context['telemetry_aggregator'] = telemetry_aggregator
+    server.router.context['telemetry_aggregator'] = telemetry_aggregator
     
     def run_bootstrap():
         try:

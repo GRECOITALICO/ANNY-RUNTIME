@@ -9,10 +9,12 @@ from runtime.execution.selector import ExecutorSelector
 from runtime.execution.worker import WorkerManager
 
 
+from runtime.telemetry.telemetry import TelemetryEnvelope
+
 class ExecutionManager:
     """Manage queue and history of bounded workspace executions."""
 
-    def __init__(self, workspace_manager: EphemeralWorkspaceManager, audit_manager=None, github_client=None, fabric_client=None):
+    def __init__(self, workspace_manager: EphemeralWorkspaceManager, audit_manager=None, github_client=None, fabric_client=None, telemetry_collector=None):
         self._executions: Dict[str, TaskExecutionContext] = {}
         self._tasks: Dict[str, Task] = {}
         self.workspace_manager = workspace_manager
@@ -38,14 +40,28 @@ class ExecutionManager:
             fabric_client=fabric_client
         )
 
+        self.telemetry_collector = telemetry_collector
         self.worker_manager = WorkerManager(
             workspace_manager,
             audit_manager,
-            mcp_gateway=self.mcp_gateway
+            mcp_gateway=self.mcp_gateway,
+            telemetry_collector=self.telemetry_collector
         )
 
     def submit_task(self, task: Task) -> TaskExecutionContext:
         execution_id = str(uuid.uuid4())
+        if self.telemetry_collector:
+            envelope = TelemetryEnvelope.create(
+                component="manager",
+                event_type="task.created",
+                source="execution",
+                execution_id=execution_id,
+                task_id=task.task_id,
+                capability_id=task.capability_id,
+                department_id=task.department_id or "UNKNOWN",
+                project_id=task.project_id
+            )
+            self.telemetry_collector.emit(envelope)
         cap = self.registry.get(task.capability_id)
         if not cap:
             raise ValueError(f"Unknown capability: {task.capability_id}")

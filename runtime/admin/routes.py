@@ -71,6 +71,8 @@ class AdminRouter:
             '/api/v1/continuity/bootstrap': self.handle_bootstrap_api,
             '/telemetry/live': self.handle_telemetry_live,
             '/telemetry/timeline': self.handle_telemetry_timeline,
+            '/api/processing/matrix': self.handle_processing_matrix,
+            '/api/processing/events': self.handle_processing_events,
             '/browser': self.handle_browser_dashboard,
         }
         self._post_routes = {
@@ -247,6 +249,31 @@ class AdminRouter:
             error_class = type(e).__name__
             safe_msg = f"Bootstrap API error: {error_class}"
             self._send_json(handler, {"error": safe_msg, "status": "ERROR"}, status=500)
+
+    def handle_processing_matrix(self, parsed) -> str:
+        aggregator = self.context.get('telemetry_aggregator')
+        if not aggregator:
+            self.context['direct_json_response'] = {"error": "Aggregator unavailable"}
+            return '/'
+        
+        query_params = urllib.parse.parse_qs(parsed.query)
+        filters = {k: v[0] for k, v in query_params.items()}
+        matrix = aggregator.get_matrix(filters)
+        self.context['direct_json_response'] = matrix
+        return '/'
+
+    def handle_processing_events(self, parsed) -> str:
+        aggregator = self.context.get('telemetry_aggregator')
+        if not aggregator:
+            self.context['direct_json_response'] = {"error": "Aggregator unavailable"}
+            return '/'
+            
+        query_params = urllib.parse.parse_qs(parsed.query)
+        filters = {k: v[0] for k, v in query_params.items() if k != 'limit'}
+        limit = int(query_params.get('limit', ['100'])[0])
+        events = aggregator.get_events(filters, limit=limit)
+        self.context['direct_json_response'] = events
+        return '/'
 
     def handle_api_status(self, parsed) -> str:
         """Returns the live status of the runtime and bootstrap sequence."""

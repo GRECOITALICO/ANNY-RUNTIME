@@ -227,6 +227,29 @@ def control_center_page(csrf_token: str) -> str:
     <tbody id="connectors-tbody"></tbody></table>
 </div>
 
+<!-- Processing Matrix -->
+<div class="panel full">
+    <h2>Processing Matrix</h2>
+    <div style="overflow-x:auto">
+        <table>
+            <thead><tr>
+                <th>Department</th>
+                <th title="Total Tasks">Total</th>
+                <th title="Deterministic Plane">DET</th>
+                <th title="Local Model Plane">LOC</th>
+                <th title="Frontier Model Plane">FRN</th>
+                <th title="Unknown Plane">UNK</th>
+                <th title="Succeeded">SUC</th>
+                <th title="Failed">FAL</th>
+                <th title="Timed Out">TMO</th>
+                <th title="Blocked">BLK</th>
+                <th title="Average Duration (ms)">Avg(ms)</th>
+            </tr></thead>
+            <tbody id="matrix-tbody"><tr><td colspan="11" style="color:var(--text-secondary)">Loading...</td></tr></tbody>
+        </table>
+    </div>
+</div>
+
 <!-- Continuity -->
 <div class="panel full">
     <h2>Continuity</h2>
@@ -396,6 +419,50 @@ async function fetchStatus() {
     }
 }
 
+async function fetchProcessingMatrix() {
+    try {
+        const r = await fetch('/api/processing/matrix');
+        if (!r.ok) return;
+        const d = await r.json();
+        
+        let html = '';
+        if (d.global) {
+            html += '<tr><td class="mono" style="font-weight:bold">ALL</td>' +
+                   '<td>' + (d.global.total||0) + '</td>' +
+                   '<td>' + (d.global.deterministic||0) + '</td>' +
+                   '<td>' + (d.global.local_model||0) + '</td>' +
+                   '<td>' + (d.global.frontier_model||0) + '</td>' +
+                   '<td>' + (d.global.unknown||0) + '</td>' +
+                   '<td>' + (d.global.success||0) + '</td>' +
+                   '<td>' + (d.global.failed||0) + '</td>' +
+                   '<td>' + (d.global.timeout||0) + '</td>' +
+                   '<td>' + (d.global.blocked||0) + '</td>' +
+                   '<td>' + Math.round(d.global.average_duration||0) + '</td></tr>';
+        }
+        if (d.departments && Object.keys(d.departments).length > 0) {
+            for (const [dept, stats] of Object.entries(d.departments)) {
+                html += '<tr><td class="mono">' + (dept||'UNKNOWN') + '</td>' +
+                       '<td>' + (stats.total||0) + '</td>' +
+                       '<td>' + (stats.deterministic||0) + '</td>' +
+                       '<td>' + (stats.local_model||0) + '</td>' +
+                       '<td>' + (stats.frontier_model||0) + '</td>' +
+                       '<td>' + (stats.unknown||0) + '</td>' +
+                       '<td>' + (stats.success||0) + '</td>' +
+                       '<td>' + (stats.failed||0) + '</td>' +
+                       '<td>' + (stats.timeout||0) + '</td>' +
+                       '<td>' + (stats.blocked||0) + '</td>' +
+                       '<td>' + Math.round(stats.average_duration||0) + '</td></tr>';
+            }
+        }
+        if (!html) {
+            html = '<tr><td colspan="11" style="color:var(--text-secondary)">No telemetry data</td></tr>';
+        }
+        setInner('matrix-tbody', html);
+    } catch(e) {
+        console.error('Matrix fetch failed:', e);
+    }
+}
+
 async function triggerVerify() {
     const btn = document.getElementById('verify-btn');
     btn.disabled = true; btn.textContent = '⟳ VERIFYING...';
@@ -411,7 +478,11 @@ async function triggerVerify() {
 }
 
 fetchStatus();
-setInterval(fetchStatus, 2000);
+fetchProcessingMatrix();
+setInterval(function() {
+    fetchStatus();
+    fetchProcessingMatrix();
+}, 2000);
 </script>
 </body>
 </html>"""
