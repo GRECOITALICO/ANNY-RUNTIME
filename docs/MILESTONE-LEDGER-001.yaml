@@ -1,0 +1,59 @@
+version: 1
+purpose: durable milestone ledger for ANNY Runtime reconstruction
+rules:
+  - milestone completion requires implementation plus tests plus evidence
+  - VERIFIED/CERTIFIED milestones are the only trusted resume points
+  - historical test counts are not current test evidence
+  - every new milestone must record commit_sha and next_action
+milestones:
+  - id: M-001
+    name: THREE_PLANE_BOOTSTRAP
+    status: IMPLEMENTED
+    commit_sha: 5d133811670612341f3e2f5c43e9250bd7bbd7f6
+    evidence: explicit mandatory runtime/fabric bootstrap gates
+  - id: M-001-R1.1
+    name: DYNAMIC_FABRIC_BINDING
+    status: IMPLEMENTED
+    commit_sha: 7de69a49d713eafe4d17d16d3c2c2bcad2fe0d1b
+    evidence: removed legacy hardcoded Fabric client/identity
+  - id: M-002-R2-PHYSICAL
+    name: OPERATIONAL_CONTINUITY
+    status: IMPLEMENTED
+    commit_sha: 0d1e37164a827d7adcc0f4c3defdaf55a13ff3
+    evidence: two-phase continuity mutation and reconciliation support
+  - id: ANNY-BOOTSTRAP-DETERMINISTIC-001
+    name: DETERMINISTIC_BOOTSTRAP
+    status: IMPLEMENTED
+    commit_sha: a9771d11e3bf49fb1170a8a1140fc9887ac6e97a
+    evidence: 12-phase design, 25 mandatory gates, inventory/access/contracts/delegation/continuity
+    historical_test_result: 42_tests_passing
+    note: historical evidence; rerun current suite before treating as current
+  - id: ANNY-LOCALHOST-ACCESS-001
+    name: LIVE_CONTROL_CENTER
+    status: IMPLEMENTED
+    commit_sha: 64f1336061c1d44c4bec53c68fce36546be07ca9
+    evidence: asynchronous bootstrap, live Control Center, status polling, verify endpoint
+    historical_test_result: 28_of_28_bootstrap_tests_passed
+  - id: SYNC-CONTROL-001
+    name: FIRST_CLASS_SYNC_CONTRACT
+    status: CONTRACT_DEFINED
+    commit_sha: f1043b322bf33b88587e2a68131e658e774e6688
+    evidence: SYNC contract document
+    implementation_status: PENDING
+    blocker: updater methods remain stubs and canonical sync API is not yet established
+current_documentation_anchor:
+  commit_sha: 6f2d8dff8e3c3f2592a567b1461569ee83e96a6f
+  note: this commit contains the reconstruction playbook and is a documentation checkpoint, not a functional milestone
+next_p0:
+  id: SYNC-IMPLEMENTATION-001
+  objective: implement real governed SYNC end-to-end without implicit activation
+  required_outputs:
+    - canonical sync service/state machine
+    - POST /api/sync
+    - GET /api/sync/status
+    - first-level Control Center SYNC UI
+    - durable sync trace/evidence
+    - negative/fail-closed tests
+    - explicit separation of SYNC/STAGE/ACTIVATE
+    - verified rollback path or explicit documented non-availability
+resume_rule: read latest commit, rerun bootstrap, verify SYNC-CONTROL-001, then execute only SYNC-IMPLEMENTATION-001 after prerequisites are re-established
