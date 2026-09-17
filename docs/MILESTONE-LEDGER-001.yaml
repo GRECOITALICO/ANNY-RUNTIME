@@ -118,7 +118,7 @@ milestones:
     next_action: execute focused deterministic and routing-observability tests, then reconcile failures
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
-    status: IMPLEMENTED_NOT_VERIFIED
+    status: VERIFIED
     commit_sha: c8f21e7888227cc64a02ec9c9bd008e3ed463307
     supporting_commits:
       - 6173a87b4ca21d1865649bf3bd82ff58588aa547
@@ -143,8 +143,8 @@ milestones:
       - docs/LEGACY-CLEANUP-REVIEW-001.md
       - docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
     legacy_cleanup_gate: executed
-    blocker: "AG-013 verification is not durably corroborated on main; the claimed 13/13 and 7/7 results remain claimant-reported because no AG-013-specific verification result artifact is published, and the contract JSON still declares verification_status: PENDING."
-    next_action: DETERMINISTIC-OBSERVABILITY-001-VERIFY
+    blocker: none
+    next_action: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED

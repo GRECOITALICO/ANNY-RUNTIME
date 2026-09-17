@@ -10,7 +10,7 @@
   "current_documentation_anchor": "eb622dcb939ba087b6fba9c2674598157128b0bc",
   "self_reference_required": false,
   "contract_status": "REPAIRED",
-  "verification_status": "PENDING",
+  "verification_status": "VERIFIED",
   "contract_tests": {
     "test_implementation_commit_resolves": "PASS",
     "test_evidence_closeout_commit_resolves": "PASS",

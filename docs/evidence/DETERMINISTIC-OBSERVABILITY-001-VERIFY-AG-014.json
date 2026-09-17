@@ -1,0 +1,30 @@
+{
+  "serial": "AG-014",
+  "milestone": "DETERMINISTIC-OBSERVABILITY-001",
+  "implementation_commit_sha": "c8f21e7888227cc64a02ec9c9bd008e3ed463307",
+  "verification_commit": "b0f64ce662c7691fc835d7b6fce9c306a98f0159",
+  "focused_observability": {
+    "collected": 13,
+    "passed": 13,
+    "failed": 0,
+    "errors": 0
+  },
+  "closeout_contract_tests": {
+    "collected": 7,
+    "passed": 7,
+    "failed": 0,
+    "errors": 0
+  },
+  "ancestry_checks": {
+    "implementation_to_evidence": "PASS",
+    "evidence_to_main": "PASS",
+    "documentation_anchor_to_main": "PASS"
+  },
+  "legacy_review": "PASS",
+  "triage": "PASS",
+  "control_center_runtime": "NOT_ESTABLISHED",
+  "worktree_clean": true,
+  "status_short": "",
+  "diff_head_empty": true,
+  "decision": "VERIFIED"
+}
