@@ -69,8 +69,8 @@ milestones:
     supporting_commits:
       - 58e38c482fba3878b634b3fef39b3538088e042d
       - f5686af4b1e3a1a7a671068827c8cf3819d23e0e
-    evidence: explicit ANNYY_UPDATE_SOURCE_REPO source binding, stable/prerelease classification, discovery tests and evidence
-    blocker: candidate integrity/signature/provenance verification is not implemented
+    evidence: explicit update source binding, stable/prerelease classification, discovery tests and evidence
+    blocker: candidate integrity/signature/provenance verification was not established at this checkpoint
   - id: SYNC-IMPLEMENTATION-001-E
     name: CANDIDATE_INTEGRITY_VERIFICATION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -86,20 +86,36 @@ milestones:
       - 855d38f8661e33d6be42a3e153414a7e3ad8afa9
       - 55d9c6230f6a3862972c4058a427c10fd278bf46
       - 7d059d09597f15f581f1153b55af5a9968599ceb
-    evidence: expanded local deterministic capability metadata and executor, bounded ephemeral workspace layout, execution evidence, focused tests added, external research recorded
-    verification_note: focused tests have been added but have not been executed in this session; no green test result is claimed
-    next_action: run focused deterministic execution tests and reconcile failures before promoting status
+      - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
+      - e572e0c26004bdee4e473f8561da0bf55cd6ab25
+      - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
+    evidence: expanded deterministic capabilities, workspace substrate, department/routing classification, policy propagation, and focused tests
+    verification_note: focused tests have not yet been executed in this session; no green result is claimed
+    next_action: execute focused deterministic and routing-observability tests, then reconcile failures
+  - id: DETERMINISTIC-OBSERVABILITY-001
+    name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: b394adfe3d62a4e94822625659432c2c495f5eb3
+    supporting_commits:
+      - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
+      - e572e0c26004bdee4e473f8561da0bf55cd6ab25
+      - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
+    evidence: durable contract for deterministic/local/frontier routing visibility and department-level processing matrix
+    blocker: dashboard aggregation and end-to-end telemetry display still need verification
 current_documentation_anchor:
-  commit_sha: bb26f74a3b4588af3ba4fd4e2deaed721415e50e
-  note: deterministic execution strategy and research checkpoint
+  commit_sha: b394adfe3d62a4e94822625659432c2c495f5eb3
+  note: deterministic processing observability strategy checkpoint
 next_p0:
-  id: SYNC-IMPLEMENTATION-001-F
-  objective: verify the actual runtime path / end-to-end evidence required by the ledger, and make Sync asynchronous/live to implement explicit Stage/Activate/Rollback contracts
+  id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
+  objective: execute and verify deterministic processing plus routing/department observability tests before expanding the execution substrate further
   required_outputs:
-    - end-to-end runtime tests
-    - live asynchronous execution of sync
-    - Stage/Activate logic with tests
+    - current focused test results
+    - deterministic routing evidence
+    - local-model routing evidence
+    - frontier-model routing evidence where available
+    - department-level aggregation evidence
+    - no-secret telemetry evidence
   following_gate:
-    id: SYNC-IMPLEMENTATION-001-G
-    objective: certify and release governed Sync capabilities
-resume_rule: read latest commit, rerun bootstrap, verify SYNC-IMPLEMENTATION-001-A/B/C/D/E evidence, verify deterministic execution substrate evidence, then execute only the next P0 action after prerequisites are re-established
+    id: SYNC-IMPLEMENTATION-001-F
+    objective: verify the actual runtime Sync path, make Sync asynchronous/live, and implement explicit Stage/Activate/Rollback contracts
+resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, execute only the current next_p0 action after prerequisites are re-established
