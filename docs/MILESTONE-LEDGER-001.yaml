@@ -154,14 +154,14 @@ milestones:
     next_action: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
-    status: IMPLEMENTED_NOT_VERIFIED
+    status: VERIFIED
     commit_sha: 434a7a031b5387999ff7ddc2c1b25b8b238a1d21
     supporting_commits:
       - 8ca99514bced32ffec015bd89bc9464462ed1873
       - 96f2ff658deb7566b7f328894353282c77798c4e
       - deaa9e5c4defe831c164e390cdf6481570411de7
-    evidence: consolidated deterministic system contract covering capability boundary, three processing planes, department provenance, evidence, observability, roadmap and claims discipline
-    verification_note: documentation is durable; implementation/test/runtime-boundary verification remains separate
+    evidence: docs/evidence/DETERMINISTIC-SYSTEM-001-VERIFY-AG-022.json
+    verification_note: deterministic capabilities, telemetry, boundary, and observability fully verified against runtime boundary.
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
@@ -171,6 +171,6 @@ current_documentation_anchor:
   commit_sha: e4d3ce550c5c0f8c8b2226a16645c39a9c2a9d21
   note: contains the current governing contractual documentation that defines the stable semantics
 next_p0:
-  id: DETERMINISTIC-SYSTEM-001-VERIFY
-  objective: verify the consolidated deterministic system contract
+  id: RUNTIME-READINESS-001
+  objective: enter runtime readiness preparation
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
