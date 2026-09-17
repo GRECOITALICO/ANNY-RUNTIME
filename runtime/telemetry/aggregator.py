@@ -49,7 +49,11 @@ class TelemetryAggregator:
         }
         
         execution_states: Dict[str, Dict[str, Any]] = {}
-        for event in events:
+        # Collector query returns newest-first by insertion. Sort chronologically by timestamp
+        # to ensure terminal states (SUCCEEDED) are not overwritten by earlier states (QUEUED).
+        def safe_timestamp(e):
+            return e.timestamp or ""
+        for event in sorted(events, key=safe_timestamp):
             if not event.execution_id:
                 continue
                 
