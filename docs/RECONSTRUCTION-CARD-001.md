@@ -22,9 +22,10 @@ Mode: evidence-first / fail-closed / no assumed state
 7. `docs/MILESTONE-LEDGER-001.yaml`
 8. `docs/RECOVERY-PLAYBOOK-001.md`
 9. `docs/BUILD-TEST-AND-RELEASE-001.md`
-10. `docs/evidence/SYNC-IMPLEMENTATION-001-A-EVIDENCE.md`
-11. `docs/evidence/SYNC-IMPLEMENTATION-001-B-EVIDENCE.md`
-12. `docs/evidence/SYNC-IMPLEMENTATION-001-D-EVIDENCE.md`
+10. `docs/DETERMINISTIC-EXECUTION-STRATEGY-001.md`
+11. `docs/evidence/SYNC-IMPLEMENTATION-001-A-EVIDENCE.md`
+12. `docs/evidence/SYNC-IMPLEMENTATION-001-B-EVIDENCE.md`
+13. `docs/evidence/SYNC-IMPLEMENTATION-001-D-EVIDENCE.md`
 
 ## Mandatory first actions
 
@@ -37,9 +38,10 @@ Mode: evidence-first / fail-closed / no assumed state
 6. identify last VERIFIED/CERTIFIED milestone
 7. verify its evidence
 8. inspect current Sync implementation state
-9. run required tests when execution is available
-10. report blockers
-11. only then continue
+9. inspect deterministic execution substrate state
+10. run required tests when execution is available
+11. report blockers
+12. only then continue
 ```
 
 ## Historical anchors
@@ -78,15 +80,26 @@ Governed Sync candidate integrity verification:
 
 `5efd8c07e0b5f8e58a27d2c3df313d42bcbc603c`
 
-Latest milestone ledger update:
+## Current deterministic execution anchor
 
-`88b5a55908c454233fe4aea4e5257d6bc479ed6c`
+Governed local deterministic execution substrate:
+
+`bb26f74a3b4588af3ba4fd4e2deaed721415e50e`
+
+Supporting implementation commits:
+
+- `a0ac78e49069ee922f399b91050432189750b76f`
+- `855d38f8661e33d6be42a3e153414a7e3ad8afa9`
+- `55d9c6230f6a3862972c4058a427c10fd278bf46`
+- `7d059d09597f15f581f1153b55af5a9968599ceb`
 
 ## Current P0 next action
 
 `SYNC-IMPLEMENTATION-001-F`
 
 Verify the actual runtime path / end-to-end evidence required by the ledger, and make Sync asynchronous/live to implement explicit Stage/Activate/Rollback contracts.
+
+The deterministic execution substrate is a parallel implementation milestone and is currently `IMPLEMENTED_NOT_VERIFIED`; focused tests have been added but current execution evidence is still required.
 
 Required boundary:
 
@@ -111,10 +124,12 @@ They are distinct operations.
 ## Current known gaps
 
 - `runtime/updater/manager.py` operational methods remain stubs.
-- Candidate verification is not yet implemented.
 - End-to-end HTTP/browser verification is not established.
 - No current CI run is being claimed for the new Sync milestones.
 - `ANNY_UPDATE_SOURCE_REPO` is optional; when absent, Sync must remain fail-closed.
+- Deterministic execution substrate focused tests have not yet been executed in this session.
+- Deterministic workspace is not yet a full hermetic sandbox; network/process/resource isolation remains bounded but incomplete.
+- Content-addressed cache, replay/idempotency and DAG scheduling remain future deterministic-substrate work.
 
 ## Resume answer format
 
@@ -133,6 +148,7 @@ EVIDENCE_REFS:
 SYNC_STATE:
 SYNC_SOURCE:
 SYNC_CANDIDATE:
+DETERMINISTIC_SUBSTRATE:
 BLOCKERS:
 NEXT_ACTION:
 RESUME_CONDITIONS:
