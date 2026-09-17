@@ -73,7 +73,21 @@ Processing-plane and department observability:
 
 `docs/DETERMINISTIC-PROCESSING-OBSERVABILITY-001.md`
 
-These documents define the deterministic execution thesis, capability boundary, three execution planes, department provenance, evidence requirements, telemetry vocabulary, Processing Matrix, security rules, future cache/replay/DAG/sandbox layers, and claims discipline.
+The consolidated deterministic documentation defines the deterministic execution thesis, capability boundary, three execution planes, department provenance, workspace/security boundaries, evidence requirements, telemetry vocabulary, Processing Matrix, capability-family taxonomy, future cache/replay/DAG/sandbox layers, and claims discipline.
+
+## Current documentation anchors
+
+README deterministic system section:
+
+`327090b4f18366733c75159b119bc5b7373bbdfd`
+
+Deterministic system documentation milestone:
+
+`434a7a031b5387999ff7ddc2c1b25b8b238a1d21`
+
+Latest deterministic observability/documentation support:
+
+`96f2ff658deb7566b7f328894353282c77798c4e`
 
 ## Current deterministic execution anchor
 
@@ -98,6 +112,7 @@ Current status:
 ```text
 DETERMINISTIC-EXECUTION-SUBSTRATE-001 = IMPLEMENTED_NOT_VERIFIED
 DETERMINISTIC-OBSERVABILITY-001       = IMPLEMENTED_NOT_VERIFIED
+DETERMINISTIC-SYSTEM-001              = IMPLEMENTED_NOT_VERIFIED
 ```
 
 The system supports an explicitly governed deterministic execution subset and carries routing/department classification through execution data structures. Verification remains pending until current focused tests and runtime-boundary evidence are executed and reconciled.
@@ -105,6 +120,7 @@ The system supports an explicitly governed deterministic execution subset and ca
 Do not interpret design taxonomy counts as implemented capability counts.
 Do not interpret registry presence as verified executable coverage.
 Do not interpret routing as successful execution.
+Do not interpret documentation as certification.
 
 ## Deterministic execution planes
 
@@ -227,13 +243,13 @@ Configured GitHub release discovery:
 
 Candidate integrity verification:
 
-The durable reconstruction provided by the latest user report identifies the actual E implementation/test/evidence commits as:
+The durable reconstruction supplied for SYNC-E identifies:
 
 - `5efd8c04d5c70867df0e9291c60d52f7f334279c` — implementation
 - `b87a36d56032314ca474cbd1f31e1d96ffddded1` — focused candidate integrity tests
 - `dbdd8e84e409b730fbcd4ca1933db6daccdf6489` — evidence document
 - `88b5a55908c454233fe4aea4e5257d6bc479ed6c` — milestone ledger update
-- `e4c576d80a1482fccd5ed47177ef39e3457d2d40` — reconstruction card update reported by the prior reconstruction
+- `e4c576d80a1482fccd5ed47177ef39e3457d2d40` — reconstruction card update reported for that checkpoint
 
 Focused SYNC-E suite reported:
 
