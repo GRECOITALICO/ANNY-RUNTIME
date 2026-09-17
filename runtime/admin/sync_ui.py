@@ -43,6 +43,9 @@ def inject_sync_controls(page: str, csrf_token: str) -> str:
   </div>
   <div class="anny-sync-actions">
     <button id="anny-sync-refresh" onclick="annySyncPoll()">REFRESH SYNC STATUS</button>
+    <button id="anny-sync-stage-btn" onclick="annySyncStage()" disabled>STAGE</button>
+    <button id="anny-sync-activate-btn" onclick="annySyncActivate()" disabled>ACTIVATE</button>
+    <button id="anny-sync-rollback-btn" onclick="annySyncRollback()" disabled>ROLLBACK</button>
   </div>
   <div id="anny-sync-message">SYNC status has not been read yet.</div>
 </div>
@@ -62,7 +65,13 @@ def inject_sync_controls(page: str, csrf_token: str) -> str:
     text('anny-sync-trace', d.trace_id||'—');
     text('anny-sync-activation', d.activation_performed ? 'TRUE' : 'FALSE');
     const stateEl=document.getElementById('anny-sync-state');if(stateEl)stateEl.style.color=stateColors[state]||'#9ca3af';
-    const btn=document.getElementById('anny-sync-btn');if(btn)btn.disabled=(state==='SYNCING');
+    const btn=document.getElementById('anny-sync-btn');if(btn)btn.disabled=(state==='SYNCING' || state==='STAGING' || state==='ACTIVATING' || state==='ROLLING_BACK');
+    const stageBtn = document.getElementById('anny-sync-stage-btn');
+    if(stageBtn) stageBtn.disabled = (state !== 'VERIFIED');
+    const activateBtn = document.getElementById('anny-sync-activate-btn');
+    if(activateBtn) activateBtn.disabled = (state !== 'STAGED');
+    const rollbackBtn = document.getElementById('anny-sync-rollback-btn');
+    if(rollbackBtn) rollbackBtn.disabled = (!d.activation_performed || state==='ROLLING_BACK');
     const msg=document.getElementById('anny-sync-message');
     if(msg){{
       const err=d.error_classification?(' — '+d.error_classification):'';

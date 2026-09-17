@@ -32,6 +32,7 @@ def test_sync_no_change_is_verified_without_activation(tmp_path: Path):
     )
 
     service.start()
+    service.wait()
     status = service.status()
 
     assert status["sync_state"] == SyncState.VERIFIED.value
@@ -53,6 +54,7 @@ def test_sync_candidate_requires_verifier(tmp_path: Path):
     )
 
     service.start()
+    service.wait()
     status = service.status()
 
     assert status["sync_state"] == SyncState.UNKNOWN.value
@@ -83,6 +85,7 @@ def test_valid_candidate_with_valid_checksum_is_verified(tmp_path: Path):
     )
 
     service.start()
+    service.wait()
     status = service.status()
 
     assert status["sync_state"] == SyncState.VERIFIED.value
@@ -118,6 +121,7 @@ def test_valid_candidate_with_invalid_checksum_is_blocked(tmp_path: Path):
     )
 
     service.start()
+    service.wait()
     status = service.status()
 
     assert status["sync_state"] == SyncState.BLOCKED.value
@@ -146,6 +150,7 @@ def test_candidate_with_missing_proof_is_blocked(tmp_path: Path):
     )
 
     service.start()
+    service.wait()
     status = service.status()
 
     assert status["sync_state"] == SyncState.BLOCKED.value
@@ -171,6 +176,7 @@ def test_verifier_exception_fails_closed(tmp_path: Path):
     )
 
     service.start()
+    service.wait()
     status = service.status()
 
     assert status["sync_state"] == SyncState.FAILED.value
@@ -200,6 +206,7 @@ def test_corrupted_artifact_missing_bytes(tmp_path: Path):
     )
 
     service.start()
+    service.wait()
     status = service.status()
 
     assert status["sync_state"] == SyncState.BLOCKED.value
@@ -254,9 +261,11 @@ def test_repeated_identical_verification(tmp_path: Path):
 
     service = SyncService(tmp_path, local_version="v0.4.0", discover=discover_fn, verify=_mock_verify)
     service.start()
+    service.wait()
     status1 = service.status()
     
     service.start()
+    service.wait()
     status2 = service.status()
     
     assert status1["sync_state"] == SyncState.VERIFIED.value
@@ -264,3 +273,70 @@ def test_repeated_identical_verification(tmp_path: Path):
     assert status1["candidate_identity"]["content_digest"] == status2["candidate_identity"]["content_digest"]
     assert status1["digest"] == status2["digest"]
     assert status1["trace_id"] != status2["trace_id"] # different runs but same deterministic identity logic
+
+
+def test_sync_stage_activate_rollback(tmp_path: Path):
+    expected_hash = "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae"
+    verifier = CandidateVerifier(expected_digest=expected_hash)
+    
+    def _mock_verify(discovered, trace_id):
+        return verifier.verify(discovered, trace_id, b"foo")
+
+    service = SyncService(
+        tmp_path,
+        local_version="v0.4.0",
+        discover=lambda: {
+            "source": "test-authority",
+            "revision": "ghi789",
+            "candidate_version": "v0.5.0",
+            "authorized": True,
+        },
+        verify=_mock_verify,
+    )
+
+    # 1. Sync
+    service.start()
+    service.wait()
+    status = service.status()
+    assert status["sync_state"] == SyncState.VERIFIED.value
+
+    # 2. Stage
+    res = service.stage()
+    assert res["status"] == "staging"
+    service.wait()
+    status = service.status()
+    assert status["sync_state"] == SyncState.STAGED.value
+    assert status["stage"] == "STAGE"
+
+    # 3. Activate
+    res = service.activate()
+    assert res["status"] == "activating"
+    service.wait()
+    status = service.status()
+    assert status["sync_state"] == SyncState.ACTIVATED.value
+    assert status["activation_performed"] is True
+    assert service.local_version == "v0.5.0"
+
+    # 4. Rollback
+    res = service.rollback()
+    assert res["status"] == "rolling_back"
+    service.wait()
+    status = service.status()
+    assert status["sync_state"] == SyncState.ROLLED_BACK.value
+    assert status["activation_performed"] is False
+    assert service.local_version == "v0.4.0"
+
+def test_stage_blocked_if_not_verified(tmp_path: Path):
+    service = SyncService(tmp_path)
+    res = service.stage()
+    assert res["status"] == "blocked"
+
+def test_activate_blocked_if_not_staged(tmp_path: Path):
+    service = SyncService(tmp_path)
+    res = service.activate()
+    assert res["status"] == "blocked"
+
+def test_rollback_blocked_if_not_activated(tmp_path: Path):
+    service = SyncService(tmp_path)
+    res = service.rollback()
+    assert res["status"] == "blocked"

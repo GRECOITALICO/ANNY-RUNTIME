@@ -34,6 +34,12 @@ class SyncState(str, Enum):
     BLOCKED = "BLOCKED"
     FAILED = "FAILED"
     UNKNOWN = "UNKNOWN"
+    STAGING = "STAGING"
+    STAGED = "STAGED"
+    ACTIVATING = "ACTIVATING"
+    ACTIVATED = "ACTIVATED"
+    ROLLING_BACK = "ROLLING_BACK"
+    ROLLED_BACK = "ROLLED_BACK"
 
 
 @dataclass

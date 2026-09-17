@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import secrets
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -35,7 +37,12 @@ class SyncService:
         self.discover = discover
         self.verify_candidate = verify
         self._active: Optional[SyncResult] = None
+        self._active_thread: Optional[threading.Thread] = None
         self._latest: Optional[SyncResult] = self._load_latest()
+
+    def wait(self, timeout: Optional[float] = None) -> None:
+        if self._active_thread:
+            self._active_thread.join(timeout=timeout)
 
     @property
     def latest(self) -> Optional[SyncResult]:
@@ -65,10 +72,10 @@ class SyncService:
         }
 
     def start(self) -> Dict[str, Any]:
-        if self._active is not None and self._active.sync_state == SyncState.SYNCING:
+        if self._active is not None and self._active.sync_state in (SyncState.SYNCING, SyncState.STAGING, SyncState.ACTIVATING, SyncState.ROLLING_BACK):
             return {
                 "status": "already_running",
-                "sync_state": SyncState.SYNCING.value,
+                "sync_state": self._active.sync_state.value,
                 "sync_id": self._active.sync_id,
                 "trace_id": self._active.trace_id,
             }
@@ -83,19 +90,116 @@ class SyncService:
         )
         self._active = result
         self._persist(result)
-        try:
-            self._discover_compare_verify(result)
-        except Exception as exc:  # fail closed and persist the failure
-            result.sync_state = SyncState.FAILED
-            result.stage = "REPORT"
-            result.error_classification = exc.__class__.__name__
-            result.details = {"message": str(exc)[:500]}
-        finally:
-            self._active = None
-            self._latest = result
-            self._persist(result)
+
+        def _run_sync():
+            try:
+                self._discover_compare_verify(result)
+            except Exception as exc:
+                result.sync_state = SyncState.FAILED
+                result.stage = "REPORT"
+                result.error_classification = exc.__class__.__name__
+                result.details = {"message": str(exc)[:500]}
+            finally:
+                self._active = None
+                self._latest = result
+                self._persist(result)
+
+        self._active_thread = threading.Thread(target=_run_sync, daemon=True)
+        self._active_thread.start()
 
         return {"status": "started", "sync_state": SyncState.SYNCING.value, "sync_id": result.sync_id, "trace_id": result.trace_id}
+
+    def stage(self) -> Dict[str, Any]:
+        if self._active is not None:
+            return {"status": "already_running", "sync_state": self._active.sync_state.value}
+        if self._latest is None or self._latest.sync_state != SyncState.VERIFIED:
+            return {"status": "blocked", "error": "Cannot stage without a VERIFIED candidate"}
+
+        result = self._latest
+        result.sync_state = SyncState.STAGING
+        result.stage = "STAGE"
+        self._active = result
+        self._persist(result)
+
+        def _run_stage():
+            try:
+                time.sleep(0.1) # Stub implementation
+                result.sync_state = SyncState.STAGED
+            except Exception as exc:
+                result.sync_state = SyncState.FAILED
+                result.error_classification = exc.__class__.__name__
+                result.details = {"message": str(exc)[:500]}
+            finally:
+                self._active = None
+                self._persist(result)
+
+        self._active_thread = threading.Thread(target=_run_stage, daemon=True)
+        self._active_thread.start()
+
+        return {"status": "staging", "sync_state": SyncState.STAGING.value, "sync_id": result.sync_id}
+
+    def activate(self) -> Dict[str, Any]:
+        if self._active is not None:
+            return {"status": "already_running", "sync_state": self._active.sync_state.value}
+        if self._latest is None or self._latest.sync_state != SyncState.STAGED:
+            return {"status": "blocked", "error": "Cannot activate without a STAGED candidate"}
+
+        result = self._latest
+        result.sync_state = SyncState.ACTIVATING
+        result.stage = "ACTIVATE"
+        self._active = result
+        self._persist(result)
+
+        def _run_activate():
+            try:
+                time.sleep(0.1) # Stub implementation
+                result.sync_state = SyncState.ACTIVATED
+                result.activation_performed = True
+                self.local_version = result.candidate_version
+            except Exception as exc:
+                result.sync_state = SyncState.FAILED
+                result.error_classification = exc.__class__.__name__
+                result.details = {"message": str(exc)[:500]}
+            finally:
+                self._active = None
+                self._persist(result)
+
+        self._active_thread = threading.Thread(target=_run_activate, daemon=True)
+        self._active_thread.start()
+
+        return {"status": "activating", "sync_state": SyncState.ACTIVATING.value, "sync_id": result.sync_id}
+
+    def rollback(self) -> Dict[str, Any]:
+        if self._active is not None:
+            return {"status": "already_running", "sync_state": self._active.sync_state.value}
+        if self._latest is None or not self._latest.activation_performed:
+            return {"status": "blocked", "error": "Cannot rollback when not activated"}
+
+        result = self._latest
+        result.sync_state = SyncState.ROLLING_BACK
+        result.stage = "ROLLBACK"
+        self._active = result
+        self._persist(result)
+
+        def _run_rollback():
+            try:
+                time.sleep(0.1) # Stub implementation
+                result.sync_state = SyncState.ROLLED_BACK
+                result.activation_performed = False
+                if result.local_version:
+                    self.local_version = result.local_version
+            except Exception as exc:
+                result.sync_state = SyncState.FAILED
+                result.error_classification = exc.__class__.__name__
+                result.details = {"message": str(exc)[:500]}
+            finally:
+                self._active = None
+                self._persist(result)
+
+        self._active_thread = threading.Thread(target=_run_rollback, daemon=True)
+        self._active_thread.start()
+
+        return {"status": "rolling_back", "sync_state": SyncState.ROLLING_BACK.value, "sync_id": result.sync_id}
 
     def _discover_compare_verify(self, result: SyncResult) -> None:
         result.stage = "DISCOVER"
