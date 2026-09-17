@@ -37,7 +37,7 @@ milestones:
   - id: SYNC-CONTROL-001
     name: FIRST_CLASS_SYNC_CONTRACT
     status: CONTRACT_DEFINED
-    commit_sha: f1043b322bf33b88587a2e68131e658e774e6688
+    commit_sha: f1043b322bf33b88587e2a68131e658e774e6688
     evidence: SYNC contract document
     implementation_status: SUPERSEDED_BY_IMPLEMENTATION
   - id: SYNC-IMPLEMENTATION-001-A
