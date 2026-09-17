@@ -22,10 +22,10 @@ Mode: evidence-first / fail-closed / no assumed state
 7. `docs/MILESTONE-LEDGER-001.yaml`
 8. `docs/RECOVERY-PLAYBOOK-001.md`
 9. `docs/BUILD-TEST-AND-RELEASE-001.md`
-10. `docs/DETERMINISTIC-EXECUTION-STRATEGY-001.md`
-11. `docs/evidence/SYNC-IMPLEMENTATION-001-A-EVIDENCE.md`
-12. `docs/evidence/SYNC-IMPLEMENTATION-001-B-EVIDENCE.md`
-13. `docs/evidence/SYNC-IMPLEMENTATION-001-D-EVIDENCE.md`
+10. `docs/DETERMINISTIC-SYSTEM-001.md`
+11. `docs/DETERMINISTIC-EXECUTION-STRATEGY-001.md`
+12. `docs/DETERMINISTIC-PROCESSING-OBSERVABILITY-001.md`
+13. relevant evidence records under `docs/evidence/`
 
 ## Mandatory first actions
 
@@ -39,9 +39,10 @@ Mode: evidence-first / fail-closed / no assumed state
 7. verify its evidence
 8. inspect current Sync implementation state
 9. inspect deterministic execution substrate state
-10. run required tests when execution is available
-11. report blockers
-12. only then continue
+10. inspect current processing-plane telemetry state
+11. run required tests when execution is available
+12. report blockers
+13. only then continue
 ```
 
 ## Historical anchors
@@ -57,6 +58,154 @@ Live Control Center milestone:
 SYNC contract milestone:
 
 `f1043b322bf33b88587e2a68131e658e774e6688`
+
+## Current deterministic documentation anchors
+
+System-level deterministic contract:
+
+`docs/DETERMINISTIC-SYSTEM-001.md`
+
+Deterministic execution strategy:
+
+`docs/DETERMINISTIC-EXECUTION-STRATEGY-001.md`
+
+Processing-plane and department observability:
+
+`docs/DETERMINISTIC-PROCESSING-OBSERVABILITY-001.md`
+
+These documents define the deterministic execution thesis, capability boundary, three execution planes, department provenance, evidence requirements, telemetry vocabulary, Processing Matrix, security rules, future cache/replay/DAG/sandbox layers, and claims discipline.
+
+## Current deterministic execution anchor
+
+Governed local deterministic execution substrate:
+
+`bb26f74a3b4588af3ba4fd4e2deaed721415e50e`
+
+Supporting implementation commits include:
+
+- `a0ac78e49069ee922f399b91050432189750b76f`
+- `855d38f8661e33d6be42a3e153414a7e3ad8afa9`
+- `55d9c6230f6a3862972c4058a427c10fd278bf46`
+- `7d059d09597f15f581f1153b55af5a9968599ceb`
+- `7934e135c148cb13544cbdaabfa84bd3e0ddc61c`
+- `e572e0c26004bdee4e473f8561da0bf55cd6ab25`
+- `9edef80cfcf8c3c203a107ffbd22a28852f6e595`
+
+## Deterministic system state
+
+Current status:
+
+```text
+DETERMINISTIC-EXECUTION-SUBSTRATE-001 = IMPLEMENTED_NOT_VERIFIED
+DETERMINISTIC-OBSERVABILITY-001       = IMPLEMENTED_NOT_VERIFIED
+```
+
+The system supports an explicitly governed deterministic execution subset and carries routing/department classification through execution data structures. Verification remains pending until current focused tests and runtime-boundary evidence are executed and reconciled.
+
+Do not interpret design taxonomy counts as implemented capability counts.
+Do not interpret registry presence as verified executable coverage.
+Do not interpret routing as successful execution.
+
+## Deterministic execution planes
+
+```text
+TASK
+  -> CAPABILITY
+  -> POLICY
+  -> EXECUTOR
+  -> ROUTING CLASS
+       DETERMINISTIC
+       LOCAL_MODEL
+       FRONTIER_MODEL
+       UNKNOWN
+  -> EXECUTION
+  -> RESULT/EVIDENCE
+  -> TELEMETRY
+```
+
+`DETERMINISTIC` means governed execution without model inference.
+
+`LOCAL_MODEL` means inference performed by a local model.
+
+`FRONTIER_MODEL` means inference performed by a remote/frontier model.
+
+`UNKNOWN` means the provenance is missing or contradictory.
+
+## Current documented deterministic executable subset
+
+- `filesystem.inspect`
+- `filesystem.list`
+- `filesystem.hash`
+- `repository.inspect`
+- `repository.search`
+- `repository.read`
+- `repository.diff`
+- `artifact.metadata`
+
+Additional registry definitions may exist without constituting verified runtime coverage.
+
+## Deterministic observability
+
+Every processing record should preserve, where applicable:
+
+```text
+task_id
+execution_id
+department_id
+project_id
+repository_id
+capability_id
+capability_family
+routing_class
+executor_type
+executor_id
+model_id/model_version
+policy_version
+workspace_id
+trace_id
+status
+duration_ms
+input_hash
+result_hash
+evidence/result references
+```
+
+Department must propagate from source task through execution context and worker into telemetry/audit. Missing department stays `UNKNOWN` and is never inferred from capability family or naming.
+
+The target Processing Matrix is:
+
+```text
+DEPARTMENT
+  -> TOTAL
+  -> DETERMINISTIC
+  -> LOCAL MODEL
+  -> FRONTIER MODEL
+  -> UNKNOWN
+  -> SUCCESS
+  -> FAILURE
+  -> TIMEOUT
+  -> BLOCKED
+  -> LAST EXECUTIONS
+```
+
+All values must originate from actual telemetry/audit records.
+
+## Deterministic-first measurement
+
+The Runtime is being built to measure how much real execution can be completed without inference.
+
+This is a measurable engineering hypothesis, not a pre-existing fact.
+
+Canonical vocabulary:
+
+- `ROUTED_DETERMINISTIC`
+- `EXECUTED_DETERMINISTIC`
+- `SUCCEEDED_DETERMINISTIC`
+- `ROUTED_LOCAL_MODEL`
+- `EXECUTED_LOCAL_MODEL`
+- `ROUTED_FRONTIER_MODEL`
+
+A deterministic success requires an actual execution result/evidence record; routing alone is insufficient.
 
 ## Current Sync implementation anchors
 
@@ -76,60 +225,57 @@ Configured GitHub release discovery:
 
 `fead26357e279daea1c6256a8675d6101afd005a`
 
-Governed Sync candidate integrity verification:
+Candidate integrity verification:
 
-`5efd8c07e0b5f8e58a27d2c3df313d42bcbc603c`
+The durable reconstruction provided by the latest user report identifies the actual E implementation/test/evidence commits as:
 
-## Current deterministic execution anchor
+- `5efd8c04d5c70867df0e9291c60d52f7f334279c` — implementation
+- `b87a36d56032314ca474cbd1f31e1d96ffddded1` — focused candidate integrity tests
+- `dbdd8e84e409b730fbcd4ca1933db6daccdf6489` — evidence document
+- `88b5a55908c454233fe4aea4e5257d6bc479ed6c` — milestone ledger update
+- `e4c576d80a1482fccd5ed47177ef39e3457d2d40` — reconstruction card update reported by the prior reconstruction
 
-Governed local deterministic execution substrate:
+Focused SYNC-E suite reported:
 
-`bb26f74a3b4588af3ba4fd4e2deaed721415e50e`
+`10 passed in 0.12s`
 
-Supporting implementation commits:
+Current verification boundary for E remains:
 
-- `a0ac78e49069ee922f399b91050432189750b76f`
-- `855d38f8661e33d6be42a3e153414a7e3ad8afa9`
-- `55d9c6230f6a3862972c4058a427c10fd278bf46`
-- `7d059d09597f15f581f1153b55af5a9968599ceb`
+```text
+IMPLEMENTED_NOT_VERIFIED
+```
+
+because end-to-end HTTP/browser verification remains pending and the broader repository suite lacks the required `mcp` environment dependency.
 
 ## Current P0 next action
 
+`DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY`
+
+Execute and verify deterministic processing plus routing/department observability tests before expanding the deterministic execution substrate further.
+
+Required outputs:
+
+- current focused test results;
+- deterministic routing evidence;
+- local-model routing evidence;
+- frontier-model routing evidence where available;
+- department aggregation evidence;
+- no-secret telemetry evidence;
+- Processing Matrix HTTP/browser evidence.
+
+After deterministic verification, return to:
+
 `SYNC-IMPLEMENTATION-001-F`
-
-Verify the actual runtime path / end-to-end evidence required by the ledger, and make Sync asynchronous/live to implement explicit Stage/Activate/Rollback contracts.
-
-The deterministic execution substrate is a parallel implementation milestone and is currently `IMPLEMENTED_NOT_VERIFIED`; focused tests have been added but current execution evidence is still required.
-
-Required boundary:
-
-```text
-EVIDENCE
-   -> STAGE
-   -> ACTIVATE
-```
-
-Do not confuse:
-
-```text
-SYNC
-VERIFY
-STAGE
-ACTIVATE
-AUTO UPDATE
-```
-
-They are distinct operations.
 
 ## Current known gaps
 
-- `runtime/updater/manager.py` operational methods remain stubs.
-- End-to-end HTTP/browser verification is not established.
-- No current CI run is being claimed for the new Sync milestones.
-- `ANNY_UPDATE_SOURCE_REPO` is optional; when absent, Sync must remain fail-closed.
-- Deterministic execution substrate focused tests have not yet been executed in this session.
-- Deterministic workspace is not yet a full hermetic sandbox; network/process/resource isolation remains bounded but incomplete.
-- Content-addressed cache, replay/idempotency and DAG scheduling remain future deterministic-substrate work.
+- End-to-end HTTP/browser verification for Sync and the Processing Matrix is not established.
+- Current focused deterministic test execution has not yet been established from this reconstruction pass.
+- `runtime/updater/manager.py` operational methods remain stubs where applicable.
+- The deterministic workspace must not be described as a complete hermetic sandbox; process/resource isolation remains incomplete.
+- Content-addressed cache, replay/idempotency and DAG scheduling are design/future layers until implemented and verified.
+- Frontier execution must not be represented as actual activity unless a real frontier executor event exists.
+- No percentage claim about deterministic workload is valid until a real telemetry population and denominator are defined.
 
 ## Resume answer format
 
@@ -149,6 +295,7 @@ SYNC_STATE:
 SYNC_SOURCE:
 SYNC_CANDIDATE:
 DETERMINISTIC_SUBSTRATE:
+PROCESSING_MATRIX:
 BLOCKERS:
 NEXT_ACTION:
 RESUME_CONDITIONS:
