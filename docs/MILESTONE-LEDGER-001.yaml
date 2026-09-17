@@ -71,20 +71,23 @@ milestones:
       - f5686af4b1e3a1a7a671068827c8cf3819d23e0e
     evidence: explicit ANNYY_UPDATE_SOURCE_REPO source binding, stable/prerelease classification, discovery tests and evidence
     blocker: candidate integrity/signature/provenance verification is not implemented
+  - id: SYNC-IMPLEMENTATION-001-E
+    name: CANDIDATE_INTEGRITY_VERIFICATION
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: 441e828
+    evidence: CandidateVerifier implementation, CandidateIdentity modeling, missing-proof negative tests, verification boundaries
+    blocker: end-to-end runtime verification remains pending
 current_documentation_anchor:
-  commit_sha: 0d932c32029b76d889ad2ab9f1c62a23d8d6bdc8
-  note: latest Sync discovery evidence checkpoint
+  commit_sha: 3530af7
+  note: latest Sync verification evidence checkpoint
 next_p0:
-  id: SYNC-IMPLEMENTATION-001-E
-  objective: verify discovered candidates using artifact identity, checksum/signature/provenance evidence before any Stage/Activate capability
+  id: SYNC-IMPLEMENTATION-001-F
+  objective: verify the actual runtime path / end-to-end evidence required by the ledger, and make Sync asynchronous/live to implement explicit Stage/Activate/Rollback contracts
   required_outputs:
-    - candidate artifact selection
-    - SHA256 or equivalent content identity
-    - signature/provenance verification contract
-    - explicit verifier result
-    - durable evidence_id
-    - invalid/corrupt/missing-proof negative tests
+    - end-to-end runtime tests
+    - live asynchronous execution of sync
+    - Stage/Activate logic with tests
   following_gate:
-    id: SYNC-IMPLEMENTATION-001-F
-    objective: make Sync asynchronous/live and implement explicit Stage/Activate/Rollback contracts with end-to-end tests
-resume_rule: read latest commit, rerun bootstrap, verify SYNC-IMPLEMENTATION-001-A/B/C/D evidence, then execute only the next P0 action after prerequisites are re-established
+    id: SYNC-IMPLEMENTATION-001-G
+    objective: certify and release governed Sync capabilities
+resume_rule: read latest commit, rerun bootstrap, verify SYNC-IMPLEMENTATION-001-A/B/C/D/E evidence, then execute only the next P0 action after prerequisites are re-established
