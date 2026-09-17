@@ -122,10 +122,10 @@ milestones:
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
       - b5a0b12f8ca962719316f6bec4e666a3c030efb7
-    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-005.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-006.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-AG-008-CLOSEOUT.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-TEST-RUN-009.json; docs/LEGACY-CLEANUP-REVIEW-001.md; docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
-    blocker: AG-009 closure is not contractually final. The current triage table does not cite durable corroboration for PRE_EXISTING classification rows; the closeout does not record the explicit final HEAD; the ledger had been set to historical commit 1dfc4f91... rather than the actual main HEAD; and the reported local worktree contains an untracked test_output.txt, so WORKTREE_CLEAN=true is not established.
+    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-005.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-006.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-007.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-AG-008-CLOSEOUT.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-TEST-RUN-009.json; docs/LEGACY-CLEANUP-REVIEW-001.md; docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
+    blocker: AG-010 is not corroborated on GitHub. Actual main remains 3c64af5ee593e2fea4e00375dd4f47adbf49fca9; the reported b499bcdfa34eddaba8948ef599a6eb174bf9f15f is not found as a commit; the final integrity artifact is absent; triage evidence remains un-reconciled; closeout still lacks explicit Final HEAD/Final Commit; current documentation anchor remains at audit 006. Do not advance to substrate verification.
     legacy_cleanup_gate: required
-    next_action: execute final observability reconciliation on current main, remove untracked local artifacts, repair durable triage/closeout/final-SHA evidence, then re-verify before advancing
+    next_action: execute final observability reconciliation on actual current main and publish verifiable durable evidence before any substrate verification
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -142,11 +142,11 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: 66c0a659380441a17927fa63a6459595723f8896
-  note: post-closeout audit 006 reconciles AG-009; observability remains IMPLEMENTED_NOT_VERIFIED; F remains VERIFIED
+  commit_sha: b016babcd40f035e038806fc39f74b4c9f51420d
+  note: post-closeout audit 007 independently rechecked AG-010 and rejected the claimed VERIFIED state; observability remains IMPLEMENTED_NOT_VERIFIED; F remains VERIFIED
 next_p0:
   id: DETERMINISTIC-OBSERVABILITY-001-FINAL-RECONCILIATION
-  objective: perform the final durable evidence and git-integrity reconciliation on current main before advancing
+  objective: perform the final durable evidence and git-integrity reconciliation on actual current main before advancing
   required_outputs:
     - triage evidence fields citing durable corroboration for each PRE_EXISTING classification
     - closeout with explicit final HEAD and final commit SHA
