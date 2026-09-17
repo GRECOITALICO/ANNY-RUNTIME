@@ -11,6 +11,7 @@ from typing import Dict, Any
 from runtime.admin.routes import AdminRouter
 from runtime.admin.middleware import AdminMiddleware
 from runtime.sync.service import SyncService
+from runtime.admin.sync_ui import inject_sync_controls
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +38,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             self.server.middleware.process_response(context)
             self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
 
-            # Canonical governed Sync status endpoint. Authentication/middleware has
-            # already run; the endpoint is intentionally outside the HTML router so
-            # SYNC cannot be confused with bootstrap verification or update-check.
+            # Canonical governed Sync status endpoint.
             if self.path.split('?', 1)[0] == '/api/sync/status':
                 sync_service = self.server.router.context.get('sync_service')
                 if sync_service is None:
@@ -49,6 +48,21 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                     }, status=503)
                 else:
                     self.server.router._send_json(self, sync_service.status())
+                return
+
+            # First-level Control Center: keep the existing page as the primary
+            # surface and inject the governed Sync control only for a normal admin
+            # session. Onboarding remains intentionally untouched.
+            if self.path.split('?', 1)[0] == '/':
+                session = context.get('admin_session')
+                is_onboarding = bool(session and getattr(session, 'scope', None) == 'ONBOARDING_ONLY')
+                html_page = self.server.router.handle_dashboard(__import__('urllib.parse').parse.urlparse(self.path))
+                if not is_onboarding:
+                    html_page = inject_sync_controls(
+                        html_page,
+                        getattr(session, 'csrf_token', '') if session else '',
+                    )
+                self.server.router._send_html(self, html_page)
                 return
 
             self.server.router.dispatch_get(self.path, self)
@@ -91,8 +105,7 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
         saved_context = dict(self.server.router.context)
         self.server.router.context.update(context)
         try:
-            # Canonical governed Sync transaction. It runs only after the normal
-            # authentication + POST-body/CSRF middleware path has accepted the request.
+            # Canonical governed Sync transaction.
             if self.path.split('?', 1)[0] == '/api/sync':
                 sync_service = self.server.router.context.get('sync_service')
                 if sync_service is None:
@@ -270,8 +283,7 @@ def start_admin_server(host: str, port: int):
     engine = RuntimeEngine(config)
     
     # Sync starts with no update source bound yet. This is deliberate: until the
-    # authoritative source + verifier contract is wired, Sync must resolve BLOCKED,
-    # never pretend to have synchronized a candidate.
+    # authoritative source + verifier contract is wired, Sync must resolve BLOCKED.
     sync_service = SyncService(
         data_dir=data_dir,
         local_version="v0.4.0",
