@@ -403,8 +403,8 @@ These are engineering patterns, not imported product semantics. ANNY retains its
 Current status:
 
 ```text
-DETERMINISTIC-EXECUTION-SUBSTRATE-001 = IMPLEMENTED_NOT_VERIFIED
-DETERMINISTIC-OBSERVABILITY-001       = IMPLEMENTED_NOT_VERIFIED
+DETERMINISTIC-EXECUTION-SUBSTRATE-001 = VERIFIED
+DETERMINISTIC-OBSERVABILITY-001       = VERIFIED
 ```
 
 This document is therefore a durable implementation contract and reconstruction aid, not a certification.
