@@ -87,13 +87,14 @@ milestones:
     blocker: end-to-end HTTP/browser runtime boundary verification remains pending; broader suite lacks required mcp environment dependency
   - id: SYNC-IMPLEMENTATION-001-F
     name: ASYNCHRONOUS_SYNC_LIFECYCLE_AND_GOVERNED_ACTIVATION_CONTRACT
-    status: VERIFIED
+    status: IMPLEMENTED_NOT_VERIFIED
     commit_sha: 4f21a64c6a06fb1618b4b7d424c0fc51fc98a806
     supporting_commits:
       - f07bc87487d350dd0eea11112475608c341c8320
       - 6544678129e96e031c5040fdb21d09e51c8651ad
-    evidence: durable audit showing implementation of explicit STAGE/ACTIVATE/ROLLBACK lifecycle, asynchronous execution, HTTP contracts, and legacy cleanup verification
-    legacy_cleanup_gate: cleared
+    evidence: implementation is present on main; post-closeout audit found unresolved mock fallback, unproven atomic concurrency, and no independent current test execution evidence
+    blocker: remove qwen_mock.json fallback, add atomic Sync concurrency protection and race test, execute focused tests on current main, reconcile final SHA in evidence, then re-verify
+    legacy_cleanup_gate: required
   - id: DETERMINISTIC-EXECUTION-SUBSTRATE-001
     name: GOVERNED_LOCAL_DETERMINISTIC_EXECUTION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -114,7 +115,7 @@ milestones:
     status: IMPLEMENTED_NOT_VERIFIED
     commit_sha: 6173a87b4ca21d1865649bf3bd82ff58588aa547
     supporting_commits:
-      - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
+      - 7934e135c148cb13544cbdaabfa84bd3c2c2bcad2fe0d1b
       - e572e0c26004bdee4e473f8561da0bf55cd6ab25
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
@@ -136,23 +137,21 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
-  note: legacy cleanup policy is now durable; implementation verification remains separate
+  commit_sha: df2b247877f0aefd74c4940fb20b1c1fd6cac7b2
+  note: post-closeout audit re-opened F verification; implementation exists but cleanup/concurrency/test evidence remain unresolved
 next_p0:
-  id: DETERMINISTIC-OBSERVABILITY-001-VERIFY
-  objective: run current observability tests and runtime-boundary verification against the actual Processing Matrix implementation, reconcile failures, and maintain legacy cleanup in the same milestone cycle before closing or superseding any implementation path
+  id: SYNC-IMPLEMENTATION-001-F-REVERIFY
+  objective: complete the post-closeout remediation and re-verify F from the current main state
   required_outputs:
-    - current observability test file committed and executed
-    - current focused test results
-    - deterministic routing evidence
-    - local-model routing evidence where available
-    - frontier-model routing evidence where available
-    - department-level aggregation evidence
-    - no-secret telemetry evidence
-    - Processing Matrix HTTP/browser evidence
-    - durable closeout evidence
-    - legacy surface inventory and cleanup/removal evidence
+    - qwen_mock.json fallback removed
+    - atomic Sync concurrency protection
+    - current simultaneous-start regression test
+    - current focused test execution evidence
+    - reconciled closeout final SHA
+    - updated F closeout evidence
+    - legacy cleanup evidence
+    - only then VERIFIED status if all gates pass
   following_gate:
-    id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
+    id: DETERMINISTIC-OBSERVABILITY-001-VERIFY
     objective: verify deterministic processing and its evidence chain with current tests, including removal of obsolete execution fallbacks
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
