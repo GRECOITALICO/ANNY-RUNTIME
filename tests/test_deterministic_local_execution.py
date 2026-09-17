@@ -74,7 +74,6 @@ def test_repository_read_and_diff(tmp_path):
     (repo / "file.txt").write_text("one\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "file.txt"], check=True)
     subprocess.run(["git", "-C", str(repo), "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "init"], check=True, capture_output=True)
-    base = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
     (repo / "file.txt").write_text("two\n", encoding="utf-8")
 
     read_task = _task("repository.read", {"path": str(repo)})
@@ -82,7 +81,7 @@ def test_repository_read_and_diff(tmp_path):
     assert read_context.status == ExecutionStatus.SUCCEEDED
     assert read_context.result["dirty"] is True
 
-    diff_task = _task("repository.diff", {"path": str(repo), "base": base, "head": "WORKTREE"})
+    diff_task = _task("repository.diff", {"path": str(repo), "base": "HEAD"})
     diff_context, _ = _execute(tmp_path / "runtime-diff", diff_task)
     assert diff_context.status == ExecutionStatus.SUCCEEDED
     assert "file.txt" in diff_context.result["diff"]
@@ -96,4 +95,5 @@ def test_artifact_metadata_contains_sha256(tmp_path):
     assert context.status == ExecutionStatus.SUCCEEDED
     assert len(context.result["sha256"]) == 64
     evidence = json.loads((workspace / "evidence" / "evidence.json").read_text(encoding="utf-8"))
-    assert evidence["reproducibility"]["capability_id"] == "artifact.metadata" if "capability_id" in evidence["reproducibility"] else True
+    assert evidence["reproducibility"]["task_id"] == task.task_id
+    assert len(evidence["reproducibility"]["input_hash"]) == 64
