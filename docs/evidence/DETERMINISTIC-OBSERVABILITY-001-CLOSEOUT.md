@@ -37,7 +37,7 @@ Verified `/api/processing/matrix` and `/api/processing/events` through `AdminRou
 Verified routes and checked against `LEGACY-CLEANUP-POLICY-001`. `/telemetry/live` and `/telemetry/timeline` serve as the active, modern observability layers for the Processing Matrix. Old telemetry paths and UI were scrubbed in prior commits.
 
 ## 3. TEST SUITE RESULTS
-All 7 observability assertions pass.
+All 9 observability assertions pass.
 ```
 tests/test_deterministic_observability_001.py::test_out_of_order_event_arrival_and_folding PASSED
 tests/test_deterministic_observability_001.py::test_deterministic_success_measurement_discipline PASSED
@@ -46,6 +46,8 @@ tests/test_deterministic_observability_001.py::test_telemetry_scrubbing PASSED
 tests/test_deterministic_observability_001.py::test_matrix_consistency PASSED
 tests/test_deterministic_observability_001.py::test_collector_filters PASSED
 tests/test_deterministic_observability_001.py::test_processing_matrix_http_boundary PASSED
+tests/test_deterministic_observability_001.py::test_timezone_aware_aggregation PASSED
+tests/test_deterministic_observability_001.py::test_full_provenance_chain PASSED
 ```
 
 ## 4. CONCLUSION

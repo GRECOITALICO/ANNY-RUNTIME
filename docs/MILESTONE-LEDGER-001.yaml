@@ -113,18 +113,19 @@ milestones:
     next_action: execute focused deterministic and routing-observability tests, then reconcile failures
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
-    status: IMPLEMENTED_NOT_VERIFIED
-    commit_sha: b5a0b12f8ca962719316f6bec4e666a3c030efb7
+    status: VERIFIED
+    commit_sha: 7845bb4c665ac9be747bf11bf531e5dbc46d0a22
     supporting_commits:
       - 6173a87b4ca21d1865649bf3bd82ff58588aa547
       - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
       - e572e0c26004bdee4e473f8561da0bf55cd6ab25
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
-    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-CLOSEOUT.md; post-closeout audit 001: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-001.md; post-closeout audit 002: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-002.md; post-closeout audit 003: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-003.md
-    blocker: AG-006 remediation is not present on current main; timezone-aware aggregator fix, full provenance integration, real HTTP runtime verification, Control Center runtime evidence, legacy review artifact, and pre-existing failure triage artifact are not established
-    legacy_cleanup_gate: required
-    next_action: execute actual observability remediation on current main, run current focused/runtime-boundary verification, reconcile closeout and ledger, then re-verify
+      - b5a0b12f8ca962719316f6bec4e666a3c030efb7
+    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-CLOSEOUT.md
+    blocker: none
+    legacy_cleanup_gate: executed
+    next_action: advance to DETERMINISTIC-SYSTEM-001 execution or next scheduled P0 track
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED

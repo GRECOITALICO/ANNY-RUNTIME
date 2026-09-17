@@ -48,11 +48,25 @@ class TelemetryAggregator:
             "average_duration": 0.0
         }
         
+        def _parse_ts(ts_str):
+            if not ts_str:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            try:
+                dt = dateutil.parser.isoparse(ts_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                else:
+                    dt = dt.astimezone(timezone.utc)
+                return dt
+            except (ValueError, TypeError, dateutil.parser.ParserError):
+                return datetime.min.replace(tzinfo=timezone.utc)
+
+        def safe_timestamp(e):
+            return _parse_ts(e.timestamp)
+
         execution_states: Dict[str, Dict[str, Any]] = {}
         # Collector query returns newest-first by insertion. Sort chronologically by timestamp
         # to ensure terminal states (SUCCEEDED) are not overwritten by earlier states (QUEUED).
-        def safe_timestamp(e):
-            return e.timestamp or ""
         for event in sorted(events, key=safe_timestamp):
             if not event.execution_id:
                 continue
@@ -63,28 +77,33 @@ class TelemetryAggregator:
                     "routing_class": event.routing_class or "UNKNOWN",
                     "status": "UNKNOWN",
                     "duration_ms": None,
-                    "timestamp": event.timestamp
+                    "timestamp": event.timestamp,
+                    "_parsed_timestamp": safe_timestamp(event)
                 }
             
             state = execution_states[event.execution_id]
+            ev_parsed = safe_timestamp(event)
+            
             # Update values if present in newer events
             if event.department_id:
                 state["department_id"] = event.department_id
             if event.routing_class:
                 state["routing_class"] = event.routing_class
+            
             if event.status:
-                state["status"] = event.status
+                # STRICT DETERMINISTIC-FIRST: Latch SUCCEEDED so late failures don't override success
+                if state["status"] == "SUCCEEDED" and event.status != "SUCCEEDED":
+                    pass
+                else:
+                    state["status"] = event.status
+                    
             if event.duration_ms is not None:
                 state["duration_ms"] = event.duration_ms
             
             # Keep track of latest timestamp
-            try:
-                ev_time = dateutil.parser.isoparse(event.timestamp)
-                st_time = dateutil.parser.isoparse(state["timestamp"])
-                if ev_time > st_time:
-                    state["timestamp"] = event.timestamp
-            except:
-                pass
+            if ev_parsed > state["_parsed_timestamp"]:
+                state["timestamp"] = event.timestamp
+                state["_parsed_timestamp"] = ev_parsed
 
         # Now compute matrix
         for ex_id, state in execution_states.items():
@@ -107,7 +126,7 @@ class TelemetryAggregator:
             if state["duration_ms"] is not None:
                 global_stats["durations"].append(state["duration_ms"])
                 
-            if not global_stats["latest_execution"] or state["timestamp"] > global_stats["latest_execution"]:
+            if not global_stats["latest_execution"] or state["_parsed_timestamp"] > _parse_ts(global_stats["latest_execution"]):
                 global_stats["latest_execution"] = state["timestamp"]
 
             # Department
@@ -125,7 +144,7 @@ class TelemetryAggregator:
             if state["duration_ms"] is not None:
                 departments[dept]["durations"].append(state["duration_ms"])
                 
-            if not departments[dept]["latest_execution"] or state["timestamp"] > departments[dept]["latest_execution"]:
+            if not departments[dept]["latest_execution"] or state["_parsed_timestamp"] > _parse_ts(departments[dept]["latest_execution"]):
                 departments[dept]["latest_execution"] = state["timestamp"]
 
         # Calculate averages
