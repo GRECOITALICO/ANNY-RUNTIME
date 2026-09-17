@@ -60,6 +60,7 @@ class ExecutionManager:
         except Exception as exc:
             raise RuntimeError(f"Failed to create workspace: {exc}") from exc
 
+        routing_class = WorkerManager._routing_class(selection.executor_type.value)
         context = TaskExecutionContext(
             execution_id=execution_id,
             task_id=task.task_id,
@@ -68,12 +69,15 @@ class ExecutionManager:
             capability_id=task.capability_id,
             workspace_path=workspace_path,
             environment={},
-            allowed_tools=[task.capability_id],
+            allowed_tools=list(cap.required_tools),
             deadline=task.deadline,
-            resource_limits={"max_output_size": 1024 * 1024, "max_workspace_size": 10 * 1024 * 1024},
-            network_policy="disabled",
-            write_policy="workspace_only",
-            status=ExecutionStatus.QUEUED
+            resource_limits={"max_output_size": cap.max_output, "max_workspace_size": 10 * 1024 * 1024},
+            network_policy=cap.network_policy,
+            write_policy=cap.filesystem_policy,
+            status=ExecutionStatus.QUEUED,
+            department_id=task.department_id,
+            capability_family=cap.family,
+            routing_class=routing_class,
         )
         context.executor_type = selection.executor_type.value
         context.executor_id = selection.executor_id
@@ -94,6 +98,8 @@ class ExecutionManager:
             raise ValueError("Execution not found")
 
         cap = self.registry.get(task.capability_id)
+        if not cap:
+            raise ValueError("Capability not found for execution")
         worker = next((w for w in self.worker_manager.list_workers() if w.execution_id == execution_id), None)
         if not worker:
             raise ValueError("Worker not found for execution")
