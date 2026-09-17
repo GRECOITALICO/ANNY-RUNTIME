@@ -39,6 +39,7 @@ class SyncService:
         self._active: Optional[SyncResult] = None
         self._active_thread: Optional[threading.Thread] = None
         self._latest: Optional[SyncResult] = self._load_latest()
+        self._lock = threading.Lock()
 
     def wait(self, timeout: Optional[float] = None) -> None:
         if self._active_thread:
@@ -72,24 +73,25 @@ class SyncService:
         }
 
     def start(self) -> Dict[str, Any]:
-        if self._active is not None and self._active.sync_state in (SyncState.SYNCING, SyncState.STAGING, SyncState.ACTIVATING, SyncState.ROLLING_BACK):
-            return {
-                "status": "already_running",
-                "sync_state": self._active.sync_state.value,
-                "sync_id": self._active.sync_id,
-                "trace_id": self._active.trace_id,
-            }
+        with self._lock:
+            if self._active is not None and self._active.sync_state in (SyncState.SYNCING, SyncState.STAGING, SyncState.ACTIVATING, SyncState.ROLLING_BACK):
+                return {
+                    "status": "already_running",
+                    "sync_state": self._active.sync_state.value,
+                    "sync_id": self._active.sync_id,
+                    "trace_id": self._active.trace_id,
+                }
 
-        now = datetime.now(timezone.utc).isoformat()
-        result = SyncResult(
-            sync_id=f"sync-{secrets.token_hex(12)}",
-            trace_id=f"trace-{secrets.token_hex(12)}",
-            requested_at=now,
-            sync_state=SyncState.SYNCING,
-            local_version=self.local_version,
-        )
-        self._active = result
-        self._persist(result)
+            now = datetime.now(timezone.utc).isoformat()
+            result = SyncResult(
+                sync_id=f"sync-{secrets.token_hex(12)}",
+                trace_id=f"trace-{secrets.token_hex(12)}",
+                requested_at=now,
+                sync_state=SyncState.SYNCING,
+                local_version=self.local_version,
+            )
+            self._active = result
+            self._persist(result)
 
         def _run_sync():
             try:
@@ -100,9 +102,10 @@ class SyncService:
                 result.error_classification = exc.__class__.__name__
                 result.details = {"message": str(exc)[:500]}
             finally:
-                self._active = None
-                self._latest = result
-                self._persist(result)
+                with self._lock:
+                    self._active = None
+                    self._latest = result
+                    self._persist(result)
 
         self._active_thread = threading.Thread(target=_run_sync, daemon=True)
         self._active_thread.start()
@@ -110,16 +113,17 @@ class SyncService:
         return {"status": "started", "sync_state": SyncState.SYNCING.value, "sync_id": result.sync_id, "trace_id": result.trace_id}
 
     def stage(self) -> Dict[str, Any]:
-        if self._active is not None:
-            return {"status": "already_running", "sync_state": self._active.sync_state.value}
-        if self._latest is None or self._latest.sync_state != SyncState.VERIFIED:
-            return {"status": "blocked", "error": "Cannot stage without a VERIFIED candidate"}
+        with self._lock:
+            if self._active is not None:
+                return {"status": "already_running", "sync_state": self._active.sync_state.value}
+            if self._latest is None or self._latest.sync_state != SyncState.VERIFIED:
+                return {"status": "blocked", "error": "Cannot stage without a VERIFIED candidate"}
 
-        result = self._latest
-        result.sync_state = SyncState.STAGING
-        result.stage = "STAGE"
-        self._active = result
-        self._persist(result)
+            result = self._latest
+            result.sync_state = SyncState.STAGING
+            result.stage = "STAGE"
+            self._active = result
+            self._persist(result)
 
         def _run_stage():
             try:
@@ -130,8 +134,9 @@ class SyncService:
                 result.error_classification = exc.__class__.__name__
                 result.details = {"message": str(exc)[:500]}
             finally:
-                self._active = None
-                self._persist(result)
+                with self._lock:
+                    self._active = None
+                    self._persist(result)
 
         self._active_thread = threading.Thread(target=_run_stage, daemon=True)
         self._active_thread.start()
@@ -139,16 +144,17 @@ class SyncService:
         return {"status": "staging", "sync_state": SyncState.STAGING.value, "sync_id": result.sync_id}
 
     def activate(self) -> Dict[str, Any]:
-        if self._active is not None:
-            return {"status": "already_running", "sync_state": self._active.sync_state.value}
-        if self._latest is None or self._latest.sync_state != SyncState.STAGED:
-            return {"status": "blocked", "error": "Cannot activate without a STAGED candidate"}
+        with self._lock:
+            if self._active is not None:
+                return {"status": "already_running", "sync_state": self._active.sync_state.value}
+            if self._latest is None or self._latest.sync_state != SyncState.STAGED:
+                return {"status": "blocked", "error": "Cannot activate without a STAGED candidate"}
 
-        result = self._latest
-        result.sync_state = SyncState.ACTIVATING
-        result.stage = "ACTIVATE"
-        self._active = result
-        self._persist(result)
+            result = self._latest
+            result.sync_state = SyncState.ACTIVATING
+            result.stage = "ACTIVATE"
+            self._active = result
+            self._persist(result)
 
         def _run_activate():
             try:
@@ -161,8 +167,9 @@ class SyncService:
                 result.error_classification = exc.__class__.__name__
                 result.details = {"message": str(exc)[:500]}
             finally:
-                self._active = None
-                self._persist(result)
+                with self._lock:
+                    self._active = None
+                    self._persist(result)
 
         self._active_thread = threading.Thread(target=_run_activate, daemon=True)
         self._active_thread.start()
@@ -170,16 +177,17 @@ class SyncService:
         return {"status": "activating", "sync_state": SyncState.ACTIVATING.value, "sync_id": result.sync_id}
 
     def rollback(self) -> Dict[str, Any]:
-        if self._active is not None:
-            return {"status": "already_running", "sync_state": self._active.sync_state.value}
-        if self._latest is None or not self._latest.activation_performed:
-            return {"status": "blocked", "error": "Cannot rollback when not activated"}
+        with self._lock:
+            if self._active is not None:
+                return {"status": "already_running", "sync_state": self._active.sync_state.value}
+            if self._latest is None or not self._latest.activation_performed:
+                return {"status": "blocked", "error": "Cannot rollback when not activated"}
 
-        result = self._latest
-        result.sync_state = SyncState.ROLLING_BACK
-        result.stage = "ROLLBACK"
-        self._active = result
-        self._persist(result)
+            result = self._latest
+            result.sync_state = SyncState.ROLLING_BACK
+            result.stage = "ROLLBACK"
+            self._active = result
+            self._persist(result)
 
         def _run_rollback():
             try:
@@ -193,8 +201,9 @@ class SyncService:
                 result.error_classification = exc.__class__.__name__
                 result.details = {"message": str(exc)[:500]}
             finally:
-                self._active = None
-                self._persist(result)
+                with self._lock:
+                    self._active = None
+                    self._persist(result)
 
         self._active_thread = threading.Thread(target=_run_rollback, daemon=True)
         self._active_thread.start()

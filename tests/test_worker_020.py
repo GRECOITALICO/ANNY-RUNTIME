@@ -163,3 +163,37 @@ def test_23_unsupported_executor_fails_closed(exec_mgr):
     assert worker.state == WorkerState.FAILED
     assert ctx.status == ExecutionStatus.FAILED
     assert ctx.failure_reason.name == "UNSUPPORTED_EXECUTOR"
+
+def test_24_local_model_unavailable_fails_closed(exec_mgr, monkeypatch):
+    monkeypatch.delenv("QWEN_MODEL_PATH", raising=False)
+    
+    class TypeVal:
+        value = "LOCAL_MODEL"
+    class MockSel:
+        executor_type = TypeVal()
+        executor_id = "local"
+        model_id = "qwen"
+    
+    class MockCap:
+        required_tools = []
+        network_policy = "disabled"
+
+    ctx = TaskExecutionContext(
+        execution_id="ex-local", task_id="t-l", account_id="a", project_id="p",
+        capability_id="cap", workspace_path="", environment={}, allowed_tools=[],
+        deadline=datetime.now(timezone.utc) + timedelta(minutes=5),
+        resource_limits={}, network_policy="disabled", write_policy="allow"
+    )
+    task = Task(
+        task_id="t-l", capability_id="cap", account_id="a", project_id="p",
+        input={}, constraints={}, deadline=datetime.now(timezone.utc) + timedelta(minutes=5),
+        workspace_policy="", evidence_policy="", requested_by="me", created_at=datetime.now(timezone.utc)
+    )
+
+    worker = exec_mgr.worker_manager.create_worker(ctx, MockSel(), task)
+    exec_mgr.worker_manager.start_worker(worker.worker_id, ctx, task, MockCap())
+
+    assert worker.state == WorkerState.FAILED
+    assert ctx.status == ExecutionStatus.FAILED
+    assert ctx.failure_reason.name == "EXECUTION_ERROR"
+    assert ctx.error_message == "Local model unavailable"

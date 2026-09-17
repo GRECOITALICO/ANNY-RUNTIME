@@ -153,6 +153,15 @@ class WorkerManager:
                     self.deterministic_executor.execute(task, context)
 
             elif worker.executor_type == "LOCAL_MODEL":
+                real_artifact_path = os.environ.get("QWEN_MODEL_PATH")
+                if not real_artifact_path or not os.path.exists(real_artifact_path):
+                    context.status = ExecutionStatus.FAILED
+                    context.failure_reason = FailureReason.EXECUTION_ERROR
+                    context.error_message = "Local model unavailable"
+                    worker.state = WorkerState.FAILED
+                    self._emit_telemetry("execution.failed", worker, {"classification": "UNAVAILABLE"})
+                    return
+
                 context_package = ContextPackage(
                     task=task,
                     capability=capability,
@@ -162,13 +171,7 @@ class WorkerManager:
                     evidence_policy=task.evidence_policy
                 )
                 from runtime.execution.qwen_executor import QwenModelExecutor
-                real_artifact_path = os.environ.get("QWEN_MODEL_PATH")
-                artifact_path = real_artifact_path if real_artifact_path and os.path.exists(real_artifact_path) else os.path.join(self.workspace_manager.base_dir, "qwen_mock.json")
-                if not os.path.exists(artifact_path):
-                    with open(artifact_path, "w", encoding="utf-8") as handle:
-                        handle.write("{}")
-
-                executor = QwenModelExecutor(artifact_path=artifact_path)
+                executor = QwenModelExecutor(artifact_path=real_artifact_path)
                 result = executor.execute(context_package)
                 context.status = ExecutionStatus.SUCCEEDED
                 context.result = result.result_data

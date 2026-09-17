@@ -335,3 +335,56 @@ def test_rollback_blocked_if_not_activated(tmp_path: Path):
     service = SyncService(tmp_path)
     res = service.rollback()
     assert res["status"] == "blocked"
+
+def test_concurrent_start_is_atomic(tmp_path: Path):
+    import threading
+    import time
+    
+    # We want to discover slowly to maximize the race condition window
+    def slow_discover():
+        time.sleep(0.5)
+        return {
+            "source": "test-authority",
+            "revision": "abc123",
+            "candidate_version": "v0.4.0",
+            "authorized": True,
+        }
+
+    service = SyncService(
+        tmp_path,
+        local_version="v0.4.0",
+        discover=slow_discover
+    )
+
+    results = []
+    def _run():
+        results.append(service.start())
+
+    t1 = threading.Thread(target=_run)
+    t2 = threading.Thread(target=_run)
+
+    t1.start()
+    t2.start()
+
+    t1.join()
+    t2.join()
+
+    # One should have started, the other should be already_running
+    statuses = [r["status"] for r in results]
+    assert "started" in statuses
+    assert "already_running" in statuses
+    assert len(statuses) == 2
+
+    # Wait for the successful one to finish
+    service.wait()
+
+    # Verify only one log entry for SYNCING and one for VERIFIED
+    records = []
+    with open(tmp_path / "sync" / "sync_records.jsonl") as f:
+        for line in f:
+            if line.strip():
+                records.append(json.loads(line))
+    
+    # It should have SYNCING -> VERIFIED from the thread that won
+    syncing_records = [r for r in records if r["sync_state"] == "SYNCING"]
+    assert len(syncing_records) == 1
