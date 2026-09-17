@@ -61,21 +61,30 @@ milestones:
     supporting_commits:
       - 85c628ce014963daa00aff37371715c2a9e9c1e9
     evidence: visible first-level SYNC NOW control, durable status panel, live status polling, CSRF-aware request
-    blocker: browser/runtime end-to-end verification pending; authoritative source and candidate verifier not configured
+    blocker: browser/runtime end-to-end verification pending
+  - id: SYNC-IMPLEMENTATION-001-D
+    name: GITHUB_RELEASE_DISCOVERY
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: fead26357e279daea1c6256a8675d6101afd005a
+    supporting_commits:
+      - 58e38c482fba3878b634b3fef39b3538088e042d
+      - f5686af4b1e3a1a7a671068827c8cf3819d23e0e
+    evidence: explicit ANNYY_UPDATE_SOURCE_REPO source binding, stable/prerelease classification, discovery tests and evidence
+    blocker: candidate integrity/signature/provenance verification is not implemented
 current_documentation_anchor:
-  commit_sha: 7798b0655f94394b53c23f024e68605bf92eef72
-  note: compact reconstruction card; documentation checkpoint
+  commit_sha: 0d932c32029b76d889ad2ab9f1c62a23d8d6bdc8
+  note: latest Sync discovery evidence checkpoint
 next_p0:
-  id: SYNC-IMPLEMENTATION-001-D
-  objective: bind authoritative source discovery and candidate verification without weakening fail-closed semantics
+  id: SYNC-IMPLEMENTATION-001-E
+  objective: verify discovered candidates using artifact identity, checksum/signature/provenance evidence before any Stage/Activate capability
   required_outputs:
-    - authoritative source identity
-    - candidate discovery
-    - cryptographic/integrity verification
-    - verified source revision/version
-    - source-unavailable and invalid-candidate negative tests
-    - durable evidence IDs
+    - candidate artifact selection
+    - SHA256 or equivalent content identity
+    - signature/provenance verification contract
+    - explicit verifier result
+    - durable evidence_id
+    - invalid/corrupt/missing-proof negative tests
   following_gate:
-    id: SYNC-IMPLEMENTATION-001-E
-    objective: make Sync asynchronous/live, add explicit Stage/Activate/Rollback contracts and end-to-end tests
-resume_rule: read latest commit, rerun bootstrap, verify SYNC-IMPLEMENTATION-001-A/B/C evidence, then execute only the next P0 action after prerequisites are re-established
+    id: SYNC-IMPLEMENTATION-001-F
+    objective: make Sync asynchronous/live and implement explicit Stage/Activate/Rollback contracts with end-to-end tests
+resume_rule: read latest commit, rerun bootstrap, verify SYNC-IMPLEMENTATION-001-A/B/C/D evidence, then execute only the next P0 action after prerequisites are re-established
