@@ -74,9 +74,14 @@ milestones:
   - id: SYNC-IMPLEMENTATION-001-E
     name: CANDIDATE_INTEGRITY_VERIFICATION
     status: IMPLEMENTED_NOT_VERIFIED
-    commit_sha: 441e828
-    evidence: CandidateVerifier implementation, CandidateIdentity modeling, missing-proof negative tests, verification boundaries
-    blocker: end-to-end runtime verification remains pending
+    commit_sha: 5efd8c04d5c70867df0e9291c60d52f7f334279c
+    supporting_commits:
+      - b87a36d56032314ca474cbd1f31e1d96ffddded1
+      - dbdd8e84e409b730fbcd4ca1933db6daccdf6489
+      - 88b5a55908c454233fe4aea4e5257d6bc479ed6c
+    evidence: CandidateVerifier implementation, candidate identity/provenance modeling, missing-proof negative tests, and durable evidence
+    focused_test_result: 10_passed_in_0.12s
+    blocker: end-to-end HTTP/browser runtime boundary verification remains pending; broader suite lacks required mcp environment dependency
   - id: DETERMINISTIC-EXECUTION-SUBSTRATE-001
     name: GOVERNED_LOCAL_DETERMINISTIC_EXECUTION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -95,17 +100,27 @@ milestones:
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
     status: IMPLEMENTED_NOT_VERIFIED
-    commit_sha: b394adfe3d62a4e94822625659432c2c495f5eb3
+    commit_sha: 96f2ff658deb7566b7f328894353282c77798c4e
     supporting_commits:
       - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
       - e572e0c26004bdee4e473f8561da0bf55cd6ab25
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
-    evidence: durable contract for deterministic/local/frontier routing visibility, department-level processing matrix, and canonical telemetry fields
+    evidence: processing-plane contract, department-level observability, canonical telemetry fields, and Processing Matrix requirements
     blocker: dashboard aggregation, task-level event emission, and end-to-end processing matrix display still need verification
+  - id: DETERMINISTIC-SYSTEM-001
+    name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: 434a7a031b5387999ff7ddc2c1b25b8b238a1d21
+    supporting_commits:
+      - 8ca99514bced32ffec015bd89bc9464462ed1873
+      - 96f2ff658deb7566b7f328894353282c77798c4e
+      - deaa9e5c4defe831c164e390cdf6481570411de7
+    evidence: consolidated deterministic system contract covering capability boundary, three processing planes, department provenance, evidence, observability, roadmap and claims discipline
+    verification_note: documentation is durable; implementation/test/runtime-boundary verification remains separate
 current_documentation_anchor:
-  commit_sha: 7ab912272be7cac7f2841afb01f8867404f43ab6
-  note: canonical processing-plane telemetry schema checkpoint
+  commit_sha: deaa9e5c4defe831c164e390cdf6481570411de7
+  note: consolidated deterministic system and reconstruction documentation checkpoint
 next_p0:
   id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
   objective: execute and verify deterministic processing plus routing/department observability tests before expanding the execution substrate further
@@ -116,6 +131,7 @@ next_p0:
     - frontier-model routing evidence where available
     - department-level aggregation evidence
     - no-secret telemetry evidence
+    - Processing Matrix HTTP/browser evidence
   following_gate:
     id: SYNC-IMPLEMENTATION-001-F
     objective: verify the actual runtime Sync path, make Sync asynchronous/live, and implement explicit Stage/Activate/Rollback contracts
