@@ -1,0 +1,31 @@
+{
+  "serial": "AG-009",
+  "milestone": "DETERMINISTIC-OBSERVABILITY-001",
+  "starting_head": "98a6227d3b5784efd9909a0b7b1670d7124bd6f5",
+  "tested_commit": "98a6227d3b5784efd9909a0b7b1670d7124bd6f5",
+  "focused": {
+    "command": "PYTHONPATH=. pytest tests/test_deterministic_observability_001.py -v",
+    "start_time": "2026-09-17T18:53:33Z",
+    "end_time": "2026-09-17T18:53:34Z",
+    "duration": "0.79s",
+    "collected": 13,
+    "passed": 13,
+    "failed": 0,
+    "skipped": 0,
+    "errors": 0
+  },
+  "full_suite": {
+    "command": "PYTHONPATH=. pytest tests/ -v --tb=no -q",
+    "start_time": "2026-09-17T18:53:41Z",
+    "end_time": "2026-09-17T18:57:18Z",
+    "duration": "217.79s (0:03:37)",
+    "collected": 552,
+    "passed": 495,
+    "failed": 31,
+    "skipped": 26,
+    "errors": 0
+  },
+  "triage_required": true,
+  "triage_path": "docs/PRE-EXISTING-FAILURES-TRIAGE-001.md",
+  "control_center_runtime": "NOT_ESTABLISHED"
+}
