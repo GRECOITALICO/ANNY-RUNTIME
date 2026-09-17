@@ -113,15 +113,18 @@ milestones:
     next_action: execute focused deterministic and routing-observability tests, then reconcile failures
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
-    status: VERIFIED
-    commit_sha: 6173a87b4ca21d1865649bf3bd82ff58588aa547
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: b5a0b12f8ca962719316f6bec4e666a3c030efb7
     supporting_commits:
+      - 6173a87b4ca21d1865649bf3bd82ff58588aa547
       - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
       - e572e0c26004bdee4e473f8561da0bf55cd6ab25
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
-    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-CLOSEOUT.md
-    blocker: none
+    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-CLOSEOUT.md; post-closeout audit: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-001.md
+    blocker: current test execution not independently established; provenance test does not exercise Task->ExecutionContext->Worker->Telemetry; HTTP test is direct AdminRouter invocation rather than live HTTP; Control Center runtime evidence absent; timestamp ordering is raw string sort; legacy closeout and ledger reconciliation incomplete; referenced preexisting failure triage artifact absent
+    legacy_cleanup_gate: required
+    next_action: remediate post-closeout audit blockers, execute current focused and runtime-boundary verification, reconcile closeout and ledger, then re-verify
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -138,16 +141,21 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: df2b247877f0aefd74c4940fb20b1c1fd6cac7b2
-  note: post-closeout audit re-opened F verification; implementation exists but cleanup/concurrency/test evidence remain unresolved
+  commit_sha: 1bc092f8cc6cf3f27b428fb614e0e5b563083a79
+  note: post-closeout audit of DETERMINISTIC-OBSERVABILITY-001 reopened verification; F remains VERIFIED; implementation exists but current runtime/evidence reconciliation is not established
 next_p0:
-  id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
-  objective: verify governed local deterministic execution and its tests
+  id: DETERMINISTIC-OBSERVABILITY-001-REVERIFY
+  objective: remediate the post-closeout audit blockers and re-verify deterministic processing observability before advancing to the execution-substrate gate
   required_outputs:
-    - current focused test execution evidence
-    - reconciled closeout final SHA
+    - current focused test execution evidence with exact command/date/time/result
+    - Task->ExecutionContext->Worker->Telemetry provenance regression evidence
+    - actual HTTP runtime boundary evidence or explicit downgrade of claim
+    - Control Center runtime evidence or explicit downgrade of claim
+    - timezone-aware chronological aggregation behavior and regression test
+    - path-by-path legacy cleanup evidence
+    - reconciled closeout final SHA and ledger SHA
     - only then VERIFIED status if all gates pass
   following_gate:
-    id: NEXT-UNSPECIFIED
-    objective: proceed to next unverified milestone
+    id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
+    objective: verify governed local deterministic execution and its tests after observability is re-established
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
