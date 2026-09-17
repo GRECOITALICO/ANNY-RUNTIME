@@ -5,3 +5,5 @@ psutil
 azure-identity
 httpx
 mcp
+websocket-client
+python-dateutil

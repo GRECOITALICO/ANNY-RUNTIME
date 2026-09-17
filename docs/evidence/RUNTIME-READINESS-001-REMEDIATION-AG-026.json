@@ -1,0 +1,101 @@
+{
+  "serial": "AG-026",
+  "starting_head": "9e2f86b8b6f11e61aee75870ae5ffe834cb5d046",
+  "actual_verification_head": "9e2f86b8b6f11e61aee75870ae5ffe834cb5d046",
+  "prior_verified_milestones": {
+    "SYNC-IMPLEMENTATION-001-F": "VERIFIED",
+    "DETERMINISTIC-OBSERVABILITY-001": "VERIFIED",
+    "DETERMINISTIC-EXECUTION-SUBSTRATE-001": "VERIFIED",
+    "DETERMINISTIC-SYSTEM-001": "VERIFIED"
+  },
+  "ag_025_reconciliation": {
+    "installability": {
+      "ag_025_claim": "No explicit install procedure",
+      "current_github_fact": "scripts/install.sh exists, cli/main.py install exists, creates staging, virtualenv, systemd unit.",
+      "corrected_status": "NOT_ESTABLISHED",
+      "evidence": "scripts/install.sh",
+      "material_blocker": "true, needs verified clean install"
+    },
+    "configuration": {
+      "ag_025_claim": "No formal configuration files exist",
+      "current_github_fact": "runtime/core/config.py has RuntimeConfig and loads config.yaml",
+      "corrected_status": "PARTIAL",
+      "evidence": "runtime/core/config.py",
+      "material_blocker": "true, needs schema, defaults, validation"
+    },
+    "os_service_integration": {
+      "ag_025_claim": "Only browser broker systemd unit exists",
+      "current_github_fact": "scripts/install.sh generates anny-runtime.service",
+      "corrected_status": "PARTIAL",
+      "evidence": "scripts/install.sh",
+      "material_blocker": "true, needs demonstrated lifecycle"
+    },
+    "health_lifecycle": {
+      "ag_025_claim": "No formal health/status endpoint",
+      "current_github_fact": "runtime/core/engine.py has states, /api/status exists",
+      "corrected_status": "PARTIAL",
+      "evidence": "runtime/core/engine.py",
+      "material_blocker": "true, needs readiness/liveness decoupling"
+    }
+  },
+  "documentation_consistency": "PASS",
+  "full_suite": {
+    "collected": 559,
+    "passed": 506,
+    "failed": 27,
+    "errors": 0,
+    "skipped": 26
+  },
+  "failure_triage": [
+    {
+      "test": "test_installer_preflight.py",
+      "category": "READINESS_DEFECT",
+      "cause": "Missing dependency mapping in DEPENDENCY-INVENTORY.json and requirements.txt",
+      "current_or_preexisting": "CURRENT",
+      "material_for_readiness": true,
+      "remediation": "Added missing dependencies (websocket, dateutil) and requirements; test now passes."
+    },
+    {
+      "test": "test_001d_r4_lifecycle.py",
+      "category": "PRE_EXISTING_FAILURE",
+      "cause": "Browser lifecycle tests missing proper Chrome sandbox environment",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_readiness": false,
+      "remediation": "Requires browser orchestration fix in subsequent milestone"
+    },
+    {
+      "test": "test_001d_r5c_submit_deny.py",
+      "category": "PRE_EXISTING_FAILURE",
+      "cause": "Broker denying valid/invalid fields inconsistently in test mock environment",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_readiness": false,
+      "remediation": "Requires broker contract hardening"
+    },
+    {
+      "test": "test_001g_broker_security.py",
+      "category": "ENVIRONMENT_DEFECT",
+      "cause": "Missing chrome binary path in CI/test environment",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_readiness": false,
+      "remediation": "Requires CI chrome setup"
+    }
+  ],
+  "clean_install": "NOT_ESTABLISHED",
+  "restart_recovery": "NOT_ESTABLISHED",
+  "distribution_artifacts": "PARTIAL",
+  "release_identity": "NOT_ESTABLISHED",
+  "legacy_review": "FAIL",
+  "legacy_retirement_gates": ["DETERMINISTIC-SYSTEM-002-CLEANUP"],
+  "legacy_surfaces": [
+    {
+      "legacy_path": "runtime/workspace/manager.py:validate_access",
+      "current_callers": ["filesystem/service.py", "execution/executor.py"],
+      "replacement": "CapabilityGate",
+      "deletion_safety": "unsafe",
+      "blocker": "blocking removal due to widespread audit use",
+      "retirement_gate": "DETERMINISTIC-SYSTEM-002-CLEANUP"
+    }
+  ],
+  "decision": "NOT_READY",
+  "next_action": "RUNTIME-READINESS-001-INSTALL-AND-CONFIG"
+}

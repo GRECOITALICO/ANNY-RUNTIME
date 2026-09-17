@@ -1,0 +1,21 @@
+{
+  "serial": "AG-026",
+  "gate": "RUNTIME-READINESS-001",
+  "status": "NOT_READY",
+  "evidence": "docs/evidence/RUNTIME-READINESS-001-REMEDIATION-AG-026.json",
+  "blockers": [
+    "INSTALLABILITY: Clean install flow not physically demonstrated and verified.",
+    "CONFIGURATION: Configuration schema and clean defaults not fully distributed or verified.",
+    "OS_SERVICE_INTEGRATION: systemd lifecycle (start/stop/status) not verified.",
+    "HEALTH_LIVENESS: Liveness and Readiness signal not explicitly separated in the health API.",
+    "RELEASE_IDENTITY: No formal release definition mapped to a durable commit for distribution."
+  ],
+  "remediation": [
+    "Execute and verify physical clean install using scripts/install.sh",
+    "Formalize and verify configuration schema in config.yaml",
+    "Verify systemd service lifecycle end-to-end",
+    "Decouple /api/status into health/readiness/liveness endpoints",
+    "Define explicit release identity matrix"
+  ],
+  "next_serial": "RUNTIME-READINESS-001-INSTALL-AND-CONFIG"
+}
