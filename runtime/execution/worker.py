@@ -176,7 +176,11 @@ class WorkerManager:
                 self._emit_telemetry("inference_completed", worker, result.evidence.get("telemetry", {}))
 
             else:
-                raise NotImplementedError(f"Execution for {worker.executor_type} not yet implemented")
+                context.status = ExecutionStatus.FAILED
+                context.failure_reason = FailureReason.UNSUPPORTED_EXECUTOR
+                worker.state = WorkerState.FAILED
+                self._emit_telemetry("execution.failed", worker, {"classification": "UNSUPPORTED_EXECUTOR"})
+                return
 
             if context.status == ExecutionStatus.SUCCEEDED:
                 worker.state = WorkerState.SUCCEEDED

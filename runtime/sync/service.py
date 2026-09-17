@@ -152,10 +152,10 @@ class SyncService:
 
         def _run_activate():
             try:
-                time.sleep(0.1) # Stub implementation
-                result.sync_state = SyncState.ACTIVATED
-                result.activation_performed = True
-                self.local_version = result.candidate_version
+                # Activation is not physically implemented yet.
+                # Must fail-closed and leave explicitly blocked to avoid faking state.
+                result.sync_state = SyncState.BLOCKED
+                result.error_classification = "ACTIVATION_NOT_IMPLEMENTED"
             except Exception as exc:
                 result.sync_state = SyncState.FAILED
                 result.error_classification = exc.__class__.__name__

@@ -132,3 +132,34 @@ def test_22_multiple_concurrent_workers(exec_mgr):
     exec_mgr.submit_task(create_task())
     exec_mgr.submit_task(create_task())
     assert len(exec_mgr.worker_manager.list_workers()) == 2
+
+def test_23_unsupported_executor_fails_closed(exec_mgr):
+    class MockUnsupportedSel:
+        class TypeVal:
+            value = "FRONTIER_MODEL"
+        executor_type = TypeVal()
+        executor_id = "frontier"
+        model_id = "mod"
+    
+    class MockCap:
+        required_tools = []
+        network_policy = "disabled"
+
+    ctx = TaskExecutionContext(
+        execution_id="ex-unsupported", task_id="t-u", account_id="a", project_id="p",
+        capability_id="cap", workspace_path="", environment={}, allowed_tools=[],
+        deadline=datetime.now(timezone.utc) + timedelta(minutes=5),
+        resource_limits={}, network_policy="disabled", write_policy="allow"
+    )
+    task = Task(
+        task_id="t-u", capability_id="cap", account_id="a", project_id="p",
+        input={}, constraints={}, deadline=datetime.now(timezone.utc) + timedelta(minutes=5),
+        workspace_policy="", evidence_policy="", requested_by="me", created_at=datetime.now(timezone.utc)
+    )
+
+    worker = exec_mgr.worker_manager.create_worker(ctx, MockUnsupportedSel(), task)
+    exec_mgr.worker_manager.start_worker(worker.worker_id, ctx, task, MockCap())
+
+    assert worker.state == WorkerState.FAILED
+    assert ctx.status == ExecutionStatus.FAILED
+    assert ctx.failure_reason.name == "UNSUPPORTED_EXECUTOR"

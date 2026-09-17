@@ -308,24 +308,19 @@ def test_sync_stage_activate_rollback(tmp_path: Path):
     assert status["sync_state"] == SyncState.STAGED.value
     assert status["stage"] == "STAGE"
 
-    # 3. Activate
+    # 3. Activate (now fails closed to BLOCKED because not implemented physically)
     res = service.activate()
     assert res["status"] == "activating"
     service.wait()
     status = service.status()
-    assert status["sync_state"] == SyncState.ACTIVATED.value
-    assert status["activation_performed"] is True
-    assert service.local_version == "v0.5.0"
-
-    # 4. Rollback
-    res = service.rollback()
-    assert res["status"] == "rolling_back"
-    service.wait()
-    status = service.status()
-    assert status["sync_state"] == SyncState.ROLLED_BACK.value
+    assert status["sync_state"] == SyncState.BLOCKED.value
+    assert status["error_classification"] == "ACTIVATION_NOT_IMPLEMENTED"
     assert status["activation_performed"] is False
     assert service.local_version == "v0.4.0"
-
+    # 4. Rollback (blocked because activation failed)
+    res = service.rollback()
+    assert res["status"] == "blocked"
+    assert res["error"] == "Cannot rollback when not activated"
 def test_stage_blocked_if_not_verified(tmp_path: Path):
     service = SyncService(tmp_path)
     res = service.stage()
