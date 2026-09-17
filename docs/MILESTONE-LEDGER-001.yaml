@@ -159,8 +159,8 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: 17a18df2620717a752ad96801ae37b9fee448324
-  note: AG-011 audit 008 records contract-design failure and unauthorized prior-milestone regression; observability remains IMPLEMENTED_NOT_VERIFIED; substrate remains blocked
+  commit_sha: eb622dcb939ba087b6fba9c2674598157128b0bc
+  note: AG-012 contract repair commit; separates impl/evidence identity, removes self-reference mandate, adds 7 contract tests (all PASS)
 next_p0:
   id: DETERMINISTIC-OBSERVABILITY-001-CONTRACT-REPAIR
   objective: repair the durable closeout contract so implementation identity, evidence closeout identity, branch inclusion, and documentation anchor are independently verifiable without self-reference
