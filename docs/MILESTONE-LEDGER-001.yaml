@@ -143,7 +143,7 @@ milestones:
       - docs/LEGACY-CLEANUP-REVIEW-001.md
       - docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
     legacy_cleanup_gate: executed
-    blocker: AG-013 verification is not durably corroborated on main; the claimed 13/13 and 7/7 results remain claimant-reported because no AG-013-specific verification result artifact is published, and the contract JSON still declares verification_status: PENDING.
+    blocker: "AG-013 verification is not durably corroborated on main; the claimed 13/13 and 7/7 results remain claimant-reported because no AG-013-specific verification result artifact is published, and the contract JSON still declares verification_status: PENDING."
     next_action: DETERMINISTIC-OBSERVABILITY-001-VERIFY
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
