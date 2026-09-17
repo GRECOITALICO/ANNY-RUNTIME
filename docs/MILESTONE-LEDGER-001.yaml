@@ -131,6 +131,7 @@ milestones:
       - 1dfc4f91b11c0392d25a205844f5bbf5179bcda8
       - cf9ab4148ac565e63ad9b3f7ea65c6ca7472a417
       - 31a1d0c83a7e1bf357c917f5da94b66ee5dd613c
+      - 6584a518514d88229992ffba7950b84b41dbd314
     evidence_files:
       - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-005.md
       - docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-006.md
@@ -160,8 +161,8 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: eb622dcb939ba087b6fba9c2674598157128b0bc
-  note: AG-012 contract repair commit; AG-013 post-closeout audit 009 now records that verification remains uncorroborated; observability remains IMPLEMENTED_NOT_VERIFIED; substrate remains blocked
+  commit_sha: 6584a518514d88229992ffba7950b84b41dbd314
+  note: AG-013 post-closeout audit 009 is the latest governing documentation; observability remains IMPLEMENTED_NOT_VERIFIED; substrate remains blocked
 next_p0:
   id: DETERMINISTIC-OBSERVABILITY-001-VERIFY
   objective: independently verify observability using the repaired closeout contract, then only after VERIFIED advance to DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
