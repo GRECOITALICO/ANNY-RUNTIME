@@ -5,6 +5,11 @@ rules:
   - VERIFIED/CERTIFIED milestones are the only trusted resume points
   - historical test counts are not current test evidence
   - every new milestone must record commit_sha and next_action
+  - commit_sha identifies the milestone implementation commit; it is not required to equal a later evidence/closeout commit
+  - evidence_closeout_commits identify later durable evidence/closeout commits and must resolve in GitHub
+  - a VERIFIED milestone must establish that its implementation commit is an ancestor of the evidence/closeout commit and that the evidence/closeout commit is reachable from the active branch
+  - current_documentation_anchor identifies the durable commit containing the current governing documentation; it must resolve in GitHub and is not self-referential
+  - no closeout rule may require a Git commit to contain its own final SHA; commit self-reference is not a valid verification primitive
   - every milestone that replaces or introduces an implementation path must perform a legacy-surface review before closeout
   - obsolete duplicate paths, stale compatibility branches, unsafe mock fallbacks, superseded routes, and stale tests must be removed in the same milestone when the replacement is verified and deletion is safe
   - if legacy deletion is not yet safe, the milestone must record the exact blocker and an explicit retirement gate; no undocumented fallback may remain
@@ -87,7 +92,7 @@ milestones:
     blocker: end-to-end HTTP/browser runtime boundary verification remains pending; broader suite lacks required mcp environment dependency
   - id: SYNC-IMPLEMENTATION-001-F
     name: ASYNCHRONOUS_SYNC_LIFECYCLE_AND_GOVERNED_ACTIVATION_CONTRACT
-    status: IMPLEMENTED_NOT_VERIFIED
+    status: VERIFIED
     commit_sha: 3f0903bbd82af6c5af051c23ac10a591786b08e6
     supporting_commits:
       - 4f21a64c6a06fb1618b4b7d424c0fc51fc98a806
@@ -95,7 +100,6 @@ milestones:
       - 6544678129e96e031c5040fdb21d09e51c8651ad
     evidence: docs/evidence/SYNC-IMPLEMENTATION-001-F-CLOSEOUT.md
     blocker: none
-    blocker: Mathematical impossibility (cryptographic SHA-1 fixed point paradox) prevents a Git commit from containing its own exact final hash in its tree.
     legacy_cleanup_gate: executed
   - id: DETERMINISTIC-EXECUTION-SUBSTRATE-001
     name: GOVERNED_LOCAL_DETERMINISTIC_EXECUTION
@@ -115,7 +119,7 @@ milestones:
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
     status: IMPLEMENTED_NOT_VERIFIED
-    commit_sha: 3bbb1314aff2efa57741f97f6f113a5cc3be0b63
+    commit_sha: c8f21e7888227cc64a02ec9c9bd008e3ed463307
     supporting_commits:
       - 6173a87b4ca21d1865649bf3bd82ff58588aa547
       - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
@@ -123,10 +127,10 @@ milestones:
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
       - b5a0b12f8ca962719316f6bec4e666a3c030efb7
-    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-005.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-006.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-007.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-AG-008-CLOSEOUT.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-TEST-RUN-009.json; docs/LEGACY-CLEANUP-REVIEW-001.md; docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
-    blocker: Mathematical impossibility (cryptographic SHA-1 fixed point paradox) prevents a Git commit from containing its own exact final hash in its tree.
+    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-005.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-006.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-007.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-008.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-AG-008-CLOSEOUT.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-TEST-RUN-009.json; docs/LEGACY-CLEANUP-REVIEW-001.md; docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
+    blocker: AG-011 exposed a contract-design flaw: the prior closeout rule required the milestone implementation commit field to equal the final evidence commit, creating self-reference. AG-011 also introduced a non-resolvable milestone SHA and regressed SYNC-IMPLEMENTATION-001-F. Contract repair is required before verification.
     legacy_cleanup_gate: executed
-    next_action: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
+    next_action: DETERMINISTIC-OBSERVABILITY-001-CONTRACT-REPAIR
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -143,19 +147,20 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: 3bbb1314aff2efa57741f97f6f113a5cc3be0b63
-  note: final closeout of DETERMINISTIC-OBSERVABILITY-001 by AG-011
+  commit_sha: 17a18df2620717a752ad96801ae37b9fee448324
+  note: AG-011 audit 008 records contract-design failure and unauthorized prior-milestone regression; observability remains IMPLEMENTED_NOT_VERIFIED; substrate remains blocked
 next_p0:
-  id: DETERMINISTIC-OBSERVABILITY-001-FINAL-RECONCILIATION
-  objective: perform the final durable evidence and git-integrity reconciliation on actual current main before advancing
+  id: DETERMINISTIC-OBSERVABILITY-001-CONTRACT-REPAIR
+  objective: repair the durable closeout contract so implementation identity, evidence closeout identity, branch inclusion, and documentation anchor are independently verifiable without self-reference
   required_outputs:
-    - triage evidence fields citing durable corroboration for each PRE_EXISTING classification
-    - closeout with explicit final HEAD and final commit SHA
-    - ledger final SHA equal to actual main HEAD
-    - actual clean local worktree with no untracked artifacts
-    - final git-integrity evidence
-    - only then VERIFIED status if all gates pass
+    - repaired durable ledger schema and contract text
+    - explicit implementation_commit_sha semantics
+    - explicit evidence_closeout_commits semantics
+    - ancestry and active-branch verification rule
+    - regression guard preserving VERIFIED status of prior milestones
+    - revised observability closeout verification procedure
+    - no SHA-1 fixed-point or self-referential hash search
   following_gate:
-    id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
-    objective: verify governed local deterministic execution and its tests after observability is re-established
+    id: DETERMINISTIC-OBSERVABILITY-001-VERIFY
+    objective: independently verify observability using the repaired closeout contract, then only after VERIFIED advance to DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
