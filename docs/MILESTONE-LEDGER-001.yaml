@@ -113,8 +113,8 @@ milestones:
     next_action: execute focused deterministic and routing-observability tests, then reconcile failures
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
-    status: VERIFIED
-    commit_sha: 1dfc4f91b11c0392d25a205844f5bbf5179bcda8
+    status: IMPLEMENTED_NOT_VERIFIED
+    commit_sha: c8f21e7888227cc64a02ec9c9bd008e3ed463307
     supporting_commits:
       - 6173a87b4ca21d1865649bf3bd82ff58588aa547
       - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
@@ -122,10 +122,10 @@ milestones:
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
       - b5a0b12f8ca962719316f6bec4e666a3c030efb7
-    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-005.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-AG-008-CLOSEOUT.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-TEST-RUN-009.json; docs/LEGACY-CLEANUP-REVIEW-001.md; docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
-    blocker: none
-    legacy_cleanup_gate: executed
-    next_action: advance to DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
+    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-005.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-006.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-AG-008-CLOSEOUT.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-TEST-RUN-009.json; docs/LEGACY-CLEANUP-REVIEW-001.md; docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
+    blocker: AG-009 closure is not contractually final. The current triage table does not cite durable corroboration for PRE_EXISTING classification rows; the closeout does not record the explicit final HEAD; the ledger had been set to historical commit 1dfc4f91... rather than the actual main HEAD; and the reported local worktree contains an untracked test_output.txt, so WORKTREE_CLEAN=true is not established.
+    legacy_cleanup_gate: required
+    next_action: execute final observability reconciliation on current main, remove untracked local artifacts, repair durable triage/closeout/final-SHA evidence, then re-verify before advancing
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -142,19 +142,17 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: 4cc8404dbc9dce927e3a877c5e39a8e27f3c6ba3
-  note: post-closeout audit 005 reconciles AG-008; observability remains IMPLEMENTED_NOT_VERIFIED; F remains VERIFIED
+  commit_sha: 66c0a659380441a17927fa63a6459595723f8896
+  note: post-closeout audit 006 reconciles AG-009; observability remains IMPLEMENTED_NOT_VERIFIED; F remains VERIFIED
 next_p0:
-  id: DETERMINISTIC-OBSERVABILITY-001-REVERIFY
-  objective: complete the missing contractual evidence and current test-run reconciliation on current main before advancing
+  id: DETERMINISTIC-OBSERVABILITY-001-FINAL-RECONCILIATION
+  objective: perform the final durable evidence and git-integrity reconciliation on current main before advancing
   required_outputs:
-    - path-by-path legacy cleanup evidence in the exact contracted table form
-    - current focused test evidence with exact command/date/time/result metadata
-    - current full-suite test evidence with exact command/date/time/result metadata
-    - durable per-failure triage or explicit zero-failure result for the current full-suite execution
-    - dedicated AG-008 closeout with exact O-01..O-09 structure and final verification decision
-    - durable AG-008 focused/full-suite test-run JSON evidence
-    - final ledger reconciliation using the actual final AG-008 commit SHA
+    - triage evidence fields citing durable corroboration for each PRE_EXISTING classification
+    - closeout with explicit final HEAD and final commit SHA
+    - ledger final SHA equal to actual main HEAD
+    - actual clean local worktree with no untracked artifacts
+    - final git-integrity evidence
     - only then VERIFIED status if all gates pass
   following_gate:
     id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
