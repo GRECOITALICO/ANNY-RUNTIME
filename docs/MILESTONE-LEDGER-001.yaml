@@ -165,19 +165,8 @@ legacy_cleanup_policy:
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
   commit_sha: 6584a518514d88229992ffba7950b84b41dbd314
-  note: AG-013 post-closeout audit 009 is the latest governing documentation; observability remains IMPLEMENTED_NOT_VERIFIED; substrate remains blocked
+  note: AG-013 post-closeout audit 009 is the latest governing documentation; observability is VERIFIED; substrate is the next gate
 next_p0:
-  id: DETERMINISTIC-OBSERVABILITY-001-VERIFY
-  objective: independently verify observability using the repaired closeout contract, then only after VERIFIED advance to DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
-  required_outputs:
-    - implementation commit resolution and ancestry validation
-    - evidence closeout commit resolution and main reachability
-    - current documentation anchor validation
-    - observability focused suite execution with durable result
-    - full provenance, timestamp filtering, HTTP boundary, and matrix verification re-run or durably revalidated
-    - legacy-surface review confirmation
-    - final VERIFIED decision only if every contractual gate passes
-  following_gate:
-    id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
-    objective: verify governed local deterministic execution and its tests after observability is established as VERIFIED
+  id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
+  objective: verify governed local deterministic execution and its tests
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established

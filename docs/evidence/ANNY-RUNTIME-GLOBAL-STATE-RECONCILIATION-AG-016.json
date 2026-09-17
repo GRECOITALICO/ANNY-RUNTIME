@@ -1,0 +1,10 @@
+{
+  "serial": "AG-016",
+  "previous_main": "afb2278a75bada5e38003ae069e5971f4bfa7167",
+  "observability_status": "VERIFIED",
+  "observability_implementation_sha": "c8f21e7888227cc64a02ec9c9bd008e3ed463307",
+  "sync_f_status": "VERIFIED",
+  "next_p0": "DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY",
+  "observability_reopened": false,
+  "decision": "GLOBAL_STATE_RECONCILED"
+}
