@@ -113,7 +113,7 @@ milestones:
     next_action: execute focused deterministic and routing-observability tests, then reconcile failures
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
-    status: VERIFIED
+    status: IMPLEMENTED_NOT_VERIFIED
     commit_sha: c8f21e7888227cc64a02ec9c9bd008e3ed463307
     supporting_commits:
       - 6173a87b4ca21d1865649bf3bd82ff58588aa547
@@ -122,10 +122,10 @@ milestones:
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
       - 7ab912272be7cac7f2841afb01f8867404f43ab6
       - b5a0b12f8ca962719316f6bec4e666a3c030efb7
-    evidence: docs/evidence/OBSERVABILITY-001-TEST-COUNTS.md; docs/evidence/OBSERVABILITY-001-PROVENANCE.md; docs/evidence/OBSERVABILITY-001-HTTP.md; docs/LEGACY-CLEANUP-REVIEW-001.md; docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
-    blocker: none
-    legacy_cleanup_gate: executed
-    next_action: advance to DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
+    evidence: docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-001.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-002.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-003.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-004.md; docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-005.md; docs/evidence/OBSERVABILITY-001-TEST-COUNTS.md; docs/evidence/OBSERVABILITY-001-PROVENANCE.md; docs/evidence/OBSERVABILITY-001-HTTP.md; docs/LEGACY-CLEANUP-REVIEW-001.md; docs/PRE-EXISTING-FAILURES-TRIAGE-001.md
+    blocker: AG-008 implementation is present, but the verification contract remains incomplete: legacy cleanup is not in the required path-by-path table; focused/full-suite run metadata is incomplete; the full-suite result is not durably established; failure triage does not use the required per-failure schema; no dedicated AG-008 closeout structure is present; and the required durable AG-008 test-run JSON is absent. Control Center runtime remains NOT_ESTABLISHED.
+    legacy_cleanup_gate: required
+    next_action: re-execute DETERMINISTIC-OBSERVABILITY-001-REVERIFY against current main and complete every outstanding contractual output before advancing
   - id: DETERMINISTIC-SYSTEM-001
     name: CONSOLIDATED_DETERMINISTIC_SYSTEM_DOCUMENTATION
     status: IMPLEMENTED_NOT_VERIFIED
@@ -142,21 +142,19 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: c61d0cc08048ba7cab9f0ca0249f9a6db247c476
-  note: post-closeout audit 004 reconciles AG-007; observability remains IMPLEMENTED_NOT_VERIFIED; F remains VERIFIED
+  commit_sha: 4cc8404dbc9dce927e3a877c5e39a8e27f3c6ba3
+  note: post-closeout audit 005 reconciles AG-008; observability remains IMPLEMENTED_NOT_VERIFIED; F remains VERIFIED
 next_p0:
   id: DETERMINISTIC-OBSERVABILITY-001-REVERIFY
-  objective: execute and verify the actual observability remediation on current main before advancing
+  objective: complete the missing contractual evidence and current test-run reconciliation on current main before advancing
   required_outputs:
-    - timezone-aware chronological aggregation implementation
-    - invalid timestamp rejection behavior with explicit regression test
-    - Task->ExecutionContext->Worker->Telemetry->matrix provenance regression evidence
-    - actual HTTP runtime boundary evidence or explicit downgrade of claim
-    - Control Center runtime evidence or explicit downgrade of claim
-    - path-by-path legacy cleanup evidence in the contracted table form
-    - current focused/full-suite test evidence with exact command/date/time/result
-    - durable pre-existing failure triage only for failures observed in current execution, using the required per-failure schema
-    - reconciled closeout final SHA and ledger SHA
+    - path-by-path legacy cleanup evidence in the exact contracted table form
+    - current focused test evidence with exact command/date/time/result metadata
+    - current full-suite test evidence with exact command/date/time/result metadata
+    - durable per-failure triage or explicit zero-failure result for the current full-suite execution
+    - dedicated AG-008 closeout with exact O-01..O-09 structure and final verification decision
+    - durable AG-008 focused/full-suite test-run JSON evidence
+    - final ledger reconciliation using the actual final AG-008 commit SHA
     - only then VERIFIED status if all gates pass
   following_gate:
     id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
