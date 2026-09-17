@@ -100,11 +100,12 @@ milestones:
       - 7934e135c148cb13544cbdaabfa84bd3e0ddc61c
       - e572e0c26004bdee4e473f8561da0bf55cd6ab25
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
-    evidence: durable contract for deterministic/local/frontier routing visibility and department-level processing matrix
-    blocker: dashboard aggregation and end-to-end telemetry display still need verification
+      - 7ab912272be7cac7f2841afb01f8867404f43ab6
+    evidence: durable contract for deterministic/local/frontier routing visibility, department-level processing matrix, and canonical telemetry fields
+    blocker: dashboard aggregation, task-level event emission, and end-to-end processing matrix display still need verification
 current_documentation_anchor:
-  commit_sha: b394adfe3d62a4e94822625659432c2c495f5eb3
-  note: deterministic processing observability strategy checkpoint
+  commit_sha: 7ab912272be7cac7f2841afb01f8867404f43ab6
+  note: canonical processing-plane telemetry schema checkpoint
 next_p0:
   id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
   objective: execute and verify deterministic processing plus routing/department observability tests before expanding the execution substrate further
