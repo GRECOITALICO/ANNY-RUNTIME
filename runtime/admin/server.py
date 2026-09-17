@@ -5,12 +5,14 @@ Binds to local interface, integrates router and middleware.
 import logging
 import socketserver
 import threading
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, Any
 
 from runtime.admin.routes import AdminRouter
 from runtime.admin.middleware import AdminMiddleware
 from runtime.sync.service import SyncService
+from runtime.sync.github_source import GitHubReleaseSource
 from runtime.admin.sync_ui import inject_sync_controls
 
 logger = logging.getLogger(__name__)
@@ -25,20 +27,17 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
         # Single request context shared between middleware and router
         context: Dict[str, Any] = dict(self.server.router.context)
         if not self.server.middleware.process_request('GET', self.path, self.headers, context):
-            # Process response to emit any cookies (e.g. new session)
             self.server.middleware.process_response(context)
             self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
             self.server.router._redirect(self, context.get('redirect_to', '/login'))
             return
 
-        # Inject request context into router so handlers see admin_session/csrf
         saved_context = dict(self.server.router.context)
         self.server.router.context.update(context)
         try:
             self.server.middleware.process_response(context)
             self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
 
-            # Canonical governed Sync status endpoint.
             if self.path.split('?', 1)[0] == '/api/sync/status':
                 sync_service = self.server.router.context.get('sync_service')
                 if sync_service is None:
@@ -50,13 +49,10 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                     self.server.router._send_json(self, sync_service.status())
                 return
 
-            # First-level Control Center: keep the existing page as the primary
-            # surface and inject the governed Sync control only for a normal admin
-            # session. Onboarding remains intentionally untouched.
             if self.path.split('?', 1)[0] == '/':
                 session = context.get('admin_session')
                 is_onboarding = bool(session and getattr(session, 'scope', None) == 'ONBOARDING_ONLY')
-                html_page = self.server.router.handle_dashboard(__import__('urllib.parse').parse.urlparse(self.path))
+                html_page = self.server.router.handle_dashboard(urllib.parse.urlparse(self.path))
                 if not is_onboarding:
                     html_page = inject_sync_controls(
                         html_page,
@@ -67,7 +63,6 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
 
             self.server.router.dispatch_get(self.path, self)
         finally:
-            # Restore persistent context, preserving any handler-set keys
             for key in list(self.server.router.context.keys()):
                 if key not in saved_context and key not in ('bootstrap_snapshot', 'sync_service'):
                     del self.server.router.context[key]
@@ -75,7 +70,6 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                                                if k not in ('admin_session', 'set_cookies', 'new_session_id', 'secure_cookie')})
 
     def do_POST(self):
-        # Single request context: start from persistent admin_context
         context: Dict[str, Any] = dict(self.server.router.context)
         if not self.server.middleware.process_request('POST', self.path, self.headers, context):
             self.server.middleware.process_response(context)
@@ -83,7 +77,6 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             self.server.router._redirect(self, context.get('redirect_to', '/login'))
             return
 
-        # Parse form data
         content_type = self.headers.get('content-type', '')
         ctype = content_type.split(';')[0].strip().lower()
 
@@ -92,7 +85,6 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get('content-length', 0))
             if length > 0:
                 body = self.rfile.read(length).decode('utf-8')
-                import urllib.parse
                 form_data = urllib.parse.parse_qs(body)
 
         if not self.server.middleware.process_post_body(self.path, form_data, context):
@@ -101,11 +93,9 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
             self.server.router._redirect(self, context.get('redirect_to', '/'))
             return
 
-        # Inject request context into router so POST handlers see admin_session
         saved_context = dict(self.server.router.context)
         self.server.router.context.update(context)
         try:
-            # Canonical governed Sync transaction.
             if self.path.split('?', 1)[0] == '/api/sync':
                 sync_service = self.server.router.context.get('sync_service')
                 if sync_service is None:
@@ -119,12 +109,9 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
                 self.server.middleware.process_response(self.server.router.context)
                 return
 
-            # Execute POST handler
             self.server.router.dispatch_post(self.path, form_data, self)
-            # Post-process (cookies) — re-read context since handler may have set new_session_id
             self.server.middleware.process_response(self.server.router.context)
         finally:
-            # Restore persistent context
             for key in list(self.server.router.context.keys()):
                 if key not in saved_context and key not in ('bootstrap_snapshot', 'sync_service'):
                     del self.server.router.context[key]
@@ -152,7 +139,6 @@ class LoopbackIPv6Server(socketserver.ThreadingMixIn, HTTPServer):
         super().server_bind()
 
 
-# Legacy alias kept for external references
 ThreadedHTTPServer = LoopbackIPv4Server
 
 
@@ -165,7 +151,6 @@ class AdminServer:
         self.server = None
         self.thread = None
         
-        # Initialize context for router
         self.admin_context = {
             'auth_manager': auth_manager,
             'audit_manager': audit_manager,
@@ -183,8 +168,6 @@ class AdminServer:
         
     def start(self):
         """Start dual-stack servers (127.0.0.1 + ::1) in background threads."""
-
-        # --- IPv4 (127.0.0.1) ---
         try:
             self.server4 = LoopbackIPv4Server(('127.0.0.1', self.port), AdminRequestHandler)
             self.server4.router = self.router
@@ -196,7 +179,6 @@ class AdminServer:
             logger.error(f"Failed to bind IPv4 (127.0.0.1:{self.port}): {e}")
             return False
 
-        # --- IPv6 (::1) — optional: skip if interface not available ---
         self.server6 = None
         self.thread6 = None
         try:
@@ -228,6 +210,7 @@ class AdminServer:
 
 def start_admin_server(host: str, port: int):
     """Convenience function to instantiate and run the AdminServer."""
+    import os
     import time
     import sys
     from runtime.core.config import get_data_dir
@@ -237,7 +220,6 @@ def start_admin_server(host: str, port: int):
     from runtime.admin.github import GitHubAuthManager
     from runtime.secrets.backend import FileSecretBackend
     
-    # Initialize basic components required by the server
     data_dir = get_data_dir()
     identity_manager = RuntimeIdentity.load(data_dir)
     auth_manager = AdminSessionManager(str(data_dir), identity_manager.runtime_id)
@@ -245,23 +227,18 @@ def start_admin_server(host: str, port: int):
     secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
     github_manager = GitHubAuthManager(secret_backend)
     
-    from runtime.workspace.manager import WorkspaceManager
     from runtime.workspace.ephemeral import EphemeralWorkspaceManager
     from runtime.execution.manager import ExecutionManager
-    
-    # Initialize GitHub client
     from runtime.github.client import GitHubClient
     from runtime.github.discovery import OrganizationDiscoveryService
     github_client = GitHubClient(secret_backend=secret_backend) if github_manager.has_token() else None
 
-    # Initialize Fabric client (new GitHub-authenticated client)
     from runtime.fabric.github_adapter import GitHubFabricAdapter
     fabric_client = GitHubFabricAdapter(github_client=github_client) if github_client else None
     
-    # We use a temp dir for workspaces for now
     ephemeral_workspace_manager = EphemeralWorkspaceManager()
     execution_manager = ExecutionManager(
-        workspace_manager=ephemeral_workspace_manager, 
+        workspace_manager=ephemeral_workspace_manager,
         audit_manager=audit_manager,
         github_client=github_client,
         fabric_client=fabric_client
@@ -275,27 +252,33 @@ def start_admin_server(host: str, port: int):
         except Exception as e:
             logger.warning(f"Startup discovery failed: {e}")
 
-    # Start server with None for bootstrap_snapshot initially
     from runtime.core.engine import RuntimeEngine
     from runtime.core.config import RuntimeConfig
     
     config = RuntimeConfig(data_dir=str(data_dir))
     engine = RuntimeEngine(config)
     
-    # Sync starts with no update source bound yet. This is deliberate: until the
-    # authoritative source + verifier contract is wired, Sync must resolve BLOCKED.
+    update_source_repo = os.environ.get("ANNY_UPDATE_SOURCE_REPO", "").strip()
+    update_source = None
+    if github_client and update_source_repo:
+        try:
+            update_source = GitHubReleaseSource(github_client, update_source_repo)
+        except ValueError as e:
+            logger.warning(f"Invalid ANNY_UPDATE_SOURCE_REPO: {e}")
+
+    local_version = os.environ.get("ANNY_RUNTIME_VERSION", "v0.4.0")
     sync_service = SyncService(
         data_dir=data_dir,
-        local_version="v0.4.0",
-        discover=None,
+        local_version=local_version,
+        discover=update_source.discover if update_source else None,
         verify=None,
     )
 
     server = AdminServer(
-        host=host, 
-        port=port, 
-        auth_manager=auth_manager, 
-        audit_manager=audit_manager, 
+        host=host,
+        port=port,
+        auth_manager=auth_manager,
+        audit_manager=audit_manager,
         github_manager=github_manager,
         secret_backend=secret_backend,
         event_bus=None,
@@ -315,10 +298,8 @@ def start_admin_server(host: str, port: int):
             logger.error(f"Runtime engine startup error: {e}")
 
     if server.start():
-        import threading
         t = threading.Thread(target=run_bootstrap, daemon=True)
         t.start()
-        
         try:
             while True:
                 time.sleep(1)
