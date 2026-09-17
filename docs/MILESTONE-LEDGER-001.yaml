@@ -114,8 +114,10 @@ milestones:
       - e572e0c26004bdee4e473f8561da0bf55cd6ab25
       - 9edef80cfcf8c3c203a107ffbd22a28852f6e595
     evidence: expanded deterministic capabilities, workspace substrate, department/routing classification, policy propagation, and focused tests
-    verification_note: focused tests have not yet been executed in this session; no green result is claimed
-    next_action: execute focused deterministic and routing-observability tests, then reconcile failures
+    verification_note: AG-017 verification attempted; tests failed (3 failures out of 37 in focal sets); decision is IMPLEMENTED_NOT_VERIFIED
+    evidence_files:
+      - docs/evidence/DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY-AG-017.json
+    next_action: RECONCILE-DETERMINISTIC-EXECUTION-SUBSTRATE-FAILURES
   - id: DETERMINISTIC-OBSERVABILITY-001
     name: PROCESSING_PLANE_AND_DEPARTMENT_OBSERVABILITY
     status: VERIFIED
@@ -167,6 +169,6 @@ current_documentation_anchor:
   commit_sha: 6584a518514d88229992ffba7950b84b41dbd314
   note: AG-013 post-closeout audit 009 is the latest governing documentation; observability is VERIFIED; substrate is the next gate
 next_p0:
-  id: DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY
-  objective: verify governed local deterministic execution and its tests
+  id: RECONCILE-DETERMINISTIC-EXECUTION-SUBSTRATE-FAILURES
+  objective: reconcile failed focused deterministic execution tests
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established

@@ -1,0 +1,17 @@
+{
+  "serial": "AG-017",
+  "milestone": "DETERMINISTIC-EXECUTION-SUBSTRATE-001",
+  "implementation_commit_sha": "bb26f74a3b4588af3ba4fd4e2deaed721415e50e",
+  "verification_commit": "e383e6496ecbaf92b17f15bc7c7eeff9e3fe6521",
+  "focused_tests": {
+    "collected": 37,
+    "passed": 34,
+    "failed": 3,
+    "errors": 0,
+    "skipped": 0
+  },
+  "observability_dependency": "VERIFIED",
+  "sync_001_f_dependency": "VERIFIED",
+  "legacy_review": "PASS",
+  "decision": "IMPLEMENTED_NOT_VERIFIED"
+}
