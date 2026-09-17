@@ -130,6 +130,7 @@ class SyncService:
             return
 
         result.comparison = "CANDIDATE_AVAILABLE"
+
         result.stage = "VERIFY"
         if self.verify_candidate is None:
             result.sync_state = SyncState.UNKNOWN
@@ -137,12 +138,31 @@ class SyncService:
             result.stage = "REPORT"
             return
 
-        verification = self.verify_candidate(discovered) or {}
-        if not verification.get("verified", False):
-            result.sync_state = SyncState.BLOCKED
-            result.verification = str(verification.get("status", "FAILED"))
-            result.error_classification = str(verification.get("error", "CANDIDATE_NOT_VERIFIED"))
+        try:
+            # We assume verify_candidate can take (discovered, trace_id)
+            verification = self.verify_candidate(discovered, result.trace_id)
+            v_dict = verification.to_dict() if hasattr(verification, "to_dict") else (verification or {})
+        except Exception as exc:
+            result.sync_state = SyncState.FAILED
+            result.error_classification = "VERIFIER_EXCEPTION"
+            result.verification = "ERROR"
             result.stage = "REPORT"
+            result.details = {"message": str(exc)[:500], "activation_performed": False}
+            return
+            
+        result.candidate_identity = v_dict.get("candidate_identity")
+        result.digest_algorithm = v_dict.get("digest_algorithm")
+        result.digest = v_dict.get("digest")
+        result.proof_reference = v_dict.get("proof_reference")
+        result.verifier_identity = v_dict.get("verifier_identity")
+
+        if not v_dict.get("verified", False):
+            status_val = v_dict.get("status", "FAILED")
+            result.sync_state = SyncState.BLOCKED if status_val != "UNKNOWN" else SyncState.UNKNOWN
+            result.verification = str(status_val)
+            result.error_classification = str(v_dict.get("error", "CANDIDATE_NOT_VERIFIED"))
+            result.stage = "REPORT"
+            result.details = {"activation_performed": False}
             return
 
         result.verification = "VERIFIED"
