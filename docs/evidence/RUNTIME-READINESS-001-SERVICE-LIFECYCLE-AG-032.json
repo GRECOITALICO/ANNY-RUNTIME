@@ -1,0 +1,94 @@
+{
+  "serial": "AG-032",
+  "starting_head": "ea64be48ca17173a68e933ce24fac743d9454657",
+  "ag_031": {
+    "decision": "NOT_ESTABLISHED",
+    "systemd_failure": "Failed to connect to user scope bus via local transport"
+  },
+  "environment": {
+    "systemd_available": false,
+    "user_bus_available": false,
+    "xdg_runtime_dir": "/run/user/1000",
+    "dbus_session_bus_address": "unix:path=/run/user/1000/bus",
+    "user_manager_reachable": false
+  },
+  "manual_runtime_test": {
+    "performed": true,
+    "exit_code": 0,
+    "port_listening": 4322
+  },
+  "failed_tests": [
+    {
+      "test": "tests/test_001d_r4_lifecycle.py::TestBrowserVisibleWaitingUser::test_browser_launched_before_ready",
+      "category": "TEST_DEFECT",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_lifecycle": false,
+      "evidence": "Colab MCP attach failed: Connection timeout or denied"
+    },
+    {
+      "test": "tests/test_001d_r4_lifecycle.py::TestBrowserClosesAfterReady::test_hide_called_when_ready",
+      "category": "TEST_DEFECT",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_lifecycle": false,
+      "evidence": "Colab MCP attach failed: Connection timeout or denied"
+    },
+    {
+      "test": "tests/test_001d_r4_lifecycle.py::TestBrowserClosesAfterReady::test_metadata_records_auto_hidden_true",
+      "category": "TEST_DEFECT",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_lifecycle": false,
+      "evidence": "Colab MCP attach failed: Connection timeout or denied"
+    },
+    {
+      "test": "tests/test_001d_r4_lifecycle.py::TestBrowserClosesAfterReady::test_metadata_records_browser_final_state_hidden",
+      "category": "TEST_DEFECT",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_lifecycle": false,
+      "evidence": "Colab MCP attach failed: Connection timeout or denied"
+    },
+    {
+      "test": "tests/test_001d_r4_lifecycle.py::TestBrowserClosesAfterReady::test_metadata_records_ready_and_hide_timestamps",
+      "category": "TEST_DEFECT",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_lifecycle": false,
+      "evidence": "Colab MCP attach failed: Connection timeout or denied"
+    },
+    {
+      "test": "tests/test_001d_r4_lifecycle.py::TestBrowserClosesAfterReady::test_fallback_to_close_when_hide_unavailable",
+      "category": "TEST_DEFECT",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_lifecycle": false,
+      "evidence": "Colab MCP attach failed: Connection timeout or denied"
+    },
+    {
+      "test": "tests/test_001d_r4_lifecycle.py::TestSessionSurvivesBrowserClose::test_session_state_ready_after_hide",
+      "category": "TEST_DEFECT",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_lifecycle": false,
+      "evidence": "Colab MCP attach failed: Connection timeout or denied"
+    },
+    {
+      "test": "tests/test_001d_r4_lifecycle.py::TestSessionSurvivesBrowserClose::test_session_ready_even_if_hide_raises",
+      "category": "TEST_DEFECT",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_lifecycle": false,
+      "evidence": "Colab MCP attach failed: Connection timeout or denied"
+    },
+    {
+      "test": "tests/test_001d_r4_lifecycle.py::TestReconnectReopensBrowser::test_provision_called_twice_launches_browser_both_times",
+      "category": "TEST_DEFECT",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_lifecycle": false,
+      "evidence": "Colab MCP attach failed: Connection timeout or denied"
+    },
+    {
+      "test": "tests/test_001d_r4_lifecycle.py::TestReconnectHidesBrowserAfterReady::test_hide_called_on_each_provision",
+      "category": "TEST_DEFECT",
+      "current_or_preexisting": "PRE_EXISTING",
+      "material_for_lifecycle": false,
+      "evidence": "Colab MCP attach failed: Connection timeout or denied"
+    }
+  ],
+  "legacy_review": "MAINTAINED",
+  "decision": "RECONCILED"
+}
