@@ -189,6 +189,6 @@ current_documentation_anchor:
   commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
 next_p0:
-  id: RUNTIME-READINESS-001-INSTALL-AND-CONFIG
-  objective: Implement and physically verify clean install and configuration schema
+  id: RUNTIME-READINESS-001-SERVICE-LIFECYCLE
+  objective: Physically verify systemd start/stop/status lifecycle and runtime service behavior
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established

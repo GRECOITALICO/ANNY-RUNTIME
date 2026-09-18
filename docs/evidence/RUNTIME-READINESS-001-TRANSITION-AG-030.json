@@ -1,0 +1,13 @@
+{
+  "serial": "AG-030",
+  "starting_head": "6e4d658cd2b7dab110f7a07a54f120c6a0330b28",
+  "previous_next_action": "RUNTIME-READINESS-001-INSTALL-AND-CONFIG",
+  "new_next_action": "RUNTIME-READINESS-001-SERVICE-LIFECYCLE",
+  "ag_029": {
+    "installability": "VERIFIED",
+    "clean_install": "VERIFIED",
+    "configuration": "VERIFIED"
+  },
+  "runtime_readiness": "NOT_READY",
+  "decision": "RECONCILED"
+}
