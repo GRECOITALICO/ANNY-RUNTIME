@@ -165,9 +165,21 @@ milestones:
   - id: RUNTIME-READINESS-001
     name: DISTRIBUTION_READINESS_GATE
     status: NOT_READY
-    blocker: Missing formal installation, runtime OS integration, configuration system, release identity, and pending 28 test failures.
-    evidence: docs/evidence/RUNTIME-READINESS-001-GAP-PLAN-AG-025.json
-    verification_note: AG-025 verification found missing operational readiness mechanisms.
+    blocker: |
+      INSTALLABILITY: NOT_ESTABLISHED
+      CONFIGURATION: PARTIAL
+      OS_SERVICE_INTEGRATION: PARTIAL
+      HEALTH: PARTIAL
+      LIVENESS: NOT_ESTABLISHED
+      READINESS_SIGNAL: NOT_ESTABLISHED
+      CLEAN_INSTALL: NOT_ESTABLISHED
+      RESTART_RECOVERY: NOT_ESTABLISHED
+      DISTRIBUTION_ARTIFACTS: PARTIAL
+      RELEASE_IDENTITY: NOT_ESTABLISHED
+      CURRENT_FAILURE_TRIAGE: PARTIAL
+      LEGACY_REVIEW: FAIL
+    evidence: docs/evidence/RUNTIME-READINESS-001-LEDGER-RECONCILIATION-AG-028.json
+    verification_note: AG-026/028 reconciliation separates implemented code from verified readiness.
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801

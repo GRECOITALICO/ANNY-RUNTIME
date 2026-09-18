@@ -1,0 +1,20 @@
+{
+  "serial": "AG-028",
+  "starting_head": "d3d59bcc8d34863bdcf1020f6137ce140489378a",
+  "ag_027_status": "RECONCILED_PARTIALLY",
+  "runtime_readiness": "NOT_READY",
+  "installability": "NOT_ESTABLISHED",
+  "configuration": "PARTIAL",
+  "os_service_integration": "PARTIAL",
+  "health": "PARTIAL",
+  "liveness": "NOT_ESTABLISHED",
+  "readiness_signal": "NOT_ESTABLISHED",
+  "clean_install": "NOT_ESTABLISHED",
+  "restart_recovery": "NOT_ESTABLISHED",
+  "distribution_artifacts": "PARTIAL",
+  "release_identity": "NOT_ESTABLISHED",
+  "current_failure_triage": "PARTIAL",
+  "legacy_review": "FAIL",
+  "next_action": "RUNTIME-READINESS-001-INSTALL-AND-CONFIG",
+  "decision": "RECONCILED"
+}
