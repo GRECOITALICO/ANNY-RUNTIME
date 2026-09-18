@@ -1,0 +1,14 @@
+{
+  "serial": "AG-027",
+  "starting_head": "1d0fa3d15d60edd7440832919972a3dd70b8baff",
+  "previous_documentation_anchor": "0325f33e9d4bb7944a19bed8a3483df4de1643dc",
+  "new_documentation_anchor": "35f369a3f982c7bc4318ba8ef75f5e62d6353abb",
+  "ag_026_head_reconciliation": "PASS",
+  "documentation_consistency": "PASS",
+  "deterministic_strategy_documentation": "VERIFIED",
+  "observability_documentation": "VERIFIED",
+  "reconstruction_card": "RECONCILED",
+  "anchor_reconciliation": "PASS",
+  "current_failure_triage": "PARTIAL",
+  "decision": "RECONCILED"
+}

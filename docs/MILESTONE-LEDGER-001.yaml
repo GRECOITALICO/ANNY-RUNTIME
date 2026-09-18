@@ -174,7 +174,7 @@ legacy_cleanup_policy:
   status: ACTIVE
   rule: no replacement milestone closes with an undocumented obsolete implementation path still callable
 current_documentation_anchor:
-  commit_sha: 0325f33e9d4bb7944a19bed8a3483df4de1643dc
+  commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
 next_p0:
   id: RUNTIME-READINESS-001-INSTALL-AND-CONFIG
