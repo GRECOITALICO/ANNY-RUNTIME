@@ -1,6 +1,6 @@
 # ANNY Runtime — Deterministic Processing Observability 001
 
-Status: P0 / REQUIRED DESIGN CONTRACT
+Status: VERIFIED
 
 Primary consolidated deterministic reference:
 
@@ -142,7 +142,7 @@ A deterministic routing decision without an actual execution record must not be 
 
 The Runtime carries department/routing/capability-family metadata through its execution data model and worker path, and the canonical telemetry model is being aligned to preserve the same classification.
 
-The deterministic execution substrate and this observability milestone remain `IMPLEMENTED_NOT_VERIFIED` until the current focused tests and runtime boundary evidence are executed and reconciled.
+The deterministic execution substrate and this observability milestone have been formally VERIFIED in AG-022.
 
 ## Future execution layers
 

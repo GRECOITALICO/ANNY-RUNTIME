@@ -265,23 +265,14 @@ because end-to-end HTTP/browser verification remains pending and the broader rep
 
 ## Current P0 next action
 
-`DETERMINISTIC-EXECUTION-SUBSTRATE-001-VERIFY`
+LAST VERIFIED MILESTONE:
+DETERMINISTIC-SYSTEM-001
 
-Execute and verify deterministic processing plus routing/department observability tests before expanding the deterministic execution substrate further.
+RUNTIME READINESS:
+NOT_READY
 
-Required outputs:
-
-- current focused test results;
-- deterministic routing evidence;
-- local-model routing evidence;
-- frontier-model routing evidence where available;
-- department aggregation evidence;
-- no-secret telemetry evidence;
-- Processing Matrix HTTP/browser evidence.
-
-After deterministic verification, return to:
-
-`SYNC-IMPLEMENTATION-001-F`
+CURRENT NEXT ACTION:
+RUNTIME-READINESS-001-INSTALL-AND-CONFIG
 
 ## Current known gaps
 
