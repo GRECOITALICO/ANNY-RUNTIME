@@ -169,9 +169,9 @@ milestones:
       INSTALLABILITY: VERIFIED
       CONFIGURATION: VERIFIED
       OS_SERVICE_INTEGRATION: NOT_ESTABLISHED
-      HEALTH: NOT_ESTABLISHED
-      LIVENESS: NOT_ESTABLISHED
-      READINESS_SIGNAL: NOT_ESTABLISHED
+      HEALTH: VERIFIED
+      LIVENESS: VERIFIED
+      READINESS_SIGNAL: VERIFIED
       CLEAN_INSTALL: VERIFIED
       RESTART_RECOVERY: NOT_ESTABLISHED
       DISTRIBUTION_ARTIFACTS: PARTIAL
@@ -189,6 +189,6 @@ current_documentation_anchor:
   commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
 next_p0:
-  id: RUNTIME-READINESS-001-HEALTH-LIVENESS-READINESS
-  objective: Physically verify application health, liveness, and readiness semantics using the manually started Runtime while preserving systemd as an independent unresolved blocker
+  id: RUNTIME-READINESS-001-RESTART-RECOVERY
+  objective: Verify system behavior during restarts.
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
