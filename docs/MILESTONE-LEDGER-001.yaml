@@ -166,20 +166,20 @@ milestones:
     name: DISTRIBUTION_READINESS_GATE
     status: NOT_READY
     blocker: |
-      INSTALLABILITY: NOT_ESTABLISHED
-      CONFIGURATION: PARTIAL
+      INSTALLABILITY: VERIFIED
+      CONFIGURATION: VERIFIED
       OS_SERVICE_INTEGRATION: PARTIAL
       HEALTH: PARTIAL
       LIVENESS: NOT_ESTABLISHED
       READINESS_SIGNAL: NOT_ESTABLISHED
-      CLEAN_INSTALL: NOT_ESTABLISHED
+      CLEAN_INSTALL: VERIFIED
       RESTART_RECOVERY: NOT_ESTABLISHED
       DISTRIBUTION_ARTIFACTS: PARTIAL
       RELEASE_IDENTITY: NOT_ESTABLISHED
       CURRENT_FAILURE_TRIAGE: PARTIAL
       LEGACY_REVIEW: FAIL
-    evidence: docs/evidence/RUNTIME-READINESS-001-LEDGER-RECONCILIATION-AG-028.json
-    verification_note: AG-026/028 reconciliation separates implemented code from verified readiness.
+    evidence: docs/evidence/RUNTIME-READINESS-001-INSTALL-AND-CONFIG-AG-029.json
+    verification_note: AG-029 verified isolated user mode install and configuration mechanisms.
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801

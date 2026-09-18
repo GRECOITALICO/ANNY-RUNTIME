@@ -1,0 +1,32 @@
+{
+  "serial": "AG-029",
+  "starting_head": "adf4a523dfdc4e36466cf2abba9930f465b4afb2",
+  "runtime_readiness": "NOT_READY",
+  "install_mode": "user",
+  "install_command": "HOME=/tmp/fake_home ./scripts/install.sh",
+  "install_exit_code": 0,
+  "clean_install": "VERIFIED",
+  "virtual_environment": "VERIFIED",
+  "dependencies": {
+    "websocket-client": "VERIFIED",
+    "python-dateutil": "VERIFIED"
+  },
+  "configuration": {
+    "load": "PASS",
+    "save": "PASS",
+    "defaults": "PASS",
+    "validation": "PASS"
+  },
+  "systemd_static_generation": "PASS",
+  "cli_registration": "PASS",
+  "cleanup": "PERFORMED",
+  "tests": {
+    "collected": 50,
+    "passed": 38,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 12
+  },
+  "failure_triage": [],
+  "decision": "PARTIAL"
+}
