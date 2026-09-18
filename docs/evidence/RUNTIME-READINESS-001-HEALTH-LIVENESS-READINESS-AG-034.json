@@ -1,0 +1,44 @@
+{
+  "task_id": "AG-034",
+  "repository": "GRECOITALICO/ANNY-RUNTIME",
+  "branch": "main",
+  "starting_head": "9c57d69386c0f8032536a6ea5e8a1b55f47992bb",
+  "health_live": {
+    "status": "VERIFIED",
+    "http_status": 200,
+    "payload": {
+      "status": "alive"
+    }
+  },
+  "health_ready": {
+    "status": "VERIFIED",
+    "http_status": 503,
+    "payload": {
+      "status": "not_ready",
+      "reason": "State=ADMIN_MODE, ready=False"
+    }
+  },
+  "api_status": {
+    "runtime_state": "ADMIN_MODE",
+    "runtime_health": "DEGRADED"
+  },
+  "physical_verification": {
+    "process_started": true,
+    "localhost_binding": true,
+    "live_endpoint": "PASS",
+    "ready_endpoint": "PASS",
+    "api_status_endpoint": "PASS"
+  },
+  "tests": {
+    "collected": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0
+  },
+  "known_failures": [],
+  "verification_status": {
+    "HEALTH": "VERIFIED",
+    "LIVENESS": "VERIFIED",
+    "READINESS_SIGNAL": "VERIFIED"
+  }
+}

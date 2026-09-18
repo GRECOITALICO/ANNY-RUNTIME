@@ -101,6 +101,25 @@ class AdminRouter:
             bridge.dispatch(parsed, handler)
             return
 
+        if parsed.path == '/health/live':
+            self._send_json(handler, {"status": "alive"})
+            return
+
+        if parsed.path == '/health/ready':
+            engine = self.context.get('runtime_engine')
+            if not engine:
+                self._send_json(handler, {"status": "not_ready", "reason": "No runtime engine"}, status=503)
+                return
+            state_name = getattr(engine.state, 'name', str(engine.state))
+            report = getattr(engine, 'bootstrap_report', None)
+            anny_ready = getattr(report, 'anny_ready', False) if report else False
+
+            if anny_ready and state_name in ('READY', 'WAITING_FOR_SESSION'):
+                self._send_json(handler, {"status": "ready"})
+            else:
+                self._send_json(handler, {"status": "not_ready", "reason": f"State={state_name}, ready={anny_ready}"}, status=503)
+            return
+
         if parsed.path == '/api/v1/continuity/bootstrap':
             self.handle_bootstrap_api(handler)
             return
@@ -299,15 +318,24 @@ class AdminRouter:
         # Identity/Health
         auth_mgr = self.context.get('auth_manager')
         runtime_id = getattr(auth_mgr, 'runtime_id', "UNKNOWN") if auth_mgr else "UNKNOWN"
-        runtime_health = "OK"
+        
+        report = getattr(engine, 'bootstrap_report', None)
+        anny_ready = getattr(report, 'anny_ready', False) if report else False
+        
+        if state_name in ('ERROR', 'STOPPED'):
+            runtime_health = "NOT_HEALTHY"
+        elif state_name in ('STARTING', 'VERIFYING', 'ADMIN_MODE', 'DRAINING'):
+            runtime_health = "DEGRADED"
+        elif state_name in ('READY', 'WAITING_FOR_SESSION'):
+            runtime_health = "HEALTHY" if anny_ready else "DEGRADED"
+        else:
+            runtime_health = "UNKNOWN"
         
         report = getattr(engine, 'bootstrap_report', None)
         gates_list = []
-        anny_ready = False
         fabric_node = "UNKNOWN"
         timestamp = None
         if report:
-            anny_ready = getattr(report, 'anny_ready', False)
             fabric_node = getattr(report, 'fabric_node', "UNKNOWN")
             timestamp = getattr(report, 'timestamp', None)
             

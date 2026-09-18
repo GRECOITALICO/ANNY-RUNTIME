@@ -18,6 +18,8 @@ ONBOARDING_ROUTES = {
     '/github/token',     # POST: submit GitHub token
     '/api/status',       # Allow reading status anytime
     '/api/bootstrap/verify', # Allow triggering verification anytime
+    '/health/live',      # Allow health checks
+    '/health/ready',     # Allow health checks
 }
 
 class AdminMiddleware:
@@ -26,7 +28,7 @@ class AdminMiddleware:
         self.auth_manager = auth_manager
         self.github_manager = github_manager
         # Paths that bypass auth entirely
-        self.public_paths = set()
+        self.public_paths = {'/health/live', '/health/ready'}
 
     def process_request(self, method: str, path: str, headers, context: Dict[str, Any]) -> bool:
         """
