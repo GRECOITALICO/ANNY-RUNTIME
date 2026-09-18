@@ -1,0 +1,45 @@
+{
+  "serial": "AG-031",
+  "starting_head": "7a8a7d2e2303845b621c2dc5e63198134910390d",
+  "install_mode": "user",
+  "service_unit": "anny-runtime.service",
+  "service_manager": "systemd --user",
+  "start": {
+    "exit_code": 1,
+    "active_state": "failed",
+    "sub_state": "failed",
+    "main_pid": 0
+  },
+  "process_identity": {
+    "verified": false,
+    "executable": "",
+    "command_line": "",
+    "working_directory": ""
+  },
+  "admin_server": {
+    "port": 3643,
+    "listening": false,
+    "local_only": false
+  },
+  "runtime_state": "ERROR",
+  "health": "NOT_ESTABLISHED",
+  "status_endpoint": "NOT_ESTABLISHED",
+  "stop": {
+    "exit_code": 1,
+    "stopped_verified": false
+  },
+  "restart": {
+    "performed": false,
+    "running_again_verified": false
+  },
+  "restart_recovery": "NOT_ESTABLISHED",
+  "logs": {
+    "startup": "Failed to connect to user scope bus via local transport: No hay datos disponibles",
+    "shutdown": "",
+    "errors": [
+      "Failed to connect to user scope bus via local transport"
+    ]
+  },
+  "legacy_review": "DETERMINISTIC-SYSTEM-002-CLEANUP maintained as retirement gate. No competing systemd paths modified.",
+  "decision": "PARTIAL"
+}
