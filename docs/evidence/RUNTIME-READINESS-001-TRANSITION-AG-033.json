@@ -1,0 +1,16 @@
+{
+  "serial": "AG-033",
+  "starting_head": "42cd6561fe02d6b2450d6bc512a9788dbc416c20",
+  "ag_032": {
+    "systemd": "SANDBOX_LIMITATION",
+    "manual_runtime_start": "VERIFIED",
+    "manual_port_binding": "VERIFIED"
+  },
+  "os_service_integration": "NOT_ESTABLISHED",
+  "health": "NOT_ESTABLISHED",
+  "liveness": "NOT_ESTABLISHED",
+  "readiness_signal": "NOT_ESTABLISHED",
+  "runtime_readiness": "NOT_READY",
+  "next_action": "RUNTIME-READINESS-001-HEALTH-LIVENESS-READINESS",
+  "decision": "RECONCILED"
+}

@@ -178,8 +178,8 @@ milestones:
       RELEASE_IDENTITY: NOT_ESTABLISHED
       CURRENT_FAILURE_TRIAGE: PARTIAL
       LEGACY_REVIEW: FAIL
-    evidence: docs/evidence/RUNTIME-READINESS-001-SERVICE-LIFECYCLE-AG-031.json
-    verification_note: AG-031 physical service test blocked by systemd availability; process starts but port binding/health unverified.
+    evidence: docs/evidence/RUNTIME-READINESS-001-TRANSITION-AG-033.json
+    verification_note: AG-031 systemd lifecycle verification is blocked by sandbox systemd user-bus unavailability. AG-032 independently verified manual Runtime startup and local port binding; OS service integration remains NOT_ESTABLISHED.
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
@@ -189,6 +189,6 @@ current_documentation_anchor:
   commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
 next_p0:
-  id: RUNTIME-READINESS-001-SERVICE-LIFECYCLE
-  objective: Physically verify systemd start/stop/status lifecycle and runtime service behavior
+  id: RUNTIME-READINESS-001-HEALTH-LIVENESS-READINESS
+  objective: Physically verify application health, liveness, and readiness semantics using the manually started Runtime while preserving systemd as an independent unresolved blocker
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
