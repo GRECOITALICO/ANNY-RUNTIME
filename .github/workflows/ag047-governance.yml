@@ -7,8 +7,6 @@ on:
       - "runtime/**"
       - "tests/test_ag047_governance_and_audit_finalization.py"
       - "tests/test_worker_020.py"
-      - "docs/MILESTONE-LEDGER-001.yaml"
-      - "docs/evidence/END-TO-END-GOVERNANCE-AND-AUDIT-FINALIZATION-AG-047.json"
   workflow_dispatch:
 
 jobs:
