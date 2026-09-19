@@ -270,15 +270,23 @@ def test_isolated_install_and_health(build_artifact, repo_root, tmp_path):
         live = False
         last_err = None
         last_resp = None
+        import urllib.request
+        import urllib.error
+        import json
+
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
         for _ in range(15):
             try:
-                resp = httpx.get(
-                    f"http://127.0.0.1:{port}/health/live", timeout=1.0
-                )
-                if resp.status_code == 200:
-                    live = True
-                    break
-                last_resp = f"{resp.status_code}: {resp.text}"
+                req = urllib.request.Request(f"http://127.0.0.1:{port}/health/live")
+                with opener.open(req, timeout=1.0) as resp:
+                    if resp.getcode() == 200:
+                        live = True
+                        break
+                    last_resp = f"{resp.getcode()}: {resp.read().decode('utf-8', errors='ignore')}"
+            except urllib.error.HTTPError as e:
+                last_resp = f"{e.code}: {e.read().decode('utf-8', errors='ignore')}"
+                last_err = e
             except Exception as e:
                 last_err = e
             time.sleep(1)
@@ -291,19 +299,36 @@ def test_isolated_install_and_health(build_artifact, repo_root, tmp_path):
             )
 
         # --- 6. READINESS (200 or 503 are both valid; endpoint must exist) ---
-        resp = httpx.get(f"http://127.0.0.1:{port}/health/ready", timeout=3.0)
-        assert resp.status_code in (200, 503), (
-            f"Unexpected readiness status: {resp.status_code}"
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/health/ready")
+            with opener.open(req, timeout=3.0) as resp:
+                readiness_code = resp.getcode()
+        except urllib.error.HTTPError as e:
+            readiness_code = e.code
+        assert readiness_code in (200, 503), (
+            f"Unexpected readiness status: {readiness_code}"
         )
 
         # --- 7. STATUS / RUNTIME IDENTITY ---
-        resp = httpx.get(f"http://127.0.0.1:{port}/api/status", timeout=3.0)
-        assert resp.status_code == 200, (
-            f"/api/status returned {resp.status_code}"
+        try:
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/api/status")
+            with opener.open(req, timeout=3.0) as resp:
+                status_code = resp.getcode()
+                body = resp.read().decode('utf-8')
+        except urllib.error.HTTPError as e:
+            status_code = e.code
+            body = ""
+            
+        assert status_code == 200, (
+            f"/api/status returned {status_code}"
         )
-        status_data = resp.json()
-        assert status_data["identity"]["runtime_version"] == "0.4.0", (
-            f"Runtime reported unexpected version: {status_data}"
+        status_data = json.loads(body)
+        assert status_data["identity"]["runtime_version"] == "0.4.0", "Version mismatch in status"
+        assert status_data["identity"]["commit"] == build_artifact["commit_sha"], (
+            "Commit mismatch in status"
+        )
+        assert status_data["state"] == "STARTING" or status_data["state"] == "RUNNING", (
+            f"Unexpected state in status: {status_data['state']}"
         )
 
     finally:
