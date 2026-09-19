@@ -13,3 +13,5 @@ RELEASE-GATE.json
 
 # Local Dev Caches
 .pytest_cache/
+*.tar.gz
+*.sha256
