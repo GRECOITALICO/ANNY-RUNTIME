@@ -215,12 +215,14 @@ milestones:
     verification_note: Single, durable, reconstructible provenance and audit chain verified across 25-point test matrix and 120-test suite covering task-to-commit identity binding, routing decision preservation, executor/model reconciliation, Fabric provenance, GitHub SHA validation, append-only durability, tamper detection, and cross-plane reconciliation.
   - id: END-TO-END-GOVERNANCE-AND-AUDIT-FINALIZATION-001
     name: END_TO_END_GOVERNANCE_AND_AUDIT_FINALIZATION
-    status: IMPLEMENTED_NOT_VERIFIED
+    status: VERIFIED
     commit_sha: 514d01ba93880ad9c1aba7dfa49e4dd0d7cf6031
     evidence: docs/evidence/END-TO-END-GOVERNANCE-AND-AUDIT-FINALIZATION-AG-047.json
-    verification_note: AG-047 governance implementation and 25-point matrix materialized on main. Current verification execution is pending because Python/test execution was unavailable in the present environment.
-    blocker: CURRENT_ENVIRONMENT_CANNOT_EXECUTE_PYTHON_TEST_SUITE
-    next_action: AG-047-VERIFY-CURRENT-SUITE
+    evidence_closeout_commits:
+      - 034d66b09a38a72f499e728069f4d58ca9641e9e
+    verification_note: AG-047 focused CI verified 49/49 tests on head b344a641dbecadc2dcd762a186f7302402ce12e6; 25 governance tests plus 24 worker tests passed in 0.22s under Python 3.11.16 / pytest 9.1.1.
+    blocker: none
+    next_action: READ_LATEST_COMMIT_AND_RESUME_BOOTSTRAP
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
@@ -229,6 +231,6 @@ legacy_cleanup_policy:
 current_documentation_anchor:
   commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
-next_p0: AG-047-VERIFY-CURRENT-SUITE
+next_p0: READ_LATEST_COMMIT_AND_RESUME_BOOTSTRAP
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
 
