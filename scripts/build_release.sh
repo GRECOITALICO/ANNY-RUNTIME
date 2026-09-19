@@ -13,6 +13,11 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     exit 1
 fi
 
+if [ -n "$(git status --porcelain)" ]; then
+    echo "Error: Working tree is dirty. Release builds must be performed on a clean, committed state."
+    exit 1
+fi
+
 COMMIT_SHA=$(git rev-parse HEAD)
 SHORT_SHA=${COMMIT_SHA:0:7}
 BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
