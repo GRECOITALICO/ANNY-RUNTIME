@@ -57,7 +57,7 @@ def test_22_multiple_concurrent_workers(exec_mgr):
     exec_mgr.submit_task(create_task()); exec_mgr.submit_task(create_task()); assert len(exec_mgr.worker_manager.list_workers())==2
 def test_23_unsupported_executor_fails_closed(exec_mgr):
     class Sel:
-        class TypeVal: value="FRONTIER_MODEL"
+        class TypeVal: value="UNSUPPORTED_EXECUTOR"
         executor_type=TypeVal(); executor_id="frontier"; model_id="mod"
     class Cap: required_tools=[]; network_policy="disabled"
     ctx=TaskExecutionContext(execution_id="ex-unsupported",task_id="t-u",account_id="a",project_id="p",capability_id="cap",workspace_path="",environment={},allowed_tools=[],deadline=datetime.now(timezone.utc)+timedelta(minutes=5),resource_limits={},network_policy="disabled",write_policy="allow")
