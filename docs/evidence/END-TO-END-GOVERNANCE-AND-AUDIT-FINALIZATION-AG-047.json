@@ -1,13 +1,15 @@
 {
   "milestone_id": "END-TO-END-GOVERNANCE-AND-AUDIT-FINALIZATION-001",
   "name": "END_TO_END_GOVERNANCE_AND_AUDIT_FINALIZATION",
-  "status": "IMPLEMENTED_NOT_VERIFIED",
+  "status": "VERIFIED",
   "starting_head": "42c8fcfda2ab94f971190c6fe6bc1ca7ec872ed2",
   "implementation_commit": "514d01ba93880ad9c1aba7dfa49e4dd0d7cf6031",
+  "verification_commit": "b344a641dbecadc2dcd762a186f7302402ce12e6",
   "changes": {
     "governance_matrix": "tests/test_ag047_governance_and_audit_finalization.py",
     "legacy_browser_lifecycle_test": "removed tests/test_001d_r4_lifecycle.py",
-    "worker_failure_mapping": "test_worker_020.py now asserts EXECUTION_ERROR for unexpected execution exceptions",
+    "worker_failure_mapping": "tests/test_worker_020.py asserts EXECUTION_ERROR for unexpected execution exceptions",
+    "unsupported_executor_regression": "test fixture aligned with governed FRONTIER_MODEL support by using UNSUPPORTED_EXECUTOR",
     "legacy_surfaces": {
       "ReceiptStore": "DEPRECATED / LEGACY",
       "AdminAuditLog": "DEPRECATED / LEGACY",
@@ -15,23 +17,32 @@
     }
   },
   "test_matrix": {
-    "declared_tests": 25,
-    "execution_status": "NOT_RUN_IN_CURRENT_ENVIRONMENT"
+    "ag047_governance_tests": 25,
+    "worker_tests": 24,
+    "total_executed": 49,
+    "execution_status": "PASSED"
+  },
+  "verification": {
+    "platform": "GitHub Actions",
+    "workflow": "AG-047 Governance Verification",
+    "run_id": 35467614756,
+    "job_id": 105962725692,
+    "head_sha": "b344a641dbecadc2dcd762a186f7302402ce12e6",
+    "result": "49 passed in 0.22s",
+    "python": "3.11.16",
+    "pytest": "9.1.1",
+    "runner": "ubuntu-24.04"
   },
   "verification_limitations": {
-    "python_execution": "UNAVAILABLE",
-    "repository_clone": "DNS/network resolution unavailable in execution container",
-    "github_actions_execution_observation": "NO_RUN_OBSERVED",
-    "full_suite": "NOT_VERIFIED"
+    "local_python_execution": "UNAVAILABLE_IN_MODEL_CONTAINER",
+    "repository_clone_from_model_container": "DNS/network resolution unavailable",
+    "full_repository_suite": "NOT_RUN_BY_AG047_FOCUSED_WORKFLOW"
   },
-  "verification_observation": {
-    "ci_workflow_added": ".github/workflows/ag047-governance.yml",
-    "ci_trigger_commit": "pending",
-    "ci_execution_observed": false,
-    "temporary_pr_probe": 6,
-    "temporary_pr_probe_state": "CLOSED_NOT_MERGED",
-    "ci_workflow_revision": "91863a06068f5967279f85f1df3a5c7fb3c57473"
+  "ci_configuration": {
+    "workflow_file": ".github/workflows/ag047-governance.yml",
+    "closeout_trigger_policy_commit": "66949c91baa97b919905b073da7e5ba57c31f3ee",
+    "note": "AG-047 focused verification is triggered by runtime/test changes; evidence and ledger closeout commits no longer retrigger the focused workflow."
   },
-  "result": "IMPLEMENTED_NOT_VERIFIED",
-  "next_action": "AG-047-VERIFY-CURRENT-SUITE"
+  "result": "VERIFIED",
+  "next_action": "READ_LATEST_COMMIT_AND_RESUME_BOOTSTRAP"
 }
