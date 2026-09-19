@@ -226,6 +226,13 @@ def test_revoked_certification(base_orchestrator):
 def test_resource_incompatibility(base_orchestrator):
     profile = _make_impl_profile("cpu-only-model", gpu_present=False)
     base_orchestrator.intelligence_layer.register_implementation(profile)
+    from runtime.intelligence.models import BenchmarkResult
+    from datetime import datetime, timezone
+    base_orchestrator.intelligence_layer.add_benchmark_result(BenchmarkResult(
+        benchmark_id="b1", implementation_id="cpu-only-model", capability_id="document.classify",
+        dataset_version="1", score=0.9, confidence=0.9, latency=10, resource_usage={},
+        timestamp=datetime.now(timezone.utc), certification_status=CertificationStatus.CERTIFIED
+    ))
     base_orchestrator.model_registry.register(
         _make_model_def("cpu-only-model", "CPU Model", ["document.classify"])
     )

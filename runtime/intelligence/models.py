@@ -34,6 +34,7 @@ class ResourceFit(str, enum.Enum):
     FIT = "FIT"
     PARTIAL = "PARTIAL"
     INSUFFICIENT = "INSUFFICIENT"
+    UNKNOWN = "UNKNOWN"
 
 @dataclass
 class ImplementationProfile:
@@ -51,6 +52,7 @@ class ImplementationProfile:
     adapter_revision: Optional[str] = None
     runtime_version: Optional[str] = None
     hardware_profile: Optional[Dict[str, Any]] = None
+    execution_class: str = "LOCAL_MODEL"
 
 @dataclass
 class ImplementationCandidate:
@@ -104,6 +106,7 @@ class CapabilityAssessmentResponse:
     confidence: float
     tier: CapabilityTier
     reason: str
+    assessment_provenance: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

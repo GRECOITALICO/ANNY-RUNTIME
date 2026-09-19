@@ -70,33 +70,66 @@ class LocalIntelligenceLayer:
         Assess whether a capability can be fulfilled matching the required quality.
         """
         candidates: List[ImplementationCandidate] = []
+        provenance = {
+            "eligible_candidates": [],
+            "rejection_reasons": {}
+        }
         
         impls_to_check = self._implementations.values()
         if available_implementations is not None:
             impls_to_check = [impl for impl in impls_to_check if impl.implementation_id in available_implementations]
         
         for impl in impls_to_check:
+            impl_id = impl.implementation_id
+            # 1. Availability check
             if not impl.availability:
+                provenance["rejection_reasons"][impl_id] = "Not available"
                 continue
+                
+            # 2. Capability support check
             if request.capability_id not in impl.capability_ids:
+                provenance["rejection_reasons"][impl_id] = f"Unsupported capability '{request.capability_id}'"
                 continue
                 
-            # Real policy and resource checks would go here. For now, we assume FIT.
-            policy_fit = True
-            if request.policy_constraints and request.policy_constraints.get("network") == "deny" and impl.resource_profile.get("requires_network"):
-                policy_fit = False
-                
-            resource_fit = ResourceFit.FIT
-            
-            # Check certification
+            # 3 & 4. Certification and Benchmark evidence check
             if impl.certification in (CertificationStatus.STALE, CertificationStatus.REQUIRES_REBENCHMARK, CertificationStatus.REVOKED):
+                provenance["rejection_reasons"][impl_id] = f"Certification status invalid: {impl.certification.value}"
                 continue
-                
-            score, conf, latency = self._get_benchmark_stats(impl.implementation_id, request.capability_id)
             
+            score, conf, latency = self._get_benchmark_stats(impl_id, request.capability_id)
+            if score == 0.0 and conf == 0.0:
+                provenance["rejection_reasons"][impl_id] = "No valid benchmark evidence found"
+                continue
+
+            # 5. Resource fit check
+            resource_fit = ResourceFit.UNKNOWN
+            if request.resource_constraints:
+                req_gpu = request.resource_constraints.get("requires_gpu")
+                impl_has_gpu = impl.resource_profile.get("gpu_present")
+                if req_gpu and not impl_has_gpu:
+                    resource_fit = ResourceFit.INSUFFICIENT
+                    provenance["rejection_reasons"][impl_id] = "Resource fit incompatible: missing GPU"
+                    continue
+                # If constraints exist and no explicit denial occurred, mark as FIT (assuming other constraints are satisfied)
+                resource_fit = ResourceFit.FIT
+            else:
+                # If no constraints requested, it fits by definition
+                resource_fit = ResourceFit.FIT
+                
+            # 6. Policy fit check
+            policy_fit = True
+            if request.policy_constraints:
+                network_policy = request.policy_constraints.get("network")
+                requires_network = impl.resource_profile.get("requires_network", False)
+                if network_policy == "disabled" and requires_network:
+                    policy_fit = False
+                    provenance["rejection_reasons"][impl_id] = "Policy denial: Implementation requires network access but policy forbids it"
+                    continue
+
+            provenance["eligible_candidates"].append(impl_id)
             candidates.append(ImplementationCandidate(
-                implementation_id=impl.implementation_id,
-                execution_class="LOCAL_MODEL", # For now everything is local model until remote compute is added
+                implementation_id=impl_id,
+                execution_class=impl.execution_class,
                 availability=impl.availability,
                 quality=score,
                 confidence=conf,
@@ -105,7 +138,7 @@ class LocalIntelligenceLayer:
                 policy_fit=policy_fit
             ))
             
-        # Filter valid candidates
+        # Filter valid candidates (Though we already continued on policy_fit/resource_fit above, just to be safe)
         valid_candidates = [
             c for c in candidates 
             if c.policy_fit and c.resource_fit in (ResourceFit.FIT, ResourceFit.PARTIAL)
@@ -118,32 +151,37 @@ class LocalIntelligenceLayer:
                 quality_score=0.0,
                 confidence=0.0,
                 tier=CapabilityTier.L0,
-                reason="No available implementations for capability"
+                reason="No available implementations for capability met constraints",
+                assessment_provenance=provenance
             )
             
-        # Sort by quality descending
-        valid_candidates.sort(key=lambda x: x.quality, reverse=True)
+        # Sort by quality descending to ensure deterministic ordering
+        valid_candidates.sort(key=lambda x: (x.quality, x.confidence), reverse=True)
         best_candidate = valid_candidates[0]
         
         tier = self._determine_tier(best_candidate.quality)
         
         if best_candidate.quality >= request.quality_required:
+            provenance["selected_implementation"] = best_candidate.implementation_id
             return CapabilityAssessmentResponse(
                 decision=DelegationDecision.DELEGATE,
                 selected_implementation=best_candidate,
                 quality_score=best_candidate.quality,
                 confidence=best_candidate.confidence,
                 tier=tier,
-                reason=f"Candidate {best_candidate.implementation_id} meets required quality ({best_candidate.quality} >= {request.quality_required})"
+                reason=f"Candidate {best_candidate.implementation_id} meets required quality ({best_candidate.quality} >= {request.quality_required})",
+                assessment_provenance=provenance
             )
         else:
+            provenance["rejection_reasons"]["all"] = "No candidate met required quality threshold"
             return CapabilityAssessmentResponse(
                 decision=DelegationDecision.ESCALATE,
-                selected_implementation=None, # Or we could pass it to show why it failed
+                selected_implementation=None,
                 quality_score=best_candidate.quality,
                 confidence=best_candidate.confidence,
                 tier=tier,
-                reason=f"Best candidate {best_candidate.implementation_id} below required quality ({best_candidate.quality} < {request.quality_required})"
+                reason=f"Best candidate {best_candidate.implementation_id} below required quality ({best_candidate.quality} < {request.quality_required})",
+                assessment_provenance=provenance
             )
 
     def check_certification_drift(self, profile: ImplementationProfile) -> CertificationStatus:

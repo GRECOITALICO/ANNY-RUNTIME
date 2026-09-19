@@ -60,6 +60,7 @@ class Orchestrator:
                     certification=getattr(m, "certification_status", CertificationStatus.CERTIFIED),
                     artifact_references=[],
                     adapter_references=[],
+                    execution_class=getattr(m, "executor_type", "LOCAL_MODEL"),
                 )
                 self.intelligence_layer.register_implementation(profile)
 
@@ -191,50 +192,40 @@ class Orchestrator:
         ]
         provenance["available_registry_models"] = available_impls
 
-        # Evaluate Candidates against Rules 8 (Certification) and 9 (Resource Fit)
-        candidate_impls = []
-        for impl_id in available_impls:
-            profile = self.intelligence_layer._implementations.get(impl_id)
-            if not profile:
-                provenance["rejection_reasons"][impl_id] = "No intelligence profile registered"
-                continue
-            
-            # Rule 8 — Reject STALE, REQUIRES_REBENCHMARK, REVOKED
-            if profile.certification in (
-                CertificationStatus.STALE,
-                CertificationStatus.REQUIRES_REBENCHMARK,
-                CertificationStatus.REVOKED,
-            ):
-                provenance["rejection_reasons"][impl_id] = f"Certification status invalid: {profile.certification.value}"
-                continue
+        # Evaluate Candidates against Rules 8 (Certification) and 9 (Resource Fit) are now delegated to Intelligence Layer
+        assessment = self.intelligence_layer.assess_capability(req, available_implementations=available_impls)
+        
+        # Merge layer provenance
+        layer_prov = getattr(assessment, "assessment_provenance", {})
+        provenance["eligible_candidates"] = layer_prov.get("eligible_candidates", [])
+        for k, v in layer_prov.get("rejection_reasons", {}).items():
+            provenance["rejection_reasons"][k] = v
 
-            # Rule 9 — Resource Fit check
-            req_constraints = getattr(task, "constraints", {}) or {}
-            if req_constraints.get("requires_gpu") and not profile.resource_profile.get("gpu_present"):
-                provenance["rejection_reasons"][impl_id] = "Resource fit incompatible: missing GPU"
-                continue
-
-            candidate_impls.append(impl_id)
-
-        provenance["eligible_candidates"] = candidate_impls
-
-        assessment = self.intelligence_layer.assess_capability(req, available_implementations=candidate_impls)
-
-        # Rule 3 — Local Model Selection
+        # Rule 3 & 7 — Execution Class Preservation
         if assessment.decision == DelegationDecision.DELEGATE and assessment.selected_implementation:
             candidate = assessment.selected_implementation
             provenance["selected_implementation"] = candidate.implementation_id
+            
+            if candidate.execution_class == ExecutorType.REMOTE_MODEL.value or candidate.execution_class == "FRONTIER_MODEL":
+                routing_class = RoutingClass.FRONTIER_MODEL
+                executor_type = ExecutorType.REMOTE_MODEL.value
+                executor_id = "frontier-executor"
+            else:
+                routing_class = RoutingClass.LOCAL_MODEL
+                executor_type = ExecutorType.LOCAL_MODEL.value
+                executor_id = "local-model-executor"
+
             return ExecutionPlan(
                 task_id=task_id,
                 capability_id=cap_id,
                 capability_version=cap_def.version,
-                routing_class=RoutingClass.LOCAL_MODEL,
-                executor_type=ExecutorType.LOCAL_MODEL.value,
-                executor_id="local-model-executor",
+                routing_class=routing_class,
+                executor_type=executor_type,
+                executor_id=executor_id,
                 model_id=candidate.implementation_id,
                 model_version="1.0.0",
                 policy_version=policy.version,
-                authority="anny-governed-local-intelligence",
+                authority=f"anny-governed-{executor_id}",
                 decision_reason=assessment.reason,
                 provenance=provenance,
             )
