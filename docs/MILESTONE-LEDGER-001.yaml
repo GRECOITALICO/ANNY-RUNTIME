@@ -174,12 +174,12 @@ milestones:
       READINESS_SIGNAL: VERIFIED
       CLEAN_INSTALL: VERIFIED
       RESTART_RECOVERY: VERIFIED
-      DISTRIBUTION_ARTIFACTS: PARTIAL
+      DISTRIBUTION_ARTIFACTS: VERIFIED
       RELEASE_IDENTITY: VERIFIED
       CURRENT_FAILURE_TRIAGE: PARTIAL
       LEGACY_REVIEW: VERIFIED
-    evidence: docs/evidence/RUNTIME-READINESS-001-TRANSITION-AG-033.json
-    verification_note: AG-031 systemd lifecycle verification is blocked by sandbox systemd user-bus unavailability. AG-032 independently verified manual Runtime startup and local port binding; OS service integration remains NOT_ESTABLISHED.
+    evidence: docs/evidence/RUNTIME-READINESS-001-DISTRIBUTION-ARTIFACTS-AG-037.json
+    verification_note: AG-037 verified physical distribution artifact extraction, identity embedding, and runtime health in isolated installation environments. OS_SERVICE_INTEGRATION remains NOT_ESTABLISHED due to sandbox constraints.
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
@@ -188,5 +188,5 @@ legacy_cleanup_policy:
 current_documentation_anchor:
   commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
-next_p0: RUNTIME-READINESS-001-DISTRIBUTION-ARTIFACTS
+next_p0: RUNTIME-READINESS-001-CURRENT-FAILURE-TRIAGE
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established

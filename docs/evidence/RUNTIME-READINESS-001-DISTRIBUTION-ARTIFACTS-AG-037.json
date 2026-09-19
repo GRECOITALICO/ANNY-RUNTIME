@@ -1,0 +1,22 @@
+{
+  "serial": "AG-037",
+  "starting_head": "67f2c627badba4eb83728eb138baa8730d0f0b5d",
+  "distribution_artifacts": {
+    "clean_tree_enforcement": "VERIFIED",
+    "tarball_format": "VERIFIED",
+    "checksum_validation": "VERIFIED",
+    "forbidden_content_exclusion": "VERIFIED",
+    "legacy_channel_audit": "VERIFIED"
+  },
+  "physical_install": {
+    "embedded_identity": "VERIFIED",
+    "offline_bootstrap": "VERIFIED",
+    "isolated_execution": "VERIFIED"
+  },
+  "health": "VERIFIED",
+  "liveness": "VERIFIED",
+  "readiness_signal": "VERIFIED",
+  "runtime_readiness": "NOT_READY",
+  "next_action": "RUNTIME-READINESS-001-CURRENT-FAILURE-TRIAGE",
+  "decision": "RECONCILED"
+}
