@@ -1,0 +1,140 @@
+{
+  "task_id": "AG-038",
+  "repository": "GRECOITALICO/ANNY-RUNTIME",
+  "branch": "ag035-clean",
+  "starting_head": "78790bd8bd22206a05431b0bbcad55dafcdffab7",
+  "test_command": "PYTHONPATH=. pytest tests/ -v",
+  "test_suite": {
+    "collected": 569,
+    "passed": 533,
+    "failed": 10,
+    "skipped": 26,
+    "errors": 0
+  },
+  "failures": [
+    {
+      "test_id": "test_browser_launched_before_ready",
+      "path": "tests/test_001d_r4_lifecycle.py",
+      "error": "AssertionError: Browser should be launched during auth phase",
+      "classification": "STALE_TEST",
+      "current": true,
+      "reproducible": true,
+      "readiness_impact": "NONE",
+      "evidence": "BrowserColabTransport replaced BrowserSessionManager subprocess launch with direct colab-mcp integration"
+    },
+    {
+      "test_id": "test_hide_called_when_ready",
+      "path": "tests/test_001d_r4_lifecycle.py",
+      "error": "AssertionError: Expected 'hide' to have been called once",
+      "classification": "STALE_TEST",
+      "current": true,
+      "reproducible": true,
+      "readiness_impact": "NONE",
+      "evidence": "BrowserColabTransport no longer calls bmanager.hide()"
+    },
+    {
+      "test_id": "test_metadata_records_auto_hidden_true",
+      "path": "tests/test_001d_r4_lifecycle.py",
+      "error": "AssertionError: assert None is True",
+      "classification": "STALE_TEST",
+      "current": true,
+      "reproducible": true,
+      "readiness_impact": "NONE",
+      "evidence": "browser_auto_hidden metadata key deprecated in favor of colab-mcp status"
+    },
+    {
+      "test_id": "test_metadata_records_browser_final_state_hidden",
+      "path": "tests/test_001d_r4_lifecycle.py",
+      "error": "AssertionError: assert None == 'HIDDEN'",
+      "classification": "STALE_TEST",
+      "current": true,
+      "reproducible": true,
+      "readiness_impact": "NONE",
+      "evidence": "browser_final_state metadata key deprecated"
+    },
+    {
+      "test_id": "test_metadata_records_ready_and_hide_timestamps",
+      "path": "tests/test_001d_r4_lifecycle.py",
+      "error": "AssertionError: assert 'ready_timestamp' in metadata",
+      "classification": "STALE_TEST",
+      "current": true,
+      "reproducible": true,
+      "readiness_impact": "NONE",
+      "evidence": "ready_timestamp metadata key replaced by lease timestamps"
+    },
+    {
+      "test_id": "test_fallback_to_close_when_hide_unavailable",
+      "path": "tests/test_001d_r4_lifecycle.py",
+      "error": "AssertionError: assert READY == FAILED",
+      "classification": "STALE_TEST",
+      "current": true,
+      "reproducible": true,
+      "readiness_impact": "NONE",
+      "evidence": "Hide fallback logic superseded by colab-mcp bridge lifecycle"
+    },
+    {
+      "test_id": "test_session_state_ready_after_hide",
+      "path": "tests/test_001d_r4_lifecycle.py",
+      "error": "AssertionError: assert READY == FAILED",
+      "classification": "STALE_TEST",
+      "current": true,
+      "reproducible": true,
+      "readiness_impact": "NONE",
+      "evidence": "Session state transition after hide superseded"
+    },
+    {
+      "test_id": "test_session_ready_even_if_hide_raises",
+      "path": "tests/test_001d_r4_lifecycle.py",
+      "error": "AssertionError: assert READY == FAILED",
+      "classification": "STALE_TEST",
+      "current": true,
+      "reproducible": true,
+      "readiness_impact": "NONE",
+      "evidence": "Hide exception handling superseded"
+    },
+    {
+      "test_id": "test_provision_called_twice_launches_browser_both_times",
+      "path": "tests/test_001d_r4_lifecycle.py",
+      "error": "AssertionError: assert 0 == 2",
+      "classification": "STALE_TEST",
+      "current": true,
+      "reproducible": true,
+      "readiness_impact": "NONE",
+      "evidence": "Multiple provision launch assertions superseded"
+    },
+    {
+      "test_id": "test_hide_called_on_each_provision",
+      "path": "tests/test_001d_r4_lifecycle.py",
+      "error": "AssertionError: assert 0 == 2",
+      "classification": "STALE_TEST",
+      "current": true,
+      "reproducible": true,
+      "readiness_impact": "NONE",
+      "evidence": "Multiple provision hide assertions superseded"
+    }
+  ],
+  "historical_reconciliation": {
+    "pre_existing_confirmed": 10,
+    "reclassified": 0,
+    "resolved": 23,
+    "stale_tests": 10,
+    "legacy_tests": 0
+  },
+  "environment_limitations": {
+    "systemd": "SANDBOX_LIMITATION",
+    "os_service_integration": "NOT_ESTABLISHED"
+  },
+  "legacy_review": {
+    "status": "COMPLETED",
+    "findings": "Legacy BrowserSessionManager lifecycle tests in test_001d_r4_lifecycle.py remain as stale tests after colab-mcp architecture migration."
+  },
+  "corrections": {
+    "applied": 0,
+    "tests": 0
+  },
+  "runtime_readiness": {
+    "CURRENT_FAILURE_TRIAGE": "VERIFIED",
+    "DISTRIBUTION_ARTIFACTS": "VERIFIED",
+    "overall": "NOT_READY"
+  }
+}
