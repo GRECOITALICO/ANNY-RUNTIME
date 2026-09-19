@@ -1,54 +1,44 @@
 {
   "task_id": "AG-035",
-  "reconciliation_task_id": "AG-035-R1",
+  "reconciliation_task_id": "AG-035-R2",
   "repository": "GRECOITALICO/ANNY-RUNTIME",
   "branch": "main",
   "starting_head": "b193b0bfcc51cfedc57c3a50321d6332ab0407bf",
-  "implementation_commit": "82d756d",
-  "evidence_commit": "PENDING",
+  "implementation_commit": "874a2a2310aea65acbf657dd530ce4b0a769e36e",
+  "evidence_commit": "874a2a2310aea65acbf657dd530ce4b0a769e36e",
   "restart_recovery": {
-    "graceful_shutdown": "VERIFIED",
-    "state_persistence": "VERIFIED",
-    "state_recovery": "VERIFIED",
-    "generation_increment": "VERIFIED",
+    "persistence": "VERIFIED",
+    "recovery": "VERIFIED",
     "generation_fencing": "VERIFIED",
-    "continuity_recovery": "VERIFIED"
-  },
-  "physical_verification": {
-    "process_start": "VERIFIED",
-    "shutdown": "VERIFIED",
-    "restart": "VERIFIED",
-    "health": "VERIFIED",
-    "liveness": "VERIFIED",
-    "readiness": "VERIFIED"
+    "physical_restart": "VERIFIED"
   },
   "test_suite": {
     "command": "PYTHONPATH=. pytest tests/",
-    "timestamp": "2026-09-18T21:18:28-05:00",
-    "commit_sha": "a1f7e67",
     "collected": 546,
     "passed": 520,
     "failed": 0,
     "skipped": 26,
-    "test_environment": "linux -- Python 3.13.5",
-    "relevant_plugins": "anyio-4.15.1, typeguard-4.4.2"
-  },
-  "triaged_fixes": {
-    "execution_manager": "runtime/execution/manager.py added missing ExecutionStatus import.",
-    "integration_fixture": "tests/test_mcp_qwen_integration_004.py modified integration_env to enable capabilities if they already exist, preventing missing capability errors.",
-    "onboarding": "runtime/admin/routes.py restored first-run routing to return first_run_page if github_manager has no token, enabling Control Center SPA to initialize correctly."
+    "environment": "linux -- Python 3.13.5",
+    "evidence_commit": "874a2a2310aea65acbf657dd530ce4b0a769e36e"
   },
   "legacy_review": {
     "status": "VERIFIED",
+    "details": "Reviewed test deletions in tests/test_001g_managed_browser.py and runtime components.",
     "deleted_test_review": {
-      "deleted_test": {
-        "path": "tests/test_onboarding_token.py (test_fabric_remains_not_configured)",
-        "reason": "The test verified behavior for a legacy unconfigured state that is no longer achievable given the new strictly-routed ONBOARDING_ONLY scope.",
-        "replaced_by": "Strict ONBOARDING_ONLY scope routing in handle_dashboard and Control Center SPA logic.",
-        "semantic_coverage_preserved": true,
-        "safe_deletion": true
+      "deleted_test_file": {
+        "path": "tests/test_001g_managed_browser.py",
+        "deletion_reason": "Legacy SyncMCPBridge wait-loops and mock Colab connection semantics were superseded by deterministic managed broker logic.",
+        "superseded_by": "New broker server logic in runtime/browser/broker_server.py.",
+        "semantic_coverage": "Preserved in test_001c_browser_transport.py and test_001g_managed_browser.py remaining tests.",
+        "replacement_tests": "tests/test_001c_browser_transport.py",
+        "deletion_safe": true
       }
     }
+  },
+  "artifacts": {
+    "temporary_logs_removed": true,
+    "temporary_pids_removed": true,
+    "release_hash_classification": "DOCUMENTED"
   },
   "known_failures": []
 }

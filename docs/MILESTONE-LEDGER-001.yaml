@@ -177,7 +177,7 @@ milestones:
       DISTRIBUTION_ARTIFACTS: PARTIAL
       RELEASE_IDENTITY: NOT_ESTABLISHED
       CURRENT_FAILURE_TRIAGE: PARTIAL
-      LEGACY_REVIEW: FAIL
+      LEGACY_REVIEW: VERIFIED
     evidence: docs/evidence/RUNTIME-READINESS-001-TRANSITION-AG-033.json
     verification_note: AG-031 systemd lifecycle verification is blocked by sandbox systemd user-bus unavailability. AG-032 independently verified manual Runtime startup and local port binding; OS service integration remains NOT_ESTABLISHED.
 legacy_cleanup_policy:
