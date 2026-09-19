@@ -241,7 +241,7 @@ def test_isolated_install_and_health(build_artifact, repo_root, tmp_path):
     env = {
         **os.environ,
         "PYTHONPATH": str(install_dir),
-        "ANNY_PORT": str(port),
+        "ANNY_ADMIN_PORT": str(port),
         "ANNY_DATA_DIR": str(data_dir),
         "ANNY_INSTALL_MODE": "user",
     }
