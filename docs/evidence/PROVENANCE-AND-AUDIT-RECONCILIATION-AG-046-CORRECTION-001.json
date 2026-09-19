@@ -1,0 +1,13 @@
+{
+  "correction_id": "PROVENANCE-AND-AUDIT-RECONCILIATION-AG-046-CORRECTION-001",
+  "status": "VERIFIED",
+  "target_milestone": "PROVENANCE-AND-AUDIT-RECONCILIATION-001",
+  "incorrect_sha": "38c68aeeca7d878e5c9aadac3aa788c8e2838a9c",
+  "incorrect_sha_exists_in_github": false,
+  "correct_implementation_sha": "018b194e9d8cbc739a090188082079c8031a758d",
+  "ledger_corrected": true,
+  "evidence_corrected": true,
+  "implementation_commit_reachable_from_main": true,
+  "technical_result_preserved": true,
+  "next_action": "AG-047: END_TO_END_GOVERNANCE_AND_AUDIT_FINALIZATION"
+}

@@ -210,7 +210,7 @@ milestones:
   - id: PROVENANCE-AND-AUDIT-RECONCILIATION-001
     name: PROVENANCE_AND_AUDIT_RECONCILIATION
     status: VERIFIED
-    commit_sha: 38c68aeeca7d878e5c9aadac3aa788c8e2838a9c
+    commit_sha: 018b194e9d8cbc739a090188082079c8031a758d
     evidence: docs/evidence/PROVENANCE-AND-AUDIT-RECONCILIATION-AG-046.json
     verification_note: Single, durable, reconstructible provenance and audit chain verified across 25-point test matrix and 120-test suite covering task-to-commit identity binding, routing decision preservation, executor/model reconciliation, Fabric provenance, GitHub SHA validation, append-only durability, tamper detection, and cross-plane reconciliation.
 legacy_cleanup_policy:
