@@ -1,0 +1,33 @@
+{
+  "task_id": "AG-036",
+  "repository": "GRECOITALICO/ANNY-RUNTIME",
+  "branch": "main",
+  "source_commit": "04805573899f728d7e77ccd915487553fe752d25",
+  "version": "0.4.0",
+  "artifact": {
+    "name": "ANNY-RUNTIME-v0.4.0-0480557.tar.gz",
+    "sha256": "91513d60522425dc9df6a24e99602817ca9c8152413a0bc5256ba17450cff610",
+    "size_bytes": 465749
+  },
+  "embedded_identity": {
+    "version": "0.4.0",
+    "commit": "04805573899f728d7e77ccd915487553fe752d25",
+    "build_time": "2026-09-19T02:54:15Z"
+  },
+  "verification": {
+    "clean_tree": true,
+    "build_success": true,
+    "artifact_extractable": true,
+    "embedded_commit_matches": true,
+    "version_matches": true,
+    "checksum_matches": true,
+    "secret_scan": true,
+    "temporary_artifacts_absent": true
+  },
+  "reproducibility": {
+    "source_identity_reproducible": true,
+    "byte_identical_reproducible": false,
+    "reason": "The build timestamp is dynamically embedded into runtime/core/version.py during the build process, preventing byte-identical artifacts from the same commit across different runs."
+  },
+  "known_failures": []
+}
