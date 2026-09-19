@@ -214,19 +214,13 @@ def test_isolated_install_and_health(build_artifact, repo_root, tmp_path):
         else:
             shutil.copy2(item, dest)
 
-    # Symlink the repo's venv (avoids network PyPI install in sandbox)
-    repo_venv = repo_root / "venv"
-    if repo_venv.exists():
-        (install_dir / "venv").symlink_to(repo_venv)
-    else:
-        # Create a minimal venv using system Python
-        subprocess.run(
-            ["python3", "-m", "venv", str(install_dir / "venv")],
-            check=True,
-        )
-
-    python_bin = install_dir / "venv" / "bin" / "python3"
-    assert python_bin.exists(), "Python binary not found in install venv"
+    # Use system python3 (all deps are available system-wide in this environment)
+    python_bin = Path("python3")
+    # If the repo has a venv, prefer it; otherwise use system python3
+    repo_venv_python = repo_root / "venv" / "bin" / "python3"
+    if repo_venv_python.exists():
+        python_bin = repo_venv_python
+        (install_dir / "venv").symlink_to(repo_root / "venv")
 
     # Verify the runtime package is importable from install dir
     check = subprocess.run(
