@@ -25,7 +25,7 @@ class AdminAuditEntry:
 
 
 class AdminAuditLog:
-    """Append-only audit log for administrative actions."""
+    """[DEPRECATED / LEGACY] Append-only audit log for administrative actions. ContinuityEngine is canonical."""
 
     # Known action types
     LOGIN = "LOGIN"
