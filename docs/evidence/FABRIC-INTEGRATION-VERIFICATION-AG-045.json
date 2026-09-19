@@ -3,7 +3,7 @@
   "name": "FABRIC_INTEGRATION_VERIFICATION",
   "status": "VERIFIED",
   "starting_head": "d727bb48f9ea87db62e74d48a3a83c4cf5120e72",
-  "implementation_commit": "0aaf4bea9f812c58cf2c23209d5dff28fd59e2f1",
+  "implementation_commit": "9cb43a0f575ca35c115ba58d045ef3a73b6e18f7",
   "dynamic_binding": "VERIFIED (GitHubFabricAdapter requires explicit binding or RuntimeConfig; fails with FABRIC_CONFIG_MISSING if unconfigured)",
   "reachability": "VERIFIED (Classifies SUCCESS, NOT_FOUND, AUTH_ERROR, NETWORK_ERROR, UNKNOWN; transport error is never CONNECTED)",
   "node_identity": "VERIFIED (Reads fabric/node.json, validates node_id, org, repo, purpose, status, and matches remote HEAD blob SHA)",

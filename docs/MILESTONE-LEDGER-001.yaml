@@ -204,6 +204,7 @@ milestones:
   - id: FABRIC-INTEGRATION-VERIFICATION-001
     name: FABRIC_INTEGRATION_VERIFICATION
     status: VERIFIED
+    commit_sha: 9cb43a0f575ca35c115ba58d045ef3a73b6e18f7
     evidence: docs/evidence/FABRIC-INTEGRATION-VERIFICATION-AG-045.json
     verification_note: End-to-end fabric integration boundary verified across 24-point test matrix covering dynamic binding, reachability classification, node identity, tenant binding, admission, policy, contract revoked capability enforcement, remote HEAD, provenance, real fabric.read boundary, governed write boundary, mock pass elimination, and legacy review.
 legacy_cleanup_policy:
