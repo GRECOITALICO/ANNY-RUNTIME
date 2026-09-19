@@ -43,26 +43,47 @@ class Orchestrator:
         Reconcile ModelRegistry models with LocalIntelligenceLayer profiles
         so registered models are known candidates for evaluation.
         """
-        registered_models = self.model_registry.list_models()
-        for m in registered_models:
-            impl_id = m.model_id
-            if impl_id not in self.intelligence_layer._implementations:
-                # Synchronize registered model to intelligence layer profile
+        registered_models = {m.model_id: m for m in self.model_registry.list_models()}
+        
+        # 1. Synchronize registered models to intelligence layer profiles
+        for impl_id, m in registered_models.items():
+            avail = self.model_registry.is_available(impl_id)
+            if m.executor_type in ("REMOTE_MODEL", "FRONTIER_MODEL") and self.frontier_executor:
+                avail = avail and self.frontier_executor.is_available(impl_id)
+
+            exec_class = getattr(m, "executor_type", "LOCAL_MODEL")
+            caps = m.capabilities_supported or ["document.classify"]
+
+            if impl_id in self.intelligence_layer._implementations:
+                profile = self.intelligence_layer._implementations[impl_id]
+                profile.availability = avail
+                profile.execution_class = exec_class
+                profile.capability_ids = caps
+                if hasattr(m, "certification_status"):
+                    profile.certification = m.certification_status
+            else:
                 from runtime.intelligence.models import ImplementationProfile
+                cert = getattr(m, "certification_status", CertificationStatus.CERTIFIED)
                 profile = ImplementationProfile(
                     implementation_id=impl_id,
-                    capability_ids=m.capabilities_supported or ["document.classify"],
+                    capability_ids=caps,
                     quality_profile="high" if getattr(m, "performance_score", 0.90) > 0.8 else "standard",
                     resource_profile={"gpu_present": getattr(m, "requires_gpu", False)},
                     latency_profile={"p50": 100},
                     cost_profile={"token_cost": 0.0},
-                    availability=self.model_registry.is_available(impl_id),
-                    certification=getattr(m, "certification_status", CertificationStatus.CERTIFIED),
+                    availability=avail,
+                    certification=cert,
                     artifact_references=[],
                     adapter_references=[],
-                    execution_class=getattr(m, "executor_type", "LOCAL_MODEL"),
+                    execution_class=exec_class,
                 )
                 self.intelligence_layer.register_implementation(profile)
+
+        # 2. Unregister implementation profiles no longer present in ModelRegistry
+        existing_impl_ids = list(self.intelligence_layer._implementations.keys())
+        for impl_id in existing_impl_ids:
+            if impl_id not in registered_models:
+                self.intelligence_layer.remove_implementation(impl_id)
 
     def plan_task(self, task: Task, policy: Optional[RuntimePolicy] = None) -> ExecutionPlan:
         """

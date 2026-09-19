@@ -17,11 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 class WorkerManager:
-    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None, telemetry_collector=None):
+    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None, telemetry_collector=None, frontier_executor=None):
         self.workspace_manager = workspace_manager
         self.audit_manager = audit_manager
         self.mcp_gateway = mcp_gateway
         self.telemetry_collector = telemetry_collector
+        self.frontier_executor = frontier_executor
         self.workers: Dict[str, WorkerDefinition] = {}
         self.deterministic_executor = DeterministicExecutor(workspace_manager)
 
@@ -177,6 +178,38 @@ class WorkerManager:
                 context.result = result.result_data
                 context.result_hash = result.evidence.get("telemetry", {}).get("result_hash")
                 self._emit_telemetry("inference_completed", worker, result.evidence.get("telemetry", {}))
+
+            elif worker.executor_type in ("REMOTE_MODEL", "FRONTIER_MODEL"):
+                from runtime.orchestration.plan import ExecutionPlan, RoutingClass
+                plan = ExecutionPlan(
+                    task_id=task.task_id,
+                    capability_id=task.capability_id,
+                    capability_version="1.0.0",
+                    routing_class=RoutingClass.FRONTIER_MODEL,
+                    executor_type="REMOTE_MODEL",
+                    executor_id=worker.executor_id or "frontier-executor",
+                    model_id=worker.model_id or "luna",
+                    model_version="1.0.0",
+                    policy_version="v1.0",
+                )
+                fe = self.frontier_executor
+                if not fe:
+                    from runtime.orchestration.frontier import DefaultFrontierExecutor
+                    fe = DefaultFrontierExecutor(enabled=True)
+
+                if fe.is_available(plan.model_id):
+                    result_data = fe.execute_plan(task, plan)
+                    context.status = ExecutionStatus.SUCCEEDED
+                    context.result = result_data
+                    context.result_hash = "frontier_exec_hash"
+                    self._emit_telemetry("inference_completed", worker, {"executor": "frontier"})
+                else:
+                    context.status = ExecutionStatus.FAILED
+                    context.failure_reason = FailureReason.EXECUTION_ERROR
+                    context.error_message = f"Frontier model {plan.model_id} unavailable"
+                    worker.state = WorkerState.FAILED
+                    self._emit_telemetry("execution.failed", worker, {"classification": "UNAVAILABLE"})
+                    return
 
             else:
                 context.status = ExecutionStatus.FAILED
