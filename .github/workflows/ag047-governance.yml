@@ -9,6 +9,8 @@ on:
       - "tests/test_worker_020.py"
       - "docs/MILESTONE-LEDGER-001.yaml"
       - "docs/evidence/END-TO-END-GOVERNANCE-AND-AUDIT-FINALIZATION-AG-047.json"
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
