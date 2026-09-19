@@ -80,11 +80,14 @@ class ContinuityRecord:
     last_completed_step: Optional[str]
     next_action: Optional[str]
 
-    handoff_target: Optional[str]
-    handoff_status: Optional[str]
+    handoff_target: Optional[str] = None
+    handoff_status: Optional[str] = None
+
+    execution_id: Optional[str] = None
+
 
     @classmethod
-    def create(cls, mission_id: str, task_id: str, step_id: str, actor_id: str, actor_level: str, objective: str) -> "ContinuityRecord":
+    def create(cls, mission_id: str, task_id: str, step_id: str, actor_id: str, actor_level: str, objective: str, execution_id: Optional[str] = None) -> "ContinuityRecord":
         now = datetime.now(timezone.utc).isoformat()
         return cls(
             continuity_id=uuid.uuid4().hex,
@@ -131,7 +134,8 @@ class ContinuityRecord:
             last_completed_step=None,
             next_action=None,
             handoff_target=None,
-            handoff_status=None
+            handoff_status=None,
+            execution_id=execution_id
         )
 
 @dataclass
@@ -185,3 +189,5 @@ class EventRecord:
     resource_ids: List[str] = None
     state_before: Optional[str] = None
     state_after: Optional[str] = None
+    execution_id: Optional[str] = None
+

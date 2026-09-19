@@ -1030,12 +1030,19 @@ class AdminRouter:
     def handle_audit_events(self, parsed) -> str:
         events = []
         audit_mgr = self.context.get('audit_manager')
-        if audit_mgr and hasattr(audit_mgr, 'get_events'):
-            try:
-                events = audit_mgr.get_events(limit=50)
-            except Exception:
-                pass
+        if audit_mgr:
+            if hasattr(audit_mgr, 'read_recent'):
+                try:
+                    events = audit_mgr.read_recent(limit=50)
+                except Exception:
+                    pass
+            elif hasattr(audit_mgr, 'get_events'):
+                try:
+                    events = audit_mgr.get_events(limit=50)
+                except Exception:
+                    pass
         return audit_events_page(events, self._get_csrf())
+
 
     def handle_audit_provenance(self, parsed) -> str:
         prov_data = ""

@@ -17,6 +17,8 @@ class ContextPackage:
     allowed_tools: List[str]
     constraints: Dict[str, Any]
     evidence_policy: str
+    execution_id: str = ""
+
 
 @dataclass
 class ModelResult:

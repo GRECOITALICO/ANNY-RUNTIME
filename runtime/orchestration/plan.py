@@ -42,3 +42,24 @@ class ExecutionPlan:
         if "api_key" in data["provenance"]:
             del data["provenance"]["api_key"]
         return data
+
+
+@dataclass
+class RoutingDecision:
+    decision_id: str
+    task_id: str
+    capability_id: str
+    capability_version: str
+    routing_class: RoutingClass
+    executor_type: str
+    executor_id: str
+    model_id: Optional[str] = None
+    model_version: Optional[str] = None
+    policy_version: str = "1.0.0"
+    authority: str = "anny-kernel"
+    workspace_policy: str = "workspace_only"
+    fallback_policy: Optional[str] = None
+    decision_reason: str = ""
+    provenance: Dict[str, Any] = field(default_factory=dict)
+    timestamp: Optional[str] = None
+

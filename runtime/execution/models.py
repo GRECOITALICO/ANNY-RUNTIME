@@ -109,6 +109,43 @@ class TaskExecutionContext:
     department_id: Optional[str] = None
     generation: Optional[int] = None
 
+@dataclass
+class ExecutionResult:
+    execution_id: str
+    task_id: str
+    status: ExecutionStatus
+    result_data: Optional[Dict[str, Any]] = None
+    result_hash: Optional[str] = None
+    error_message: Optional[str] = None
+    failure_reason: Optional[FailureReason] = None
+    duration_ms: Optional[int] = None
+    completed_at: Optional[datetime] = None
+    evidence_ref: Optional[str] = None
+    provenance: Optional[Dict[str, Any]] = None
+
+@dataclass
+class ExecutionDetails:
+    execution_id: str
+    task_id: str
+    generation: Optional[int] = None
+    routing_class: Optional[str] = None
+    executor_type: Optional[str] = None
+    executor_id: Optional[str] = None
+    model_id: Optional[str] = None
+    model_version: Optional[str] = None
+    worker_id: Optional[str] = None
+    fabric_node: Optional[str] = None
+    tenant_id: Optional[str] = None
+    status: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None
+    events: Optional[List[Any]] = None
+    evidence_refs: Optional[List[str]] = None
+    commit_before: Optional[str] = None
+    commit_after: Optional[str] = None
+    files_changed: Optional[List[str]] = None
+    failure_reason: Optional[str] = None
+
+
 class ModelState(str, enum.Enum):
     REGISTERED = "REGISTERED"
     AVAILABLE = "AVAILABLE"

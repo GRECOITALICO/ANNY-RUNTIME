@@ -23,7 +23,8 @@ class RepositoryMutationContract:
         commit_before: str,
         reason: str,
         action: str,
-        next_action: str
+        next_action: str,
+        execution_id: Optional[str] = None
     ) -> EventRecord:
         # Find active record for this step
         records = [r for r in self.engine.get_records_by_mission(mission_id) if r.step_id == step_id]
@@ -38,6 +39,8 @@ class RepositoryMutationContract:
         record.commit_before = commit_before
         record.reason = reason
         record.next_action = next_action
+        if execution_id:
+            record.execution_id = execution_id
         
         # Implementation state transitions to ACTIVE (prepared, but not final)
         record.implementation_state = ContinuityStatus.ACTIVE.value
@@ -60,7 +63,7 @@ class RepositoryMutationContract:
             event_type=ContinuityEventType.MUTATION_PREPARED,
             target=repository,
             intent=action,
-            inputs={"branch": branch},
+            inputs={"branch": branch, "execution_id": execution_id} if execution_id else {"branch": branch},
             repository=repository,
             branch=branch,
             commit_before=commit_before,
@@ -77,12 +80,14 @@ class RepositoryMutationContract:
             verification_state=record.verification_state,
             certification_state=record.certification_state,
             blocker_refs=[],
-            next_action=next_action
+            next_action=next_action,
+            execution_id=execution_id
         )
         self.engine.append_event(event)
         self.engine.flush()
         
         return event
+
 
     def finalize_mutation(
         self,
@@ -142,7 +147,8 @@ class RepositoryMutationContract:
             verification_state=record.verification_state,
             certification_state=record.certification_state,
             blocker_refs=[],
-            next_action=prepare_event.next_action
+            next_action=prepare_event.next_action,
+            execution_id=getattr(prepare_event, "execution_id", None)
         )
         self.engine.append_event(event)
         
@@ -178,9 +184,11 @@ class RepositoryMutationContract:
             verification_state=record.verification_state,
             certification_state=record.certification_state,
             blocker_refs=[],
-            next_action=prepare_event.next_action
+            next_action=prepare_event.next_action,
+            execution_id=getattr(prepare_event, "execution_id", None)
         )
         self.engine.append_event(event_compat)
+
         
         self.engine.flush()
         

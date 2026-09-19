@@ -169,3 +169,32 @@ class GitHubClient:
         endpoint = "/search/code"
         params = {'q': q}
         return self._request(endpoint, query_params=params)
+
+    def get_commit(self, owner: str, repo: str, sha: str) -> Dict[str, Any]:
+        """Fetch commit details from GitHub by SHA."""
+        return self._request(f"/repos/{owner}/{repo}/commits/{sha}")
+
+    def is_commit_ancestor(self, owner: str, repo: str, ancestor_sha: str, head_sha: str) -> bool:
+        """Verify if ancestor_sha is an ancestor of head_sha in owner/repo via GitHub compare API."""
+        if ancestor_sha == head_sha:
+            return True
+        try:
+            res = self._request(f"/repos/{owner}/{repo}/compare/{ancestor_sha}...{head_sha}")
+            status = res.get("status") if isinstance(res, dict) else None
+            return status in ("ahead", "identical")
+        except GitHubNotFoundError:
+            return False
+        except GitHubClientError:
+            return False
+
+
+def validate_github_sha(client: GitHubClient, owner: str, repo: str, sha: str) -> bool:
+    """Validate that sha actually exists in GitHub for owner/repo."""
+    try:
+        res = client.get_commit(owner, repo, sha)
+        return bool(res and isinstance(res, dict) and res.get("sha"))
+    except GitHubNotFoundError:
+        return False
+    except GitHubClientError:
+        return False
+

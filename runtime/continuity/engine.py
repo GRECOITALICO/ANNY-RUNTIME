@@ -161,8 +161,14 @@ class ContinuityEngine:
         Does not depend on Python in-memory state.
         """
         with self._lock:
-            relevant_records = [r for r in self._records.values() if r.task_id == execution_id or r.continuity_id == execution_id]
-            relevant_events = [e for e in self._events if e.task_id == execution_id or e.inputs.get("execution_id") == execution_id]
+            relevant_records = [
+                r for r in self._records.values()
+                if getattr(r, "execution_id", None) == execution_id or r.task_id == execution_id or r.continuity_id == execution_id
+            ]
+            relevant_events = [
+                e for e in self._events
+                if getattr(e, "execution_id", None) == execution_id or e.task_id == execution_id or (isinstance(e.inputs, dict) and e.inputs.get("execution_id") == execution_id)
+            ]
 
             if not relevant_records and not relevant_events:
                 return None
@@ -173,7 +179,8 @@ class ContinuityEngine:
             sorted_events = sorted(relevant_events, key=lambda x: x.sequence)
             last_event = sorted_events[-1] if sorted_events else None
 
-            status = latest_record.status if latest_record else (last_event.status if last_event else "UNKNOWN")
+            status = last_event.status if (last_event and last_event.status in ("COMPLETE", "SUCCESS", "FAILED", "VERIFIED", "SUCCEEDED", "TIMED_OUT")) else (latest_record.status if latest_record else (last_event.status if last_event else "UNKNOWN"))
+
             
             reconstruction = {
                 "execution_id": execution_id,
@@ -181,22 +188,28 @@ class ContinuityEngine:
                 "capability_id": latest_record.step_id if latest_record else (last_event.step_id if last_event else "unknown"),
                 "status": status,
                 "events_count": len(sorted_events),
-                "latest_event_type": last_event.event_type if last_event else None,
+                "latest_event_type": last_event.event_type.value if last_event and hasattr(last_event.event_type, "value") else str(last_event.event_type if last_event else None),
                 "latest_sequence": last_event.sequence if last_event else 0,
                 "evidence_refs": latest_record.evidence_refs if latest_record else (last_event.evidence_refs if last_event else []),
                 "files_changed": latest_record.files_changed if latest_record else (last_event.files_changed if last_event else []),
                 "commit_before": latest_record.commit_before if latest_record else (last_event.commit_before if last_event else None),
                 "commit_after": latest_record.commit_after if latest_record else (last_event.commit_after if last_event else None),
+                "fabric_node": latest_record.fabric_node if latest_record else (last_event.fabric_node if last_event else None),
+                "fabric_tenant": latest_record.fabric_tenant if latest_record else (last_event.fabric_tenant if last_event else None),
             }
-            if last_event and last_event.inputs:
+            if last_event and isinstance(last_event.inputs, dict):
                 reconstruction["routing_class"] = last_event.inputs.get("routing_class")
                 reconstruction["executor_type"] = last_event.inputs.get("executor_type")
                 reconstruction["executor_id"] = last_event.inputs.get("executor_id")
                 reconstruction["model_id"] = last_event.inputs.get("model_id")
+                reconstruction["model_version"] = last_event.inputs.get("model_version")
+                reconstruction["worker_id"] = last_event.inputs.get("worker_id")
                 reconstruction["generation"] = last_event.inputs.get("generation")
                 reconstruction["failure_reason"] = last_event.inputs.get("failure_reason")
+                reconstruction["error_message"] = last_event.inputs.get("error_message")
 
             return reconstruction
+
 
     def flush(self) -> None:
         """Explicitly flush OS buffers to disk using fsync."""

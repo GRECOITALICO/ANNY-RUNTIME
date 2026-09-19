@@ -23,8 +23,13 @@ class ExecutionReceipt:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 class ReceiptStore:
-    """Store for managing execution receipts."""
+    """[DEPRECATED / LEGACY] Store for managing execution receipts.
+    
+    Canonicity Note: ContinuityEngine is the canonical audit & receipt store.
+    This class is maintained solely for backward compatibility.
+    """
     def __init__(self, data_dir: str) -> None:
+
         self.data_dir = Path(data_dir)
         self.receipts_dir = self.data_dir / "receipts"
         self.receipts_dir.mkdir(parents=True, exist_ok=True)

@@ -71,7 +71,8 @@ class GitService:
         action: str,
         tests: List[str],
         evidence_refs: List[str],
-        next_action: str
+        next_action: str,
+        execution_id: Optional[str] = None
     ) -> Dict[str, str]:
         decision = self.shell_executor.capability_gate.check(
             session_id=session_id,
@@ -106,8 +107,10 @@ class GitService:
             commit_before=commit_before,
             reason=reason,
             action=action,
-            next_action=next_action
+            next_action=next_action,
+            execution_id=execution_id
         )
+
 
         # 3. Find files changed
         status_res = self.shell_executor.execute(

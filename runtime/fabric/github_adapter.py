@@ -146,9 +146,8 @@ class GitHubFabricAdapter:
             # Use the Contents API — this always reflects remote HEAD
             endpoint = f"/repos/{self._org}/{self._repo}/contents/fabric/node.json"
             response = self.gh._request(endpoint)
-            import json as _json
-            data = _json.loads(response)
-            return True, data.get("sha")
+            data = json.loads(response) if isinstance(response, str) else response
+            return True, data.get("sha") if isinstance(data, dict) else None
         except GitHubNotFoundError:
             return False, None
         except Exception as e:
@@ -250,10 +249,9 @@ class GitHubFabricAdapter:
 
         try:
             endpoint = f"/repos/{self._org}/{self._repo}/commits/{commit_sha}"
-            import json as _json
             response = self.gh._request(endpoint)
-            data = _json.loads(response)
-            if data.get("sha"):
+            data = json.loads(response) if isinstance(response, str) else response
+            if isinstance(data, dict) and data.get("sha"):
                 return True, None
             return False, "Commit object malformed"
         except GitHubNotFoundError:
@@ -261,6 +259,30 @@ class GitHubFabricAdapter:
         except Exception as e:
             logger.warning(f"Provenance validation failed for {commit_sha[:7]}: {e}")
             return False, f"Provenance check error: {e}"
+
+    def get_provenance(self, provenance_id: str) -> Dict[str, Any]:
+        """Reads provenance record for provenance_id or commit SHA."""
+        path = f"fabric/provenance/{provenance_id}.json"
+        try:
+            content = self.gh.get_file(self._org, self._repo, path)
+            return json.loads(content)
+        except GitHubNotFoundError:
+            pass
+        try:
+            res = self.gh.get_commit(self._org, self._repo, provenance_id) if hasattr(self.gh, 'get_commit') else None
+            if res and isinstance(res, dict):
+                return {
+                    "provenance_id": provenance_id,
+                    "org": self._org,
+                    "repo": self._repo,
+                    "commit_sha": res.get("sha"),
+                    "verified": True,
+                    "raw": res
+                }
+        except GitHubClientError:
+            pass
+        raise FabricError("PROVENANCE_NOT_FOUND", f"Provenance {provenance_id} not found")
+
 
     def issue_trust_token(self, runtime_id: str, private_key: bytes) -> FabricTrustToken:
         """Issues an offline trust token using HMAC over GitHub token + Private Key."""

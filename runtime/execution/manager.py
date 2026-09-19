@@ -110,9 +110,21 @@ class ExecutionManager:
         self.worker_manager.create_worker(context, selection, task)
 
         if self.continuity_engine:
-            from runtime.continuity.models import EventRecord
+            from runtime.continuity.models import EventRecord, ContinuityRecord
             from runtime.continuity.events import ContinuityEventType
             from datetime import datetime, timezone
+            
+            record = ContinuityRecord.create(
+                mission_id="DEFAULT_MISSION",
+                task_id=task.task_id,
+                step_id=task.capability_id,
+                actor_id=getattr(task, "requested_by", "ANNY"),
+                actor_level="L0",
+                objective=f"Task queued: {task.task_id}",
+                execution_id=execution_id
+            )
+            self.continuity_engine.save_record(record)
+
             event = EventRecord(
                 event_id=f"evt-{uuid.uuid4().hex[:8]}",
                 sequence=0,
@@ -139,7 +151,8 @@ class ExecutionManager:
                 files_changed=[], observation=f"Execution QUEUED ({execution_id})", result="QUEUED",
                 evidence_refs=[], test_results=[], decision_ref=None, state_change="QUEUED",
                 status="QUEUED", implementation_state="QUEUED", verification_state="PENDING", certification_state="NOT_CERTIFIED",
-                blocker_refs=[], next_action="EXECUTE"
+                blocker_refs=[], next_action="EXECUTE",
+                execution_id=execution_id
             )
             self.continuity_engine.append_event(event)
 
@@ -203,7 +216,8 @@ class ExecutionManager:
                         files_changed=[], observation=f"Fencing failed: {str(e)}", result="FAILED",
                         evidence_refs=[], test_results=[], decision_ref=None, state_change="FAILED",
                         status="FAILED", implementation_state="FAILED", verification_state="FAILED", certification_state="NOT_CERTIFIED",
-                        blocker_refs=[], next_action=None
+                        blocker_refs=[], next_action=None,
+                        execution_id=execution_id
                     )
                     self.continuity_engine.append_event(event)
 
@@ -213,6 +227,20 @@ class ExecutionManager:
         self.worker_manager.terminate_worker(worker.worker_id)
         from runtime.execution.models import ExecutionStatus
         if context.status in (ExecutionStatus.SUCCEEDED, ExecutionStatus.FAILED, ExecutionStatus.TIMED_OUT, ExecutionStatus.LIMIT_EXCEEDED):
+            # Preserve evidence files to durable store before workspace destruction
+            from runtime.core.config import get_data_dir
+            from pathlib import Path
+            import shutil
+            base_dir = self.continuity_engine.data_dir if self.continuity_engine else get_data_dir()
+            evidence_dir = Path(base_dir) / "evidence" / execution_id
+            evidence_dir.mkdir(parents=True, exist_ok=True)
+            workspace_dir = Path(context.workspace_path)
+            for fname in ("evidence.json", "reproducibility.json", "observability.json"):
+                fpath = workspace_dir / fname if fname != "observability.json" else workspace_dir / "logs" / "observability.json"
+                if fpath.exists():
+                    shutil.copy2(fpath, evidence_dir / fpath.name)
+
+
             if task.workspace_policy == "destroy_on_complete":
                 self.workspace_manager.destroy_workspace(context.workspace_path)
 
@@ -220,6 +248,19 @@ class ExecutionManager:
             from runtime.continuity.models import EventRecord
             from runtime.continuity.events import ContinuityEventType
             from datetime import datetime, timezone
+            
+            rec = self.continuity_engine.get_record(execution_id)
+            if not rec:
+                recs = self.continuity_engine.get_records_by_task(task.task_id)
+                rec = recs[-1] if recs else None
+            if rec:
+                rec.status = context.status.value
+                rec.completed_at = datetime.now(timezone.utc).isoformat()
+                rec.verification_state = "VERIFIED" if context.status == ExecutionStatus.SUCCEEDED else "FAILED"
+                if context.result_hash:
+                    rec.evidence_refs.append(context.result_hash)
+                self.continuity_engine.save_record(rec)
+
             event = EventRecord(
                 event_id=f"evt-{uuid.uuid4().hex[:8]}",
                 sequence=0,
@@ -248,12 +289,48 @@ class ExecutionManager:
                 files_changed=[], observation=f"Execution status: {context.status.value}", result=context.status.value,
                 evidence_refs=[context.result_hash] if context.result_hash else [], test_results=[], decision_ref=None, state_change=context.status.value,
                 status=context.status.value, implementation_state=context.status.value, verification_state="VERIFIED" if context.status == ExecutionStatus.SUCCEEDED else "FAILED", certification_state="NOT_CERTIFIED",
-                blocker_refs=[], next_action=None
+                blocker_refs=[], next_action=None,
+                execution_id=execution_id
             )
             self.continuity_engine.append_event(event)
 
     def get_execution(self, execution_id: str) -> Optional[TaskExecutionContext]:
-        return self._executions.get(execution_id)
+        if execution_id in self._executions:
+            return self._executions[execution_id]
+        if self.continuity_engine:
+            recon = self.continuity_engine.reconstruct_execution(execution_id)
+            if recon:
+                from datetime import datetime, timezone
+                status_val = recon.get("status", "FAILED")
+                try:
+                    exec_status = ExecutionStatus(status_val)
+                except ValueError:
+                    exec_status = ExecutionStatus.FAILED
+                
+                context = TaskExecutionContext(
+                    execution_id=execution_id,
+                    task_id=recon.get("task_id", execution_id),
+                    account_id="RECONSTRUCTED",
+                    project_id="RECONSTRUCTED",
+                    capability_id=recon.get("capability_id", "unknown"),
+                    workspace_path="",
+                    environment={},
+                    allowed_tools=[],
+                    deadline=datetime.now(timezone.utc),
+                    resource_limits={},
+                    network_policy="none",
+                    write_policy="none",
+                    status=exec_status,
+                    routing_class=recon.get("routing_class"),
+                    executor_type=recon.get("executor_type"),
+                    executor_id=recon.get("executor_id"),
+                    model_id=recon.get("model_id"),
+                    generation=recon.get("generation"),
+                )
+                self._executions[execution_id] = context
+                return context
+        return None
 
     def get_all_executions(self) -> List[TaskExecutionContext]:
         return sorted(list(self._executions.values()), key=lambda x: x.execution_id)
+
