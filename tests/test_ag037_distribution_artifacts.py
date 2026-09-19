@@ -233,7 +233,18 @@ def test_isolated_install_and_health(build_artifact, repo_root, tmp_path):
         f"runtime package not importable:\n{check.stderr}"
     )
 
-    # --- 4. START RUNTIME ---
+    # --- 4. BOOTSTRAP IDENTITY (mirrors install.sh step 11) ---
+    bootstrap_result = subprocess.run(
+        [str(python_bin), str(cli_script), "identity-bootstrap"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert bootstrap_result.returncode == 0, (
+        f"identity-bootstrap failed:\n{bootstrap_result.stdout}\n{bootstrap_result.stderr}"
+    )
+
+    # --- 5. START RUNTIME ---
     port = get_free_port()
     cli_script = install_dir / "cli" / "main.py"
     assert cli_script.exists(), f"CLI script not found: {cli_script}"
