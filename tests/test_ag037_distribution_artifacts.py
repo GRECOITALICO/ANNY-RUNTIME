@@ -268,6 +268,7 @@ def test_isolated_install_and_health(build_artifact, repo_root, tmp_path):
     try:
         # --- 5. LIVENESS ---
         live = False
+        last_err = None
         for _ in range(15):
             try:
                 resp = httpx.get(
@@ -276,15 +277,15 @@ def test_isolated_install_and_health(build_artifact, repo_root, tmp_path):
                 if resp.status_code == 200:
                     live = True
                     break
-            except Exception:
-                pass
+            except Exception as e:
+                last_err = e
             time.sleep(1)
 
         if not live:
             proc.terminate()
             out, err = proc.communicate(timeout=5)
             pytest.fail(
-                f"Runtime failed to become live.\nStdout:\n{out.decode()}\nStderr:\n{err.decode()}"
+                f"Runtime failed to become live. Last error: {last_err}\nStdout:\n{out.decode()}\nStderr:\n{err.decode()}"
             )
 
         # --- 6. READINESS (200 or 503 are both valid; endpoint must exist) ---
