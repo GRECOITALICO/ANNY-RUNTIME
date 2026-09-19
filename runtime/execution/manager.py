@@ -14,11 +14,12 @@ from runtime.telemetry.telemetry import TelemetryEnvelope
 class ExecutionManager:
     """Manage queue and history of bounded workspace executions."""
 
-    def __init__(self, workspace_manager: EphemeralWorkspaceManager, audit_manager=None, github_client=None, fabric_client=None, telemetry_collector=None, runtime_engine=None):
+    def __init__(self, workspace_manager: EphemeralWorkspaceManager, audit_manager=None, github_client=None, fabric_client=None, telemetry_collector=None, runtime_engine=None, continuity_engine=None):
         self._executions: Dict[str, TaskExecutionContext] = {}
         self._tasks: Dict[str, Task] = {}
         self.workspace_manager = workspace_manager
         self.runtime_engine = runtime_engine
+        self.continuity_engine = continuity_engine or getattr(runtime_engine, "continuity_engine", None)
 
         self.registry = CapabilityRegistry()
         self.policy = RuntimePolicy()
@@ -107,6 +108,41 @@ class ExecutionManager:
         self._tasks[execution_id] = task
         self._executions[execution_id] = context
         self.worker_manager.create_worker(context, selection, task)
+
+        if self.continuity_engine:
+            from runtime.continuity.models import EventRecord
+            from runtime.continuity.events import ContinuityEventType
+            from datetime import datetime, timezone
+            event = EventRecord(
+                event_id=f"evt-{uuid.uuid4().hex[:8]}",
+                sequence=0,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                mission_id="DEFAULT_MISSION",
+                task_id=task.task_id,
+                step_id=task.capability_id,
+                parent_event_id=None,
+                actor_id=getattr(task, "requested_by", "ANNY"),
+                actor_level="L0",
+                parent_actor_id=None,
+                event_type=ContinuityEventType.TASK_CREATED,
+                target=task.capability_id,
+                intent=f"Task queued: {task.task_id}",
+                inputs={
+                    "execution_id": execution_id,
+                    "routing_class": routing_class,
+                    "executor_type": selection.executor_type.value,
+                    "executor_id": selection.executor_id,
+                    "model_id": selection.model_id,
+                    "generation": context.generation,
+                },
+                repository=None, branch=None, commit_before=None, commit_after=None,
+                files_changed=[], observation=f"Execution QUEUED ({execution_id})", result="QUEUED",
+                evidence_refs=[], test_results=[], decision_ref=None, state_change="QUEUED",
+                status="QUEUED", implementation_state="QUEUED", verification_state="PENDING", certification_state="NOT_CERTIFIED",
+                blocker_refs=[], next_action="EXECUTE"
+            )
+            self.continuity_engine.append_event(event)
+
         return context
 
     def execute_sync(self, execution_id: str) -> TaskExecutionContext:
@@ -134,6 +170,43 @@ class ExecutionManager:
                 context.failure_reason = FailureReason.AUTHORIZATION_DENIED
                 context.error_message = str(e)
                 worker.state = WorkerState.FAILED
+
+                if self.continuity_engine:
+                    from runtime.continuity.models import EventRecord
+                    from runtime.continuity.events import ContinuityEventType
+                    from datetime import datetime, timezone
+                    event = EventRecord(
+                        event_id=f"evt-{uuid.uuid4().hex[:8]}",
+                        sequence=0,
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                        mission_id="DEFAULT_MISSION",
+                        task_id=task.task_id,
+                        step_id=task.capability_id,
+                        parent_event_id=None,
+                        actor_id=getattr(task, "requested_by", "ANNY"),
+                        actor_level="L0",
+                        parent_actor_id=None,
+                        event_type=ContinuityEventType.ACTION_FAILED,
+                        target=task.capability_id,
+                        intent=f"Execution fenced for {execution_id}",
+                        inputs={
+                            "execution_id": execution_id,
+                            "routing_class": context.routing_class,
+                            "executor_type": context.executor_type,
+                            "executor_id": context.executor_id,
+                            "model_id": context.model_id,
+                            "generation": context.generation,
+                            "failure_reason": context.failure_reason.value if context.failure_reason else None,
+                            "error_message": context.error_message
+                        },
+                        repository=None, branch=None, commit_before=None, commit_after=None,
+                        files_changed=[], observation=f"Fencing failed: {str(e)}", result="FAILED",
+                        evidence_refs=[], test_results=[], decision_ref=None, state_change="FAILED",
+                        status="FAILED", implementation_state="FAILED", verification_state="FAILED", certification_state="NOT_CERTIFIED",
+                        blocker_refs=[], next_action=None
+                    )
+                    self.continuity_engine.append_event(event)
+
                 return context
 
         self.worker_manager.start_worker(worker.worker_id, context, task, cap)
@@ -142,7 +215,42 @@ class ExecutionManager:
         if context.status in (ExecutionStatus.SUCCEEDED, ExecutionStatus.FAILED, ExecutionStatus.TIMED_OUT, ExecutionStatus.LIMIT_EXCEEDED):
             if task.workspace_policy == "destroy_on_complete":
                 self.workspace_manager.destroy_workspace(context.workspace_path)
-        return context
+
+        if self.continuity_engine:
+            from runtime.continuity.models import EventRecord
+            from runtime.continuity.events import ContinuityEventType
+            from datetime import datetime, timezone
+            event = EventRecord(
+                event_id=f"evt-{uuid.uuid4().hex[:8]}",
+                sequence=0,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+                mission_id="DEFAULT_MISSION",
+                task_id=task.task_id,
+                step_id=task.capability_id,
+                parent_event_id=None,
+                actor_id=getattr(task, "requested_by", "ANNY"),
+                actor_level="L0",
+                parent_actor_id=None,
+                event_type=ContinuityEventType.ACTION_COMPLETED if context.status == ExecutionStatus.SUCCEEDED else ContinuityEventType.ACTION_FAILED,
+                target=task.capability_id,
+                intent=f"Execution completed for {execution_id}",
+                inputs={
+                    "execution_id": execution_id,
+                    "routing_class": context.routing_class,
+                    "executor_type": context.executor_type,
+                    "executor_id": context.executor_id,
+                    "model_id": context.model_id,
+                    "generation": context.generation,
+                    "failure_reason": context.failure_reason.value if context.failure_reason else None,
+                    "error_message": context.error_message
+                },
+                repository=None, branch=None, commit_before=None, commit_after=None,
+                files_changed=[], observation=f"Execution status: {context.status.value}", result=context.status.value,
+                evidence_refs=[context.result_hash] if context.result_hash else [], test_results=[], decision_ref=None, state_change=context.status.value,
+                status=context.status.value, implementation_state=context.status.value, verification_state="VERIFIED" if context.status == ExecutionStatus.SUCCEEDED else "FAILED", certification_state="NOT_CERTIFIED",
+                blocker_refs=[], next_action=None
+            )
+            self.continuity_engine.append_event(event)
 
     def get_execution(self, execution_id: str) -> Optional[TaskExecutionContext]:
         return self._executions.get(execution_id)

@@ -196,6 +196,11 @@ milestones:
     status: VERIFIED
     evidence: docs/evidence/EXECUTOR-REGISTRY-RECONCILIATION-AG-043.json
     verification_note: ModelRegistry, CapabilityRegistry, LocalIntelligenceLayer, and FrontierExecutor availability and execution classes reconciled without registry drift.
+  - id: DETERMINISTIC-CONTINUITY-RECONCILIATION-001
+    name: DETERMINISTIC_CONTINUITY_RECONCILIATION
+    status: VERIFIED
+    evidence: docs/evidence/DETERMINISTIC-CONTINUITY-RECONCILIATION-AG-044.json
+    verification_note: Deterministic continuity, corruption quarantining, event sequencing, state reconstruction, generation fencing, and process interruption recovery verified across 20-test matrix.
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
@@ -204,5 +209,5 @@ legacy_cleanup_policy:
 current_documentation_anchor:
   commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
-next_p0: DETERMINISTIC_CONTINUITY_RECONCILIATION
+next_p0: FABRIC_INTEGRATION_VERIFICATION
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
