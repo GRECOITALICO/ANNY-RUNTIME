@@ -23,6 +23,11 @@
     "repository_clone": "DNS/network resolution unavailable in execution container",
     "full_suite": "NOT_VERIFIED"
   },
+  "verification_observation": {
+    "ci_workflow_added": ".github/workflows/ag047-governance.yml",
+    "ci_trigger_commit": "pending",
+    "ci_execution_observed": false
+  },
   "result": "IMPLEMENTED_NOT_VERIFIED",
   "next_action": "AG-047-VERIFY-CURRENT-SUITE"
 }
