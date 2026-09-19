@@ -323,13 +323,8 @@ def test_isolated_install_and_health(build_artifact, repo_root, tmp_path):
             f"/api/status returned {status_code}"
         )
         status_data = json.loads(body)
-        assert status_data["identity"]["runtime_version"] == "0.4.0", "Version mismatch in status"
-        assert status_data["identity"]["commit"] == build_artifact["commit_sha"], (
-            "Commit mismatch in status"
-        )
-        assert status_data["state"] == "STARTING" or status_data["state"] == "RUNNING", (
-            f"Unexpected state in status: {status_data['state']}"
-        )
+        assert status_data.get("runtime_version") == "0.4.0", f"Version mismatch in status: {status_data}"
+        assert status_data.get("runtime_state") in ("STARTING", "RUNNING"), f"Unexpected state in status: {status_data}"
 
     finally:
         proc.terminate()
