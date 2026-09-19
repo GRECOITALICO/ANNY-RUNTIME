@@ -259,7 +259,7 @@ def test_isolated_install_and_health(build_artifact, repo_root, tmp_path):
     # --- 5. START RUNTIME ---
 
     proc = subprocess.Popen(
-        [str(python_bin), str(cli_script), "server"],
+        [str(python_bin), str(cli_script), "server", "--port", str(port)],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
