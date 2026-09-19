@@ -240,13 +240,32 @@ class ModelRegistry:
 
     def register_model(self, model: ModelDefinition):
         if model.model_id in self._models:
-            raise ValueError(f"Model {model.model_id} already registered.")
+            raise ValueError(f"Model {model.model_id} is already registered")
         self._models[model.model_id] = model
         self._performance[model.model_id] = ModelPerformanceProfile(
             model_id=model.model_id,
             capability_id="*"
         )
         self._save_to_disk()
+
+    def register(self, model: ModelDefinition):
+        """Alias for register_model."""
+        self.register_model(model)
+
+    def unregister(self, model_id: str):
+        """Remove a model from the registry."""
+        if model_id in self._models:
+            del self._models[model_id]
+            if model_id in self._performance:
+                del self._performance[model_id]
+            self._save_to_disk()
+
+    def set_availability(self, model_id: str, available: bool):
+        """Set availability state of a model."""
+        model = self.get_model(model_id)
+        if model:
+            model.status = ModelState.AVAILABLE if available else ModelState.UNAVAILABLE
+            self._save_to_disk()
 
     def add_binding(self, binding: ModelCapabilityBinding):
         self._bindings.append(binding)

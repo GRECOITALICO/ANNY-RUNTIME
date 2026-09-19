@@ -17,6 +17,10 @@ from runtime.execution.capability import ExecutorType
 class MockIntelligenceLayer:
     def __init__(self, registry):
         self.registry = registry
+        self._implementations = {}
+        
+    def register_implementation(self, profile):
+        self._implementations[profile.implementation_id] = profile
         
     def assess_capability(self, req, available_implementations=None):
         cap_id = req.capability_id
@@ -105,8 +109,8 @@ def test_05_forbidden_binding(clean_registry):
     
     # ensure luna isn't available to force it to look at qwen3
     clean_registry.get_model("luna").status = ModelState.UNAVAILABLE
-    selection = selector.select(task, cap, policy)
-    assert selection.executor_type == ExecutorType.DETERMINISTIC
+    with pytest.raises(ValueError, match="Execution plan BLOCKED"):
+        selection = selector.select(task, cap, policy)
 
 def test_06_preferred_binding(clean_registry):
     selector = ExecutorSelector(clean_registry, intelligence_layer=MockIntelligenceLayer(clean_registry))
@@ -165,8 +169,8 @@ def test_13_llm_capability_without_model(clean_registry):
     cap = CapabilityDefinition("nonexistent.task", "test", "test", "1.0", "low", True, True, "disabled", "read_only", [], 60, 1024, True, ExecutorType.LOCAL_MODEL, None, True)
     task = Task("t6", "nonexistent.task", "test-account", "test-project", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
     
-    selection = selector.select(task, cap, policy)
-    assert selection.executor_type == ExecutorType.DETERMINISTIC
+    with pytest.raises(ValueError, match="Execution plan BLOCKED"):
+        selection = selector.select(task, cap, policy)
 
 def test_14_authority_boundary():
     from runtime.execution.selector import ExecutorSelection
@@ -201,10 +205,10 @@ def test_19_reproducibility_metadata():
     
     cap = manager.registry.get("schema.validate")
     cap.inference_required = True
+    cap.preferred_executor = ExecutorType.LOCAL_MODEL
     task = Task("task-123", "schema.validate", "test-account", "test-project", {}, {}, datetime.now(timezone.utc), "destroy_on_complete", "required", "admin", datetime.now(timezone.utc))
-    context = manager.submit_task(task)
-    assert context.model_version == "1.0.0"
-    assert context.executor_version == "1.0.0"
+    with pytest.raises(ValueError, match="Execution plan BLOCKED"):
+        context = manager.submit_task(task)
 
 def test_20_schema_validation():
     # Tested by ensuring loading an invalid version raises an error via internal method

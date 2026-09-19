@@ -378,31 +378,28 @@ def test_t08_full_provenance_chain_to_matrix(collector, aggregator):
         telemetry_collector=collector
     )
     
-    class MockRegistry:
-        def get(self, cap_id):
-            from runtime.execution.capability import CapabilityDefinition
-            return CapabilityDefinition(
-                capability_id=cap_id,
-                name="Test Cap",
-                description="Test",
-                family="test",
-                version="1.0.0",
-                enabled=True,
-                side_effect="read",
-                risk_level="LOW",
-                deterministic_allowed=True,
-                inference_required=False,
-                required_tools=[],
-                network_policy="none",
-                filesystem_policy="readonly",
-                max_runtime=30,
-                max_output=1024,
-                evidence_required=False,
-                preferred_executor="DETERMINISTIC",
-                fallback_executor=None
-            )
-            
-    manager.registry = MockRegistry()
+    from runtime.execution.capability import CapabilityDefinition, ExecutorType
+    cap = CapabilityDefinition(
+        capability_id="cap-test",
+        name="Test Cap",
+        description="Test",
+        family="test",
+        version="1.0.0",
+        enabled=True,
+        side_effect="read",
+        risk_level="LOW",
+        deterministic_allowed=True,
+        inference_required=False,
+        required_tools=[],
+        network_policy="none",
+        filesystem_policy="readonly",
+        max_runtime=30,
+        max_output=1024,
+        evidence_required=False,
+        preferred_executor=ExecutorType.DETERMINISTIC,
+        fallback_executor=None
+    )
+    manager.registry.register(cap)
     
     task = Task(
         task_id="task-provenance-1",
