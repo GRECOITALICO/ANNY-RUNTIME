@@ -21,12 +21,15 @@
   "verification_limitations": {
     "python_execution": "UNAVAILABLE",
     "repository_clone": "DNS/network resolution unavailable in execution container",
+    "github_actions_execution_observation": "NO_RUN_OBSERVED",
     "full_suite": "NOT_VERIFIED"
   },
   "verification_observation": {
     "ci_workflow_added": ".github/workflows/ag047-governance.yml",
-    "ci_trigger_commit": "pending",
-    "ci_execution_observed": false
+    "ci_trigger_commit": "1a3dc895f8b7e3aad3ceda272683a2e543b2d1f8",
+    "ci_execution_observed": false,
+    "temporary_pr_probe": 6,
+    "temporary_pr_probe_state": "CLOSED_NOT_MERGED"
   },
   "result": "IMPLEMENTED_NOT_VERIFIED",
   "next_action": "AG-047-VERIFY-CURRENT-SUITE"
