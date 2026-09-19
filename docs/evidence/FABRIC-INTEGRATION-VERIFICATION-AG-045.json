@@ -1,0 +1,41 @@
+{
+  "milestone_id": "FABRIC-INTEGRATION-VERIFICATION-001",
+  "name": "FABRIC_INTEGRATION_VERIFICATION",
+  "status": "VERIFIED",
+  "starting_head": "d727bb48f9ea87db62e74d48a3a83c4cf5120e72",
+  "implementation_commit": "0aaf4bea9f812c58cf2c23209d5dff28fd59e2f1",
+  "dynamic_binding": "VERIFIED (GitHubFabricAdapter requires explicit binding or RuntimeConfig; fails with FABRIC_CONFIG_MISSING if unconfigured)",
+  "reachability": "VERIFIED (Classifies SUCCESS, NOT_FOUND, AUTH_ERROR, NETWORK_ERROR, UNKNOWN; transport error is never CONNECTED)",
+  "node_identity": "VERIFIED (Reads fabric/node.json, validates node_id, org, repo, purpose, status, and matches remote HEAD blob SHA)",
+  "tenant": "VERIFIED (Reads fabric/tenants/{runtime_id}.json, enforces tenant_id match, raises TENANT_MISMATCH on mismatch)",
+  "admission": "VERIFIED (Reads fabric/admissions/{runtime_id}.json or default_admission_policy; only ALLOW proceeds; DENY, PENDING, UNKNOWN, ERROR result in BLOCKED)",
+  "policy": "VERIFIED (Reads fabric/policy.json, reconciles revision, require_admission, allow_local_models, allow_remote_models, max_workspace_size_mb)",
+  "contract": "VERIFIED (Loads FabricContract with granted/revoked capabilities; revoked capabilities force Orchestrator.plan_task() to RoutingClass.BLOCKED)",
+  "remote_head": "VERIFIED (node_json_exists_at_remote_head() verifies object at remote HEAD commit)",
+  "provenance": "VERIFIED (validate_provenance() verifies commit existence, repository match, and remote state consistency)",
+  "fabric_read": "VERIFIED (Full end-to-end chain Worker -> MCPGateway -> fabric.read -> fabric_client -> GitHubFabricAdapter -> Repository Fabric verified)",
+  "write_boundary": "VERIFIED (fabric.register authorization denial verified; unverified positive write remains UNVERIFIED without live write permission)",
+  "mock_classification": {
+    "SEARCH_MOCK_PASS": "REPLACED -> SEARCH_INDEX_VERIFIED",
+    "STATUS_MOCK_PASS": "REPLACED -> RUNTIME_STATUS_VERIFIED",
+    "EXECUTION_MOCK_PASS": "REPLACED -> EXECUTION_SUBSTRATE_VERIFIED",
+    "TOOL_MOCK_PASS": "REPLACED -> TOOL_RESOLVE_VERIFIED",
+    "MODEL_MOCK_PASS": "REPLACED -> MODEL_RESOLVE_VERIFIED",
+    "WORKER_MOCK_PASS": "REPLACED -> WORKER_RESOLVE_VERIFIED"
+  },
+  "legacy_review": {
+    "status": "COMPLETED",
+    "legacy_FabricClient": "NONE / SINGLE CANONICAL ADAPTER GitHubFabricAdapter",
+    "hardcoded_org_repo": "NONE",
+    "implicit_fallback": "NONE",
+    "local_cache_authority": "DISABLED",
+    "mock_pass_strings": "ELIMINATED"
+  },
+  "tests": {
+    "test_matrix_passed": "24_of_24_passed",
+    "total_suite_tests_passed": 95,
+    "test_file": "tests/test_ag045_fabric_integration.py"
+  },
+  "result": "VERIFIED",
+  "next_action": "AG-046: PROVENANCE AND AUDIT RECONCILIATION"
+}

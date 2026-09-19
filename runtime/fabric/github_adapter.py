@@ -101,13 +101,16 @@ class GitHubFabricAdapter:
         try:
             self.gh.get_repository(self._org, self._repo)
             latency_ms = (time.monotonic() - t0) * 1000
-            return True, latency_ms, None
+            return True, latency_ms, "SUCCESS"
         except GitHubNotFoundError:
-            return False, 0.0, "Fabric repository not found (404)"
+            return False, 0.0, "NOT_FOUND"
         except GitHubClientError as e:
-            return False, 0.0, f"GitHub API error: {e}"
+            err_str = str(e).lower()
+            if "401" in err_str or "403" in err_str or "unauthorized" in err_str or "forbidden" in err_str:
+                return False, 0.0, "AUTH_ERROR"
+            return False, 0.0, f"NETWORK_ERROR: {e}"
         except Exception as e:
-            return False, 0.0, f"Unexpected error: {e}"
+            return False, 0.0, f"UNKNOWN: {e}"
 
     def probe_health(self) -> FabricHealthResult:
         """Returns a FabricHealthResult for compatibility with existing callers."""
@@ -158,9 +161,14 @@ class GitHubFabricAdapter:
         try:
             content = self.gh.get_file(self._org, self._repo, path)
             data = json.loads(content)
-            return FabricTenant.from_dict(data)
+            tenant = FabricTenant.from_dict(data)
+            if tenant.runtime_id != runtime_id:
+                raise FabricError("TENANT_MISMATCH", f"Tenant record runtime_id '{tenant.runtime_id}' != expected '{runtime_id}'")
+            return tenant
         except GitHubNotFoundError:
             raise FabricError("TENANT_UNBOUND", f"No tenant binding found for {runtime_id}")
+        except FabricError:
+            raise
         except Exception as e:
             logger.error(f"Failed to read tenant binding: {e}")
             raise FabricError("FABRIC_TENANT_ERROR", f"Could not read {path}: {e}")
@@ -226,7 +234,7 @@ class GitHubFabricAdapter:
         except Exception as e:
             raise FabricError("FABRIC_STATE_ERROR", f"Could not read fabric/state.json: {e}")
 
-    def validate_provenance(self, commit_sha: str) -> Tuple[bool, Optional[str]]:
+    def validate_provenance(self, commit_sha: str, expected_org: Optional[str] = None, expected_repo: Optional[str] = None) -> Tuple[bool, Optional[str]]:
         """Validates if a commit exists in the Fabric repository at remote HEAD.
 
         Returns:
@@ -234,12 +242,17 @@ class GitHubFabricAdapter:
         """
         if not commit_sha or len(commit_sha) < 7:
             return False, "Invalid commit SHA"
+
+        target_org = expected_org or self._org
+        target_repo = expected_repo or self._repo
+        if target_org != self._org or target_repo != self._repo:
+            return False, f"Commit repository mismatch: {target_org}/{target_repo} != {self._org}/{self._repo}"
+
         try:
             endpoint = f"/repos/{self._org}/{self._repo}/commits/{commit_sha}"
             import json as _json
             response = self.gh._request(endpoint)
             data = _json.loads(response)
-            # Confirm we got a real commit object back
             if data.get("sha"):
                 return True, None
             return False, "Commit object malformed"

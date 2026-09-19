@@ -31,11 +31,13 @@ class Orchestrator:
         model_registry: Optional[ModelRegistry] = None,
         intelligence_layer: Optional[LocalIntelligenceLayer] = None,
         frontier_executor: Optional[FrontierExecutor] = None,
+        fabric_adapter=None,
     ):
         self.capability_registry = capability_registry or CapabilityRegistry()
         self.model_registry = model_registry or ModelRegistry()
         self.intelligence_layer = intelligence_layer or LocalIntelligenceLayer()
         self.frontier_executor = frontier_executor or DefaultFrontierExecutor()
+        self.fabric_adapter = fabric_adapter
         self._reconcile_registries()
 
     def _reconcile_registries(self) -> None:
@@ -119,6 +121,28 @@ class Orchestrator:
 
         provenance["capability_version"] = cap_def.version
         provenance["risk_level"] = cap_def.risk_level
+
+        # Fabric Contract Check — Revoked Capabilities
+        if self.fabric_adapter:
+            try:
+                contract_data = self.fabric_adapter.read_contract()
+                from runtime.fabric.models import FabricContract
+                contract = FabricContract.from_dict(contract_data)
+                if cap_id in contract.revoked_capabilities:
+                    reason = f"Fabric contract denial: Capability '{cap_id}' is revoked by Fabric contract"
+                    return ExecutionPlan(
+                        task_id=task_id,
+                        capability_id=cap_id,
+                        capability_version=cap_def.version,
+                        routing_class=RoutingClass.BLOCKED,
+                        executor_type="NONE",
+                        executor_id="none",
+                        policy_version=policy.version,
+                        decision_reason=reason,
+                        provenance=provenance,
+                    )
+            except Exception as e:
+                logger.warning(f"Could not read fabric contract during task planning: {e}")
 
         # Check if capability is disabled
         if not cap_def.enabled:

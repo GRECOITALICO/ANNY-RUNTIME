@@ -201,6 +201,11 @@ milestones:
     status: VERIFIED
     evidence: docs/evidence/DETERMINISTIC-CONTINUITY-RECONCILIATION-AG-044.json
     verification_note: Deterministic continuity, corruption quarantining, event sequencing, state reconstruction, generation fencing, and process interruption recovery verified across 20-test matrix.
+  - id: FABRIC-INTEGRATION-VERIFICATION-001
+    name: FABRIC_INTEGRATION_VERIFICATION
+    status: VERIFIED
+    evidence: docs/evidence/FABRIC-INTEGRATION-VERIFICATION-AG-045.json
+    verification_note: End-to-end fabric integration boundary verified across 24-point test matrix covering dynamic binding, reachability classification, node identity, tenant binding, admission, policy, contract revoked capability enforcement, remote HEAD, provenance, real fabric.read boundary, governed write boundary, mock pass elimination, and legacy review.
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
@@ -209,5 +214,6 @@ legacy_cleanup_policy:
 current_documentation_anchor:
   commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
-next_p0: FABRIC_INTEGRATION_VERIFICATION
+next_p0: PROVENANCE_AND_AUDIT_RECONCILIATION
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
+
