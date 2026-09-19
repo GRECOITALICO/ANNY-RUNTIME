@@ -186,6 +186,11 @@ milestones:
     commit_sha: d8254e952782c99d62f43387cf3b17e4d49e2348
     evidence: docs/evidence/RUNTIME-READINESS-001-ORCHESTRATION-KERNEL-AG-041.json
     verification_note: Orchestration kernel implemented, ExecutionPlan defined, Model fallback rules strictly enforced. No silent fallback without authorization.
+  - id: INTELLIGENCE-LAYER-VERIFICATION-001
+    name: INTELLIGENCE_LAYER_VERIFICATION
+    status: VERIFIED
+    evidence: docs/evidence/INTELLIGENCE-LAYER-VERIFICATION-AG-042.json
+    verification_note: Intelligence layer enforces formal assessment of candidates. Rejection reasons and detailed provenance returned correctly in Kernel plan.
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
@@ -194,5 +199,5 @@ legacy_cleanup_policy:
 current_documentation_anchor:
   commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
-next_p0: INTELLIGENCE_LAYER_VERIFICATION
+next_p0: EXECUTOR_REGISTRY_RECONCILIATION
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
