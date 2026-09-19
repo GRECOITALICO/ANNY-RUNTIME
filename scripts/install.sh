@@ -108,7 +108,15 @@ function cleanup_on_fail {
 }
 trap cleanup_on_fail EXIT
 
-echo "Installing ANNY Runtime v0.2..."
+# 0. Extract Version
+VERSION_PY="$(dirname "$0")/../runtime/core/version.py"
+if [ -f "$VERSION_PY" ]; then
+    RUNTIME_VERSION=$(grep '__version__' "$VERSION_PY" | cut -d'"' -f2 | cut -d"'" -f2)
+else
+    RUNTIME_VERSION="unknown"
+fi
+
+echo "Installing ANNY Runtime v$RUNTIME_VERSION..."
 
 # 1. Platform Detection
 if [[ "$OSTYPE" != "linux-gnu"* ]]; then
@@ -120,11 +128,11 @@ fi
 if [ "$EUID" -eq 0 ]; then
   echo "Running in SYSTEM-WIDE mode."
   INSTALL_MODE="system"
-  FINAL_INSTALL_DIR="/opt/anny-runtime"
-  DATA_DIR="/var/lib/anny-runtime"
-  BIN_DIR="/usr/local/bin"
-  SYSTEMD_DIR="/etc/systemd/system"
-  SERVICE_USER="${SUDO_USER:-root}"
+  FINAL_INSTALL_DIR="${FINAL_INSTALL_DIR:-/opt/anny-runtime}"
+  DATA_DIR="${DATA_DIR:-/var/lib/anny-runtime}"
+  BIN_DIR="${BIN_DIR:-/usr/local/bin}"
+  SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
+  SERVICE_USER="${SERVICE_USER:-${SUDO_USER:-root}}"
   
   if [ "$SERVICE_USER" == "root" ]; then
       echo "WARNING: Running ANNY-RUNTIME as root is not recommended."
@@ -132,11 +140,11 @@ if [ "$EUID" -eq 0 ]; then
 else
   echo "Running in USER-LOCAL mode."
   INSTALL_MODE="user"
-  FINAL_INSTALL_DIR="$HOME/.local/share/anny-runtime"
-  DATA_DIR="$HOME/.anny-runtime"
-  BIN_DIR="$HOME/.local/bin"
-  SYSTEMD_DIR="$HOME/.config/systemd/user"
-  SERVICE_USER="$USER"
+  FINAL_INSTALL_DIR="${FINAL_INSTALL_DIR:-$HOME/.local/share/anny-runtime}"
+  DATA_DIR="${DATA_DIR:-$HOME/.anny-runtime}"
+  BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
+  SYSTEMD_DIR="${SYSTEMD_DIR:-$HOME/.config/systemd/user}"
+  SERVICE_USER="${SERVICE_USER:-$USER}"
 fi
 
 # 3. Transactional Staging
@@ -278,9 +286,15 @@ RestrictSUIDSGID=yes
 [Install]
 WantedBy=multi-user.target
 EOF
-    echo "Reloading systemd... (REGISTERED != HEALTHY)"
-    systemctl daemon-reload
-    systemctl enable anny-runtime.service
+    if [ -d /run/systemd/system ]; then
+        echo "Reloading systemd... (REGISTERED != HEALTHY)"
+        systemctl daemon-reload
+        systemctl enable anny-runtime.service
+    else
+        echo "WARNING: systemd is not running or accessible (sandbox environment detected)."
+        echo "         Skipped systemctl daemon-reload and enable."
+        echo "         To start the runtime manually, run: $BIN_DIR/anny-runtime server"
+    fi
 else
     cat << EOF > "$SYSTEMD_DIR/anny-runtime.service"
 [Unit]
@@ -299,9 +313,15 @@ Environment=ANNY_DATA_DIR=$DATA_DIR
 [Install]
 WantedBy=default.target
 EOF
-    echo "Reloading systemd... (REGISTERED != HEALTHY)"
-    systemctl --user daemon-reload
-    systemctl --user enable anny-runtime.service
+    if XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)} systemctl --user show-environment >/dev/null 2>&1; then
+        echo "Reloading systemd... (REGISTERED != HEALTHY)"
+        systemctl --user daemon-reload
+        systemctl --user enable anny-runtime.service
+    else
+        echo "WARNING: systemd user-bus is not running or accessible (sandbox environment detected)."
+        echo "         Skipped systemctl --user daemon-reload and enable."
+        echo "         To start the runtime manually, run: $BIN_DIR/anny-runtime server"
+    fi
 fi
 
 # 11. Initial Identity Creation

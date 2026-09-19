@@ -25,6 +25,7 @@ from runtime.admin.dto import (
 )
 from runtime.github.client import GitHubClient
 from runtime.github.discovery import OrganizationDiscoveryService
+from runtime.core.version import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -364,7 +365,7 @@ class AdminRouter:
             "timestamp": timestamp,
             
             "runtime_id": runtime_id,
-            "runtime_version": "v0.4.0",
+            "runtime_version": __version__,
             "github_org": gh_status, 
             "fabric_org": fabric_org,
             "fabric_repo": fabric_repo,
@@ -531,6 +532,17 @@ class AdminRouter:
     # --- GET Handlers ---
 
     def handle_dashboard(self, parsed) -> str:
+        gh_mgr = self.context.get('github_manager')
+        session = self.context.get('admin_session')
+        is_first_run = gh_mgr and not gh_mgr.has_token()
+        
+        query_params = urllib.parse.parse_qs(parsed.query)
+        error = query_params.get('error', [''])[0] or None
+
+        if is_first_run or (session and getattr(session, 'scope', '') == "ONBOARDING_ONLY"):
+            from runtime.admin.templates import first_run_page
+            return first_run_page(csrf_token=self._get_csrf(), error=error)
+
         try:
             from runtime.admin.templates_cc import control_center_page
             return control_center_page(self._get_csrf())

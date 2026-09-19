@@ -193,7 +193,10 @@ def integration_env(tmp_path):
     cap_registry = CapabilityRegistry()
     # Register fabric capabilities
     for cap_id in ["fabric.read", "fabric.register", "model.tool_request"]:
-        if not cap_registry.get(cap_id):
+        cap = cap_registry.get(cap_id)
+        if cap:
+            cap.enabled = True
+        else:
             cap_registry.register(CapabilityDefinition(
                 capability_id=cap_id, name=cap_id, description=cap_id,
                 version="1.0.0", risk_level="medium", inference_required=(cap_id == "model.tool_request"),

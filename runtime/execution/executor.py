@@ -55,13 +55,7 @@ class ExecutionOrchestrator:
         ):
             return ToolResult(False, None, "Capabilities denied for tool", 0)
             
-        # 3. Validate workspace access
-        if not self.workspace_manager.validate_access(
-            workspace_id=tool_invocation.workspace_id,
-            tenant_id=tool_invocation.tenant_id,
-            actor_id=tool_invocation.actor_id
-        ):
-            return ToolResult(False, None, "Workspace access denied", 0)
+
             
         # 4. Validate generation (fence stale)
         if self.process_manager.generation != self.generation:

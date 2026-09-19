@@ -234,7 +234,7 @@ class TestBrowserBrokerContract:
     def test_start_browser_uses_chrome_binary(self):
         b = self._make_broker()
         with patch("subprocess.Popen") as mock_popen, \
-             patch.object(Path, "exists", return_value=True):
+             patch.object(Path, "exists", return_value=True), patch.object(Path, "mkdir"):
             proc = MagicMock()
             proc.poll.return_value = None
             proc.pid = 12345
@@ -249,7 +249,7 @@ class TestBrowserBrokerContract:
     def test_start_browser_uses_shell_false(self):
         b = self._make_broker()
         with patch("subprocess.Popen") as mock_popen, \
-             patch.object(Path, "exists", return_value=True):
+             patch.object(Path, "exists", return_value=True), patch.object(Path, "mkdir"):
             proc = MagicMock()
             proc.poll.return_value = None
             proc.pid = 12345
@@ -264,7 +264,7 @@ class TestBrowserBrokerContract:
         b = self._make_broker()
         url = "https://colab.research.google.com/test"
         with patch("subprocess.Popen") as mock_popen, \
-             patch.object(Path, "exists", return_value=True):
+             patch.object(Path, "exists", return_value=True), patch.object(Path, "mkdir"):
             proc = MagicMock()
             proc.poll.return_value = None
             proc.pid = 99
@@ -278,7 +278,7 @@ class TestBrowserBrokerContract:
     def test_start_browser_no_no_sandbox_flag(self):
         b = self._make_broker()
         with patch("subprocess.Popen") as mock_popen, \
-             patch.object(Path, "exists", return_value=True):
+             patch.object(Path, "exists", return_value=True), patch.object(Path, "mkdir"):
             proc = MagicMock()
             proc.poll.return_value = None
             proc.pid = 99
@@ -292,7 +292,7 @@ class TestBrowserBrokerContract:
     def test_start_browser_profile_under_anny(self):
         b = self._make_broker()
         with patch("subprocess.Popen") as mock_popen, \
-             patch.object(Path, "exists", return_value=True):
+             patch.object(Path, "exists", return_value=True), patch.object(Path, "mkdir"):
             proc = MagicMock()
             proc.poll.return_value = None
             proc.pid = 99

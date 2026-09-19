@@ -45,13 +45,14 @@ class RuntimeIdentity:
             format=serialization.PublicFormat.Raw
         ).hex()
         
+        from runtime.core.version import __version__
         return cls(
             runtime_id=generate_id("RT"),
             installation_id=generate_id("INST"),
             private_key=private_key,
             public_key=public_key,
             platform=platform,
-            runtime_version="0.1.0",
+            runtime_version=__version__,
             protocol_version=PROTOCOL_VERSION,
             generation=1,
             created_at=datetime.now(timezone.utc).isoformat()

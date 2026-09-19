@@ -173,7 +173,7 @@ milestones:
       LIVENESS: VERIFIED
       READINESS_SIGNAL: VERIFIED
       CLEAN_INSTALL: VERIFIED
-      RESTART_RECOVERY: NOT_ESTABLISHED
+      RESTART_RECOVERY: VERIFIED
       DISTRIBUTION_ARTIFACTS: PARTIAL
       RELEASE_IDENTITY: NOT_ESTABLISHED
       CURRENT_FAILURE_TRIAGE: PARTIAL
@@ -189,6 +189,5 @@ current_documentation_anchor:
   commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
 next_p0:
-  id: RUNTIME-READINESS-001-RESTART-RECOVERY
-  objective: Verify system behavior during restarts.
+  id: RUNTIME-READINESS-001-RELEASE-IDENTITY
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established

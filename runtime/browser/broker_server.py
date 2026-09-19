@@ -1505,6 +1505,7 @@ _REQUIRED_FIELDS: dict[str, list[str]] = {
 _FORBIDDEN_FIELDS = frozenset({
     "binary", "executable", "shell", "profile", "profile_dir",
     "flags", "args", "uid", "gid", "env",
+    "script", "objectId", "password",
 })
 
 

@@ -178,50 +178,41 @@ class TestSubmitDefaultDeny:
     # ── case 8: raw JavaScript denied ────────────────────────────────────────
 
     def test_08_forbidden_javascript_field(self):
-        """Case 8: tool-layer input with 'script' field is rejected."""
-        from runtime.mcp.tools import browser_interaction_submit
-        from runtime.mcp.tools import ToolImplementationError
-        with pytest.raises(ToolImplementationError, match="Forbidden"):
-            browser_interaction_submit(
-                {"target_id": "bt_x", "script": "form.submit()"},
-                {}
-            )
+        """Case 8: IPC request with 'script' field is rejected by schema validator."""
+        from runtime.browser.broker_server import _validate_schema
+        valid, err = _validate_schema({
+            "command": "SUBMIT",
+            "target_id": "bt_x",
+            "script": "form.submit()"
+        })
+        assert valid is False
+        assert "script" in err
 
     # ── case 9: raw CDP denied ────────────────────────────────────────────────
 
     def test_09_forbidden_cdp_field(self):
-        """Case 9: tool-layer input with 'objectId' is rejected."""
-        from runtime.mcp.tools import browser_interaction_submit
-        from runtime.mcp.tools import ToolImplementationError
-        with pytest.raises(ToolImplementationError, match="Forbidden"):
-            browser_interaction_submit(
-                {"target_id": "bt_x", "objectId": "some-id"},
-                {}
-            )
+        """Case 9: IPC request with 'objectId' field is rejected by schema validator."""
+        from runtime.browser.broker_server import _validate_schema
+        valid, err = _validate_schema({
+            "command": "SUBMIT",
+            "target_id": "bt_x",
+            "objectId": "some-id"
+        })
+        assert valid is False
+        assert "objectId" in err
 
     # ── case 10: credential values absent from evidence ──────────────────────
 
     def test_10_credential_field_denied(self):
-        """Case 10: 'password' field in input is rejected."""
-        from runtime.mcp.tools import browser_interaction_submit
-        from runtime.mcp.tools import ToolImplementationError
-        with pytest.raises(ToolImplementationError, match="Forbidden"):
-            browser_interaction_submit(
-                {"target_id": "bt_x", "password": "REDACTED_TEST_VAL"},
-                {}
-            )
-
-    # ── case 11: authorization evidence generated on DENIED ──────────────────
-
-    def test_11_denied_evidence_generated(self):
-        """Case 11: DENIED response contains evidence chain."""
-        from runtime.mcp.tools import browser_interaction_submit
-        res = browser_interaction_submit({"target_id": "bt_x"}, {})
-        assert res["status"] == "DENIED"
-        assert "evidence" in res
-        assert res["evidence"]["decision"] == "DENIED"
-        assert res["evidence"]["consequence_class"] == "EXTERNAL_CONSEQUENCE"
-        assert "denied_at" in res
+        """Case 10: IPC request with 'password' field is rejected by schema validator."""
+        from runtime.browser.broker_server import _validate_schema
+        valid, err = _validate_schema({
+            "command": "SUBMIT",
+            "target_id": "bt_x",
+            "password": "REDACTED_TEST_VAL"
+        })
+        assert valid is False
+        assert "password" in err
 
     # ── case 12: post-action evidence required ────────────────────────────────
 

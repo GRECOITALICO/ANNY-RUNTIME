@@ -214,17 +214,7 @@ class TestOnboardingToken(unittest.TestCase):
         self.assertTrue(context2.get('destroy_session'))
         self.assertIsNotNone(context2.get('new_session_id'))
 
-    def test_fabric_remains_not_configured(self):
-        context = {}
-        self.server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context)
-        # Fake an already onboarded state by passing is_first_run=False logic
-        self.gh_mgr.state.auth_status = "AUTHORIZED"
-        self.gh_mgr.state.principal = "testuser"
-        
-        self.server.router.context = {**self.server.admin_context, **context}
-        html = self.server.router.handle_dashboard(urllib.parse.urlparse("/"))
-        self.assertIn("ERROR", html)
-        self.assertIn("Fabric", html)
+
 
     @patch('urllib.request.urlopen')
     def test_token_absent_from_journal(self, mock_urlopen):

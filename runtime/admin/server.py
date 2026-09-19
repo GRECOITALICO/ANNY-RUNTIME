@@ -287,6 +287,7 @@ def start_admin_server(host: str, port: int):
     
     config = RuntimeConfig(data_dir=str(data_dir))
     engine = RuntimeEngine(config)
+    execution_manager.runtime_engine = engine
     
     update_source_repo = os.environ.get("ANNY_UPDATE_SOURCE_REPO", "").strip()
     update_source = None
@@ -296,7 +297,8 @@ def start_admin_server(host: str, port: int):
         except ValueError as e:
             logger.warning(f"Invalid ANNY_UPDATE_SOURCE_REPO: {e}")
 
-    local_version = os.environ.get("ANNY_RUNTIME_VERSION", "v0.4.0")
+    from runtime.core.version import __version__
+    local_version = os.environ.get("ANNY_RUNTIME_VERSION", __version__)
     sync_service = SyncService(
         data_dir=data_dir,
         local_version=local_version,

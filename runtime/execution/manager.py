@@ -14,10 +14,11 @@ from runtime.telemetry.telemetry import TelemetryEnvelope
 class ExecutionManager:
     """Manage queue and history of bounded workspace executions."""
 
-    def __init__(self, workspace_manager: EphemeralWorkspaceManager, audit_manager=None, github_client=None, fabric_client=None, telemetry_collector=None):
+    def __init__(self, workspace_manager: EphemeralWorkspaceManager, audit_manager=None, github_client=None, fabric_client=None, telemetry_collector=None, runtime_engine=None):
         self._executions: Dict[str, TaskExecutionContext] = {}
         self._tasks: Dict[str, Task] = {}
         self.workspace_manager = workspace_manager
+        self.runtime_engine = runtime_engine
 
         self.registry = CapabilityRegistry()
         self.policy = RuntimePolicy()
@@ -101,6 +102,7 @@ class ExecutionManager:
         context.model_id = selection.model_id
         context.model_version = selection.model_version
         context.policy_version = selection.policy_version
+        context.generation = self.runtime_engine.generation.current if self.runtime_engine else 1
 
         self._tasks[execution_id] = task
         self._executions[execution_id] = context
@@ -120,8 +122,23 @@ class ExecutionManager:
         if not worker:
             raise ValueError("Worker not found for execution")
 
+        if self.runtime_engine and context.generation is not None:
+            from runtime.core.generation import StaleGenerationError
+            try:
+                self.runtime_engine.generation.fence(context.generation)
+            except StaleGenerationError as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Fencing execution {execution_id}: {e}")
+                from runtime.execution.models import ExecutionStatus, FailureReason, WorkerState
+                context.status = ExecutionStatus.FAILED
+                context.failure_reason = FailureReason.AUTHORIZATION_DENIED
+                context.error_message = str(e)
+                worker.state = WorkerState.FAILED
+                return context
+
         self.worker_manager.start_worker(worker.worker_id, context, task, cap)
         self.worker_manager.terminate_worker(worker.worker_id)
+        from runtime.execution.models import ExecutionStatus
         if context.status in (ExecutionStatus.SUCCEEDED, ExecutionStatus.FAILED, ExecutionStatus.TIMED_OUT, ExecutionStatus.LIMIT_EXCEEDED):
             if task.workspace_policy == "destroy_on_complete":
                 self.workspace_manager.destroy_workspace(context.workspace_path)

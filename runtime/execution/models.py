@@ -107,6 +107,7 @@ class TaskExecutionContext:
     routing_class: Optional[str] = None
     capability_family: Optional[str] = None
     department_id: Optional[str] = None
+    generation: Optional[int] = None
 
 class ModelState(str, enum.Enum):
     REGISTERED = "REGISTERED"

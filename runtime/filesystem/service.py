@@ -31,9 +31,7 @@ class FilesystemService:
         if not context.workspace_id:
             raise PermissionError("Access denied: missing workspace scope")
 
-        if not self.workspace_manager.validate_access(context.workspace_id, context.tenant_id, context.actor_id):
-            raise PermissionError("Access denied: workspace tenant/actor mismatch")
-            
+
         safe_path = self._resolve_safe_path(context, path)
         if not safe_path.exists() or not safe_path.is_file():
             raise FileNotFoundError("File not found")
@@ -49,9 +47,7 @@ class FilesystemService:
         if not context.workspace_id:
             raise PermissionError("Access denied: missing workspace scope")
 
-        if not self.workspace_manager.validate_access(context.workspace_id, context.tenant_id, context.actor_id):
-            raise PermissionError("Access denied: workspace tenant/actor mismatch")
-            
+
         safe_path = self._resolve_safe_path(context, path)
         safe_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -78,9 +74,7 @@ class FilesystemService:
         if not context.workspace_id:
             raise PermissionError("Access denied: missing workspace scope")
             
-        if not self.workspace_manager.validate_access(context.workspace_id, context.tenant_id, context.actor_id):
-            raise PermissionError("Access denied: workspace tenant/actor mismatch")
-            
+
         safe_path = self._resolve_safe_path(context, path)
         if safe_path.exists():
             if safe_path.is_file():

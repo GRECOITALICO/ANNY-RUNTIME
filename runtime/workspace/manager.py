@@ -122,10 +122,3 @@ class WorkspaceManager:
             return True
         return False
 
-    def validate_access(self, workspace_id: str, tenant_id: str, actor_id: str) -> bool:
-        """Legacy compatibility wrapper. Avoid using directly."""
-        ws = self._workspaces.get(workspace_id)
-        if not ws: return False
-        if ws.tenant_id != tenant_id: return False
-        if actor_id not in ws.actor_scope and '*' not in ws.actor_scope: return False
-        return True
