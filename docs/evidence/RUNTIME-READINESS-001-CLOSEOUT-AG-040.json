@@ -1,0 +1,36 @@
+{
+  "task_id": "AG-040",
+  "repository": "GRECOITALICO/ANNY-RUNTIME",
+  "branch": "main",
+  "remote_head": "af65c627badba4eb83728eb138baa8730d0f0b5d",
+  "gates": {
+    "INSTALLABILITY": "VERIFIED",
+    "CONFIGURATION": "VERIFIED",
+    "OS_SERVICE_INTEGRATION": "NOT_ESTABLISHED",
+    "HEALTH": "VERIFIED",
+    "LIVENESS": "VERIFIED",
+    "READINESS_SIGNAL": "VERIFIED",
+    "CLEAN_INSTALL": "VERIFIED",
+    "RESTART_RECOVERY": "VERIFIED",
+    "DISTRIBUTION_ARTIFACTS": "VERIFIED",
+    "RELEASE_IDENTITY": "VERIFIED",
+    "CURRENT_FAILURE_TRIAGE": "VERIFIED",
+    "LEGACY_REVIEW": "VERIFIED"
+  },
+  "closeout": {
+    "status": "CLOSED_WITH_BLOCKER",
+    "blocker": "OS_SERVICE_INTEGRATION: NOT_ESTABLISHED (SYSTEMD: SANDBOX_LIMITATION)",
+    "readiness": "NOT_READY"
+  },
+  "evidence_refs": {
+    "AG-034": "docs/evidence/RUNTIME-READINESS-001-TRANSITION-AG-033.json",
+    "AG-035": "docs/evidence/AG-035-RESTART-RECOVERY.json",
+    "AG-036": "docs/evidence/AG-036-RELEASE-IDENTITY-CLOSEOUT.json",
+    "AG-037": "docs/evidence/RUNTIME-READINESS-001-DISTRIBUTION-ARTIFACTS-AG-037.json",
+    "AG-038": "docs/evidence/RUNTIME-READINESS-001-CURRENT-FAILURE-TRIAGE-AG-038.json"
+  },
+  "known_limitations": {
+    "systemd": "SANDBOX_LIMITATION"
+  },
+  "next_action": "ANNY-ORCHESTRATION-KERNEL"
+}

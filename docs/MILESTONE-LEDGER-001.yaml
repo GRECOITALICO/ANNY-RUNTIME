@@ -178,8 +178,8 @@ milestones:
       RELEASE_IDENTITY: VERIFIED
       CURRENT_FAILURE_TRIAGE: VERIFIED
       LEGACY_REVIEW: VERIFIED
-    evidence: docs/evidence/RUNTIME-READINESS-001-CURRENT-FAILURE-TRIAGE-AG-038.json
-    verification_note: AG-038 verified current test suite failure triage (533 passed, 10 failed, 26 skipped). All 10 active failures in test_001d_r4_lifecycle.py were classified as STALE_TEST due to colab-mcp architecture migration.
+    evidence: docs/evidence/RUNTIME-READINESS-001-CLOSEOUT-AG-040.json
+    verification_note: AG-040 formally closed RUNTIME-READINESS-001 as CLOSED_WITH_BLOCKER. All 11 code/identity/distribution gates are VERIFIED; OS_SERVICE_INTEGRATION remains NOT_ESTABLISHED due to sandbox systemd user-bus limits. Overall status remains NOT_READY.
 legacy_cleanup_policy:
   document: docs/LEGACY-CLEANUP-POLICY-001.md
   commit_sha: 65ebce66fccf79a58b331a996b278c622ed7c801
@@ -188,5 +188,5 @@ legacy_cleanup_policy:
 current_documentation_anchor:
   commit_sha: 35f369a3f982c7bc4318ba8ef75f5e62d6353abb
   note: contains the current governing contractual documentation that defines the stable semantics
-next_p0: RUNTIME-READINESS-001-COMPLETE
+next_p0: ANNY-ORCHESTRATION-KERNEL
 resume_rule: read latest commit, rerun bootstrap, verify all prior evidence, inspect legacy surfaces affected by the current milestone, execute only the current next_p0 action after prerequisites are re-established
