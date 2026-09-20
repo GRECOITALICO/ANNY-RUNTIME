@@ -9,7 +9,11 @@ The ANNY Customer Zero Bootstrap process enables a freshly installed `ANNY-RUNTI
 ## Bootstrap Sequence
 
 1. **Identity Initialization**: Ed25519 keypair generation and local credential persistence.
-2. **GitHub Authorization**: GitHub Access Token onboarding (paste-based). Device Flow (RFC 8628) retained as optional future method.
+2. **GitHub Authorization**: ANNY-hosted GitHub App authorization as specified
+   in [ADR-022](ADR-022-CUSTOMER-ZERO-GITHUB-AUTH.md). No customer enters a
+   token, configures an OAuth client, or uses Device Flow. The current
+   repository does not yet contain the required hosted authorization service;
+   until it is delivered, customer-zero onboarding is `BLOCKED`, not bypassed.
 3. **Organization Discovery**: Read-only GitHub API discovery of authenticated principal, accessible organizations, and repositories.
 4. **Operational Repository Resolution**: Dynamically discovering the operational repository by inspecting all accessible repositories for an explicit operational-repository marker (`anny-operational` topic or `BOOTSTRAP.md` presence). Exactly one candidate must be found; zero yields `BLOCKED/UNKNOWN`, multiple yields `AMBIGUOUS/BLOCKED`.
 5. **14-Stage Bootstrap Read**: Executing the 14-stage read order per `BOOTSTRAP.md` contract against the resolved operational repository.

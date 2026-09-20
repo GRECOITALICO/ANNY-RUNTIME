@@ -1,8 +1,19 @@
 # GitHub Authorization Architecture
 
-The ANNY Runtime supports two onboarding methods: GitHub Device Flow (RFC 8628) when a GitHub OAuth client ID is configured, and a GitHub Access Token as the recovery/migration path. Credentials are validated and stored securely; no raw credential is returned to the browser.
+The customer-facing onboarding architecture is defined by
+[ADR-022](ADR-022-CUSTOMER-ZERO-GITHUB-AUTH.md). It selects an ANNY-hosted
+GitHub App authorization callback and a Runtime-bound one-time grant. A new
+customer must only click `CONNECT GITHUB` and complete GitHub's normal
+login/consent flow. They must never configure a client ID, client secret,
+access token, scope, or device code.
 
-## Authorization Flow (Device Flow)
+The local Device Flow and token-entry implementations described below are
+legacy engineering paths. They are **not** the customer-zero onboarding
+contract and must fail closed unless explicitly enabled for an internal,
+non-customer engineering workflow. They do not make customer onboarding
+available in the absence of the ANNY authorization service.
+
+## Legacy engineering flow: Device Flow
 
 1. The Runtime operator configures the OAuth application's public client ID in the service environment as `GITHUB_CLIENT_ID`. No OAuth client secret is required or accepted by the Runtime Device Flow.
 2. On first run, `CONNECT GITHUB` posts a session-bound CSRF token to `/github/device/init`.
@@ -10,7 +21,7 @@ The ANNY Runtime supports two onboarding methods: GitHub Device Flow (RFC 8628) 
 4. On GitHub authorization, the Runtime validates and stores the access token through `SecretBackend`, discovers the available GitHub scope, revokes the onboarding session, and issues a regular admin session.
 5. If the client ID is not configured, initiation fails closed and onboarding remains restricted.
 
-## Authorization Flow (Token Recovery/Migration)
+## Legacy engineering flow: Token Recovery/Migration
 
 1. **First Run:** The user opens the admin panel at `http://127.0.0.1:3643/`.
 2. **Token Entry:** The panel presents a password input labeled "GITHUB ACCESS TOKEN" only in the recovery/migration interface.
