@@ -6,33 +6,55 @@ param containerAppsEnvironmentName string = 'cae-cnaz001'
 @description('New isolated Container App for ANNY hosted authorization.')
 param authContainerAppName string = 'ca-anny-auth'
 
-@description('Existing Azure Container Registry.')
+@description('Existing Azure Container Registry name.')
 param containerRegistryName string = 'cnaz001acrvwee7dlf'
 
-@description('Existing Key Vault. No secret values are embedded here.')
+@description('Existing Key Vault name.')
 param keyVaultName string = 'kvconrradcp001'
 
 @description('Container image repository/name.')
 param imageRepository string = 'anny-auth'
 
-@description('Immutable image tag or digest. Must not remain DESIGN_ONLY for deployment.')
-param imageTag string = 'DESIGN_ONLY'
+@description('Synthetic tag used only for read-only what-if. Replace with an immutable reviewed tag/digest before deployment.')
+param imageTag string = 'what-if-only'
 
-@description('Future public hostname for authorization. DNS ownership must be verified before deployment.')
-param authHostname string = 'auth.REPLACE_ME'
+@description('Synthetic hostname used only for read-only what-if. Replace with the approved public hostname before deployment.')
+param authHostname string = 'auth.what-if.invalid'
 
-@description('Resource ID of dedicated user-assigned managed identity.')
-param authManagedIdentityResourceId string = 'REPLACE_ME'
-
-@description('Key Vault secret URI for the GitHub App client secret.')
-param githubAppClientSecretUri string = 'REPLACE_ME'
+@description('GitHub App secret name in Key Vault. The secret value is never stored here.')
+param githubAppClientSecretName string = 'github-app-client-secret'
 
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
   name: containerAppsEnvironmentName
 }
 
-resource registry 'Microsoft.ContainerRegistry/registries@2023-11-01' existing = {
-  name: containerRegistryName
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: keyVaultName
+}
+
+resource authIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'mi-anny-auth'
+  location: resourceGroup().location
+}
+
+resource authAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(resourceGroup().id, authIdentity.id, 'AcrPull')
+  scope: resourceGroup()
+  properties: {
+    principalId: authIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource authKeyVaultSecretsUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, authIdentity.id, 'KeyVaultSecretsUser')
+  scope: keyVault
+  properties: {
+    principalId: authIdentity.properties.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+    principalType: 'ServicePrincipal'
+  }
 }
 
 resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
@@ -41,7 +63,7 @@ resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${authManagedIdentityResourceId}': {}
+      '${authIdentity.id}': {}
     }
   }
   properties: {
@@ -55,15 +77,15 @@ resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
       }
       registries: [
         {
-          server: registry.properties.loginServer
-          identity: authManagedIdentityResourceId
+          server: '${containerRegistryName}.azurecr.io'
+          identity: authIdentity.id
         }
       ]
       secrets: [
         {
-          name: 'github-app-client-secret'
-          keyVaultUrl: githubAppClientSecretUri
-          identity: authManagedIdentityResourceId
+          name: githubAppClientSecretName
+          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/${githubAppClientSecretName}'
+          identity: authIdentity.id
         }
       ]
     }
@@ -71,7 +93,7 @@ resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'anny-auth'
-          image: '${registry.properties.loginServer}/${imageRepository}:${imageTag}'
+          image: '${containerRegistryName}.azurecr.io/${imageRepository}:${imageTag}'
           env: [
             { name: 'ANNY_AUTH_ISSUER', value: 'https://${authHostname}' }
             { name: 'ANNY_AUTH_AUDIENCE', value: 'anny-runtime' }
@@ -104,5 +126,6 @@ resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
+output authIdentityId string = authIdentity.id
 output authContainerAppId string = authApp.id
 output authFqdn string = authApp.properties.configuration.ingress.fqdn
