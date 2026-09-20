@@ -768,6 +768,8 @@ class AdminRouter:
         
         try:
             device_flow = gh_mgr.initiate_device_flow()
+            if device_flow is None:
+                return '/?error=GitHub+Device+Flow+is+not+configured'
             from runtime.admin.templates import device_flow_page
             html = device_flow_page(
                 user_code=device_flow.user_code,
@@ -1107,5 +1109,4 @@ class AdminRouter:
         from runtime.admin.templates import browser_session_page
         html = browser_session_page(session_data[0], self._get_csrf())
         self._send_html(handler, html)
-
 

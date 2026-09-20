@@ -1,0 +1,1 @@
+"""ANNY Auth service package."""
