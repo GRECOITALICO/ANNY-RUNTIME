@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "containerAppsEnvironmentName": {
+      "value": "cae-cnaz001"
+    },
+    "authContainerAppName": {
+      "value": "ca-anny-auth"
+    },
+    "containerRegistryName": {
+      "value": "cnaz001acrvwee7dlf"
+    },
+    "keyVaultName": {
+      "value": "kvconrradcp001"
+    },
+    "imageRepository": {
+      "value": "anny-auth"
+    },
+    "imageTag": {
+      "value": "DESIGN_ONLY"
+    },
+    "authHostname": {
+      "value": "auth.REPLACE_ME"
+    },
+    "authManagedIdentityResourceId": {
+      "value": "REPLACE_ME"
+    },
+    "githubAppClientSecretUri": {
+      "value": "REPLACE_ME"
+    }
+  }
+}
