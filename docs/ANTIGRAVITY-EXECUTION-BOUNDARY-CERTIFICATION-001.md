@@ -28,7 +28,7 @@ The following remain unchanged:
 - no authority expansion;
 - no cross-domain writes;
 - no destructive reconciliation;
-- no resolution of unresolved DESIGN/ECHO conflict by inference.
+- no organizational-state inference from Runtime documentation; current organizational state must be read from ANNY-OPERATIONAL.
 
 ## 3. Objective
 
@@ -146,7 +146,7 @@ Recommended order:
 
 1. KIRA -> FORGE
 2. IRIS -> PRISM
-3. ANNA -> currently unresolved L2 identity; stop before execution until DESIGN/ECHO is reconciled
+3. ANNA -> ECHO
 4. KLARA -> SENTINEL
 5. RUTH -> LEX
 6. MINA -> SCOUT
