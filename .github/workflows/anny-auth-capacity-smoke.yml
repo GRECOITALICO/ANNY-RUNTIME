@@ -1,0 +1,39 @@
+name: ANNY Auth capacity gate smoke
+
+on:
+  pull_request:
+    paths:
+      - "services/anny-auth/**"
+      - ".github/workflows/anny-auth-capacity-smoke.yml"
+  workflow_dispatch:
+
+jobs:
+  auth-capacity-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/anny-auth
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Auth test dependencies
+        run: python -m pip install --upgrade pip && pip install -e . pytest
+
+      - name: Contract and replay tests
+        run: python -m pytest -q tests/test_contract_flow.py
+
+      - name: Smoke load 500 attempts / 10 seconds
+        run: python tests/load_test.py --scenario 500_10s | tee capacity-smoke.txt
+
+      - name: Upload capacity smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: anny-auth-capacity-smoke
+          path: services/anny-auth/capacity-smoke.txt
