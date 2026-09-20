@@ -1,0 +1,26 @@
+{
+  "test_id": "R2_CERTIFICATION",
+  "mission_id": "CERTIFICATION-57614b0",
+  "task_id": "R2-001",
+  "assignment_id": "L1-L2-CERTIFICATION",
+  "actor": "ANNY-DTO",
+  "repository": "GRECOITALICO/ANNY-RUNTIME",
+  "branch": "main",
+  "exact_commit_sha": "57614b0d6fc0fae76f2eeb15862f66d24990da9e",
+  "runtime_identity": "ANNY-RUNTIME-v0.4.0",
+  "timestamps": {
+    "start": "2026-09-19T21:03:36Z",
+    "end": "2026-09-19T21:03:37Z"
+  },
+  "execution_id": "exec-r2-001",
+  "operation_id": "op-r2-001",
+  "test_count": 6,
+  "result": "PASS",
+  "blockers": "none",
+  "next_action": "R3_CERTIFICATION",
+  "integrity_hash": "b2c6b44558f6d89a22cc3f03b5585f9e2b10dc66",
+  "details": {
+    "LOCAL HARDENING": "EXECUTED",
+    "REMOTE/COLAB": "BLOCKED / NOT EXECUTED"
+  }
+}

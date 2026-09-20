@@ -1,0 +1,27 @@
+{
+  "test_id": "RUNTIME_READINESS",
+  "mission_id": "CERTIFICATION-57614b0",
+  "task_id": "READINESS-001",
+  "assignment_id": "L1-L2-CERTIFICATION",
+  "actor": "ANNY-DTO",
+  "repository": "GRECOITALICO/ANNY-RUNTIME",
+  "branch": "main",
+  "exact_commit_sha": "57614b0d6fc0fae76f2eeb15862f66d24990da9e",
+  "runtime_identity": "ANNY-RUNTIME-v0.4.0",
+  "timestamps": {
+    "start": "2026-09-19T21:07:00Z",
+    "end": "2026-09-19T21:07:11Z"
+  },
+  "execution_id": "exec-readiness-001",
+  "operation_id": "op-readiness-001",
+  "test_count": 0,
+  "result": "BLOCKED",
+  "blockers": "ENVIRONMENT_SANDBOX_RESTRICTION",
+  "next_action": "KIRA_REVIEW",
+  "integrity_hash": "25251a37c35e80718617cb7dc1c66f7f6a70a5ab",
+  "details": {
+    "OS_SERVICE_INTEGRATION": "BLOCKED",
+    "reason": "systemd user bus inaccessible in sandbox environment: Failed to connect to user scope bus via local transport",
+    "strict_compliance_note": "Blocked per authority directive. No fallback or simulation applied."
+  }
+}
