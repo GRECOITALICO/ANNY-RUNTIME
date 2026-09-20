@@ -32,8 +32,13 @@ jobs:
       - name: Smoke load 500 attempts / 10 seconds
         run: python tests/load_test.py --scenario 500_10s | tee capacity-smoke.txt
 
+      - name: Extended load 2,000 attempts / 1 minute
+        run: python tests/load_test.py --scenario 2000_1m | tee capacity-2000-1m.txt
+
       - name: Upload capacity smoke evidence
         uses: actions/upload-artifact@v4
         with:
           name: anny-auth-capacity-smoke
-          path: services/anny-auth/capacity-smoke.txt
+          path: |
+            services/anny-auth/capacity-smoke.txt
+            services/anny-auth/capacity-2000-1m.txt
