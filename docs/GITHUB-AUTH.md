@@ -1,13 +1,19 @@
 # GitHub Authorization Architecture
 
-The ANNY Runtime uses **GitHub Access Token** (paste-based) as the **current Customer Zero onboarding method**. The user provides a single GitHub Personal Access Token through the admin panel, which is validated, encrypted, and stored securely.
+The ANNY Runtime supports two onboarding methods: GitHub Device Flow (RFC 8628) when a GitHub OAuth client ID is configured, and a GitHub Access Token as the recovery/migration path. Credentials are validated and stored securely; no raw credential is returned to the browser.
 
-> **Device Flow (RFC 8628)** is retained internally as an **optional future authentication method**. It is NOT the primary onboarding mechanism for Customer Zero.
+## Authorization Flow (Device Flow)
 
-## Authorization Flow (Current — Token-Based)
+1. The Runtime operator configures the OAuth application's public client ID in the service environment as `GITHUB_CLIENT_ID`. No OAuth client secret is required or accepted by the Runtime Device Flow.
+2. On first run, `CONNECT GITHUB` posts a session-bound CSRF token to `/github/device/init`.
+3. The Runtime displays GitHub's device verification URI and user code, then permits `/github/device/poll` only within the restricted onboarding session.
+4. On GitHub authorization, the Runtime validates and stores the access token through `SecretBackend`, discovers the available GitHub scope, revokes the onboarding session, and issues a regular admin session.
+5. If the client ID is not configured, initiation fails closed and onboarding remains restricted.
+
+## Authorization Flow (Token Recovery/Migration)
 
 1. **First Run:** The user opens the admin panel at `http://127.0.0.1:3643/`.
-2. **Token Entry:** The panel presents a single password input labeled "GITHUB ACCESS TOKEN" and a "CONNECT" button.
+2. **Token Entry:** The panel presents a password input labeled "GITHUB ACCESS TOKEN" only in the recovery/migration interface.
 3. **Validation:** The Runtime validates the token against `GET https://api.github.com/user`, checks required scopes (`repo`, `read:org`), and extracts the authenticated principal.
 4. **Secure Storage:** The token is immediately encrypted and persisted to disk via the `SecretBackend`. **It is never returned to the browser.**
 5. **Discovery:** Organizations and repositories are discovered dynamically.

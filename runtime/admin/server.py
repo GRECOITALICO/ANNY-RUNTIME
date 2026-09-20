@@ -248,7 +248,10 @@ def start_admin_server(host: str, port: int):
     auth_manager = AdminSessionManager(str(data_dir), identity_manager.runtime_id)
     audit_manager = AdminAuditLog(str(data_dir), identity_manager.runtime_id)
     secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
-    github_manager = GitHubAuthManager(secret_backend)
+    github_manager = GitHubAuthManager(
+        secret_backend,
+        client_id=os.environ.get("GITHUB_CLIENT_ID", "").strip(),
+    )
     
     from runtime.workspace.ephemeral import EphemeralWorkspaceManager
     from runtime.execution.manager import ExecutionManager
