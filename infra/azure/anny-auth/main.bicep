@@ -67,7 +67,7 @@ resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      ${authIdentity.id}: {}
+      '${authIdentity.id}': {}
     }
   }
   properties: {
@@ -81,14 +81,14 @@ resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
       }
       registries: [
         {
-          server: registry.properties.loginServer
+          server: '${registry.properties.loginServer}'
           identity: authIdentity.id
         }
       ]
       secrets: [
         {
           name: githubAppClientSecretName
-          keyVaultUrl: ${keyVault.properties.vaultUri}secrets/${githubAppClientSecretName}
+          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/${githubAppClientSecretName}'
           identity: authIdentity.id
         }
       ]
@@ -97,9 +97,9 @@ resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'anny-auth'
-          image: ${registry.properties.loginServer}/${imageRepository}:${imageTag}
+          image: '${registry.properties.loginServer}/${imageRepository}:${imageTag}'
           env: [
-            { name: 'ANNY_AUTH_ISSUER', value: https://${authHostname} }
+            { name: 'ANNY_AUTH_ISSUER', value: 'https://${authHostname}' }
             { name: 'ANNY_AUTH_AUDIENCE', value: 'anny-runtime' }
           ]
           probes: [
