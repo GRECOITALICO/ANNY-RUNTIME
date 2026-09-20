@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import unittest
 
@@ -55,6 +56,36 @@ class AuthContractFlowTests(unittest.IsolatedAsyncioTestCase):
             json=redeem_payload,
         )
         self.assertEqual(replay.status_code, 409)
+
+    async def test_redeem_is_single_use_under_concurrency(self) -> None:
+        payload = {
+            "transaction_id": "test-concurrent-001",
+            "runtime_id": "runtime-concurrent",
+            "installation_id": "install-concurrent",
+            "runtime_public_key": "public-key-concurrent",
+            "onboarding_session_hash": "session-concurrent",
+        }
+        created = await self.client.post(
+            "/v1/runtime-authorizations", json=payload
+        )
+        self.assertEqual(created.status_code, 200)
+
+        redeem_payload = {
+            key: payload[key] for key in payload if key != "transaction_id"
+        }
+        responses = await asyncio.gather(
+            *[
+                self.client.post(
+                    "/v1/runtime-authorizations/test-concurrent-001/redeem",
+                    json=redeem_payload,
+                )
+                for _ in range(20)
+            ]
+        )
+        successes = [response for response in responses if response.status_code == 200]
+        conflicts = [response for response in responses if response.status_code == 409]
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(len(conflicts), 19)
 
     async def test_production_mode_fails_closed(self) -> None:
         os.environ.pop("ANNY_AUTH_TEST_MODE", None)
