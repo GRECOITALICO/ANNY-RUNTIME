@@ -28,6 +28,10 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
   name: containerAppsEnvironmentName
 }
 
+resource registry 'Microsoft.ContainerRegistry/registries@2025-11-01' existing = {
+  name: containerRegistryName
+}
+
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: keyVaultName
 }
@@ -38,8 +42,8 @@ resource authIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-
 }
 
 resource authAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(resourceGroup().id, authIdentity.id, 'AcrPull')
-  scope: resourceGroup()
+  name: guid(registry.id, authIdentity.id, 'AcrPull')
+  scope: registry
   properties: {
     principalId: authIdentity.properties.principalId
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
@@ -63,7 +67,7 @@ resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${authIdentity.id}': {}
+      ${authIdentity.id}: {}
     }
   }
   properties: {
@@ -77,14 +81,14 @@ resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
       }
       registries: [
         {
-          server: '${containerRegistryName}.azurecr.io'
+          server: registry.properties.loginServer
           identity: authIdentity.id
         }
       ]
       secrets: [
         {
           name: githubAppClientSecretName
-          keyVaultUrl: '${keyVault.properties.vaultUri}secrets/${githubAppClientSecretName}'
+          keyVaultUrl: ${keyVault.properties.vaultUri}secrets/${githubAppClientSecretName}
           identity: authIdentity.id
         }
       ]
@@ -93,9 +97,9 @@ resource authApp 'Microsoft.App/containerApps@2024-03-01' = {
       containers: [
         {
           name: 'anny-auth'
-          image: '${containerRegistryName}.azurecr.io/${imageRepository}:${imageTag}'
+          image: ${registry.properties.loginServer}/${imageRepository}:${imageTag}
           env: [
-            { name: 'ANNY_AUTH_ISSUER', value: 'https://${authHostname}' }
+            { name: 'ANNY_AUTH_ISSUER', value: https://${authHostname} }
             { name: 'ANNY_AUTH_AUDIENCE', value: 'anny-runtime' }
           ]
           probes: [
