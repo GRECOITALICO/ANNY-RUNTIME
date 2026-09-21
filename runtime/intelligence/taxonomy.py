@@ -15,6 +15,7 @@ from typing import FrozenSet
 # Deterministic capabilities: no inference benchmark required (Phase 31).
 DETERMINISTIC_CAPABILITIES: FrozenSet[str] = frozenset([
     "filesystem.read", "filesystem.write", "filesystem.list",
+    "schema.validate",
     "search.index", "search.query",
     "git.clone", "git.commit", "git.diff", "git.log",
     "patch.apply", "patch.parse", "patch.review",
@@ -33,7 +34,7 @@ LOCAL_INFERENCE_CAPABILITIES: FrozenSet[str] = frozenset([
     "test.generation", "bug.diagnosis",
     "tool.use", "tool.planning",
     "document.summarize", "document.classify",
-    "schema.validate", "architecture.analysis",
+    "architecture.analysis",
 ])
 
 ALL_CAPABILITIES: FrozenSet[str] = DETERMINISTIC_CAPABILITIES | LOCAL_INFERENCE_CAPABILITIES
