@@ -1,0 +1,37 @@
+name: bootstrap port regression
+
+on:
+  pull_request:
+    paths:
+      - 'runtime/bootstrap/planes.py'
+      - 'runtime/admin/port.py'
+      - 'runtime/core/config.py'
+      - 'tests/test_bootstrap_admin_port.py'
+      - '.github/workflows/bootstrap-port-regression.yml'
+  push:
+    branches:
+      - 'fix/bootstrap-admin-port-binding-2026-09-21'
+    paths:
+      - 'runtime/bootstrap/planes.py'
+      - 'runtime/admin/port.py'
+      - 'runtime/core/config.py'
+      - 'tests/test_bootstrap_admin_port.py'
+      - '.github/workflows/bootstrap-port-regression.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest PyYAML cryptography psutil azure-identity httpx mcp websocket-client python-dateutil
+      - name: Compile touched modules
+        run: |
+          python -m py_compile runtime/bootstrap/planes.py runtime/admin/port.py runtime/core/config.py tests/test_bootstrap_admin_port.py
+      - name: Run bootstrap port regression
+        run: pytest -q tests/test_bootstrap_admin_port.py
