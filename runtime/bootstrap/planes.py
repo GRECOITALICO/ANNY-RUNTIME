@@ -21,6 +21,7 @@ from runtime.github.client import GitHubClient, GitHubAuthError
 from runtime.fabric.github_adapter import GitHubFabricAdapter, FabricError, FabricAdmissionResult
 from runtime.continuity.engine import ContinuityEngine
 from runtime.core.inventory import InventoryDiscovery, BootstrapInventory
+from runtime.core.config import get_admin_port
 from runtime.core.access_verifier import CriticalAccessVerifier
 
 from .gates import ReadinessGate, GateResult, MANDATORY_GATES
@@ -28,9 +29,10 @@ from .report import BootstrapReport, ComponentInventory
 
 logger = logging.getLogger(__name__)
 
-# Localhost admin control plane — used for RUNTIME_* gate checks
+# Localhost admin control plane — used for RUNTIME_* gate checks.
+# The port must follow RuntimeConfig/admin_port so bootstrap cannot probe a
+# different endpoint than the Runtime server actually starts on.
 ADMIN_HOST = "127.0.0.1"
-ADMIN_PORT = 7891
 
 
 class ThreePlaneBootstrap:
@@ -53,11 +55,25 @@ class ThreePlaneBootstrap:
         self.fabric = fabric_client
         self.continuity = continuity_engine
         self.config = config
+        configured_host = getattr(config, "admin_host", None) if config else None
+        configured_port = getattr(config, "admin_port", None) if config else None
+        self.admin_host = configured_host if isinstance(configured_host, str) and configured_host else ADMIN_HOST
+        if isinstance(configured_port, (int, str)):
+            try:
+                self.admin_port = int(configured_port)
+            except (TypeError, ValueError):
+                self.admin_port = get_admin_port()
+        else:
+            self.admin_port = get_admin_port()
         self._cap_registry = capability_registry
         self._tool_registry = tool_registry
         self._model_registry = model_registry
         self._worker_manager = worker_manager
 
+    def _admin_url(self, path: str) -> str:
+        """Return the configured local admin URL used by Runtime probes."""
+        clean_path = path if path.startswith("/") else "/" + path
+        return f"http://{self.admin_host}:{self.admin_port}{clean_path}"
     def resolve(self) -> BootstrapReport:
         """Executes the full bootstrap sequence. Returns a BootstrapReport.
 
@@ -402,14 +418,14 @@ class ThreePlaneBootstrap:
         This gate proves the process is up and the HTTP server accepts connections.
         """
         try:
-            url = f"http://{ADMIN_HOST}:{ADMIN_PORT}/api/status"
+            url = self._admin_url("/api/status")
             req = urllib.request.Request(url, method="GET")
             req.add_header("X-Bootstrap-Probe", "1")
             with urllib.request.urlopen(req, timeout=3) as resp:
                 if resp.status == 200:
                     report.add_result(GateResult(
                         ReadinessGate.RUNTIME_REACHABLE, True,
-                        f"Admin API responded 200 at {ADMIN_HOST}:{ADMIN_PORT}",
+                        f"Admin API responded 200 at {self.admin_host}:{self.admin_port}",
                         url
                     ))
                     return True
@@ -422,7 +438,7 @@ class ThreePlaneBootstrap:
         except urllib.error.URLError as e:
             report.add_result(GateResult(
                 ReadinessGate.RUNTIME_REACHABLE, False,
-                f"Admin API not reachable at {ADMIN_HOST}:{ADMIN_PORT}: {e.reason}"
+                f"Admin API not reachable at {self.admin_host}:{self.admin_port}: {e.reason}"
             ))
             return False
         except Exception as e:
@@ -436,7 +452,7 @@ class ThreePlaneBootstrap:
             return False
 
         try:
-            url = f"http://{ADMIN_HOST}:{ADMIN_PORT}/api/status"
+            url = self._admin_url("/api/status")
             req = urllib.request.Request(url, method="GET")
             req.add_header("X-Bootstrap-Probe", "1")
             with urllib.request.urlopen(req, timeout=3) as resp:
@@ -484,7 +500,7 @@ class ThreePlaneBootstrap:
             return False
 
         try:
-            url = f"http://{ADMIN_HOST}:{ADMIN_PORT}/api/status"
+            url = self._admin_url("/api/status")
             req = urllib.request.Request(url, method="GET")
             with urllib.request.urlopen(req, timeout=3) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
