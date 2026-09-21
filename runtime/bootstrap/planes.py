@@ -452,7 +452,7 @@ class ThreePlaneBootstrap:
             return False
 
         try:
-            url = f"http://{ADMIN_HOST}:{ADMIN_PORT}/api/status"
+            url = self._admin_url("/api/status")
             req = urllib.request.Request(url, method="GET")
             req.add_header("X-Bootstrap-Probe", "1")
             with urllib.request.urlopen(req, timeout=3) as resp:
@@ -500,7 +500,7 @@ class ThreePlaneBootstrap:
             return False
 
         try:
-            url = f"http://{ADMIN_HOST}:{ADMIN_PORT}/api/status"
+            url = self._admin_url("/api/status")
             req = urllib.request.Request(url, method="GET")
             with urllib.request.urlopen(req, timeout=3) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
