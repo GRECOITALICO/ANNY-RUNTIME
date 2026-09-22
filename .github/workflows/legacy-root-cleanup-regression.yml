@@ -1,0 +1,49 @@
+name: legacy root cleanup regression
+
+on:
+  pull_request:
+    paths:
+      - "runtime/**"
+      - "tests/**"
+      - "docs/LEGACY-CLEANUP-REVIEW-001.md"
+      - ".github/workflows/legacy-root-cleanup-regression.yml"
+  push:
+    branches:
+      - cleanup/runtime-root-scratch-20260922
+    paths:
+      - "runtime/**"
+      - "tests/**"
+      - "docs/LEGACY-CLEANUP-REVIEW-001.md"
+      - ".github/workflows/legacy-root-cleanup-regression.yml"
+
+jobs:
+  canonical-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused test dependencies
+        run: python -m pip install pytest PyYAML
+
+      - name: Assert retired root scratch files are absent
+        run: |
+          test ! -e diag_browser.py
+          test ! -e fix.py
+          test ! -e patch.py
+          test ! -e patch_all.py
+          test ! -e generate_001b_s2_evidence.py
+          test ! -e generate_evidence_002.py
+          test ! -e list_tools.py
+          test ! -e test_cdp.py
+          test ! -e test_cdp2.py
+          test ! -e test_backend_node.py
+
+      - name: Compile canonical runtime server
+        run: python -m py_compile runtime/admin/server.py
+
+      - name: Run focused canonical regression
+        run: pytest -q tests/test_022_model_registry.py
