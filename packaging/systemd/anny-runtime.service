@@ -1,14 +1,16 @@
 [Unit]
-Description=ANNY Runtime Local Execution Environment
+Description=ANNY Runtime Node
 After=network.target
 
 [Service]
 Type=simple
 User=%i
-ExecStart=/opt/anny-runtime/venv/bin/python -m runtime.core.engine
-Restart=always
-RestartSec=5
-Environment="ANNY_RUNTIME_ENV=production"
+ExecStart=/usr/local/bin/anny-runtime server
+Restart=on-failure
+WorkingDirectory=/opt/anny-runtime
+Environment=PYTHONUNBUFFERED=1
+Environment=ANNY_INSTALL_MODE=system
+Environment=ANNY_DATA_DIR=/var/lib/anny-runtime
 
 [Install]
 WantedBy=multi-user.target

@@ -1,0 +1,82 @@
+schema_version: "1.0"
+artifact_type: "RUNTIME_LEGACY_CLEANUP"
+status: "RECORDED"
+scope:
+  repository: "GRECOITALICO/ANNY-RUNTIME"
+  base_commit: "ca79ef164f4920acc50dbff0be129f59977316ce"
+  branch: "cleanup/runtime-root-scratch-20260922"
+
+deleted_categories:
+  patch_and_rewrite_tools:
+    - diag_browser.py
+    - fix.py
+    - patch.py
+    - patch2.py
+    - patch_all.py
+    - patch_broker.py
+    - patch_broker_submit.py
+    - patch_dump.py
+    - patch_error.py
+    - patch_physical.py
+  historical_generators:
+    - generate_001b_s2_evidence.py
+    - generate_evidence_002.py
+    - list_tools.py
+  root_manual_browser_tests:
+    - test.js
+    - test_node.js
+    - test_backend_node.py
+    - test_cdp.py
+    - test_cdp2.py
+    - test_cdp_hide.py
+    - test_describe_node.py
+    - test_dev_broker.py
+    - test_dynamic_tools.py
+    - test_fetch.py
+    - test_find_cdp.py
+    - test_find_cdp2.py
+    - test_find_click.py
+    - test_isolated.py
+    - test_isolated_nav.py
+    - test_js.py
+    - test_obj.py
+    - test_persistent.py
+    - test_x11.py
+
+preserved:
+  - "runtime/**"
+  - "tests/**"
+  - "scripts/install.sh"
+  - "scripts/build_release.sh"
+  - "packaging/**"
+  - "historical evidence and release metadata"
+
+verification:
+  canonical_workflows_reviewed: true
+  deleted_paths_referenced_by_canonical_workflows: false
+  cleanup_policy: "docs/LEGACY-CLEANUP-POLICY-001.md"
+  dedicated_ci: ".github/workflows/legacy-root-cleanup-regression.yml"
+  active_runtime_code_modified: false
+  production: false
+  activation: false
+  authority_expansion: false
+  KIRA_P2: "SEPARATE_AND_UNTOUCHED"
+
+additional_retirements:
+  - "evidence_001d.json"
+  - "023_QWEN_INTEGRATION_EVIDENCE.md"
+  - "DEPENDENCY-INVENTORY.json"
+  - "adapters/fabric_client.py"
+  - "adapters/__init__.py"
+  - "scratch/**"
+  - "audit/customer_zero_008/**"
+  - "tools/certification/**"
+
+preserved_runtime_surfaces:
+  - "runtime/**"
+  - "tests/**"
+  - "scripts/**"
+  - "packaging/**"
+  - "systemd/anny-browser-broker.service"
+  - "tools/** excluding retired certification history"
+  - "release checksum and repository metadata"
