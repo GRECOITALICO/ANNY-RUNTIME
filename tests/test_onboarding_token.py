@@ -21,15 +21,24 @@ class TestOnboardingToken(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.data_dir)
 
-    def test_first_run_shows_device_flow_button(self):
+    def test_first_run_without_client_id_keeps_token_fallback(self):
         context = {}
         self.server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context)
         self.server.router.context = {**self.server.admin_context, **context}
         html = self.server.router.handle_dashboard(urllib.parse.urlparse("/"))
-        self.assertIn('CONNECT GITHUB', html)
+        self.assertIn('CONNECT WITH ACCESS TOKEN', html)
+        self.assertIn('action="/github/token"', html)
+        self.assertNotIn('action="/github/device/init"', html)
+
+    def test_first_run_with_client_id_offers_device_flow(self):
+        self.gh_mgr.client_id = "Iv1.public-test"
+        context = {}
+        self.server.middleware.process_request("GET", "/", {'Host': '127.0.0.1'}, context)
+        self.server.router.context = {**self.server.admin_context, **context}
+        html = self.server.router.handle_dashboard(urllib.parse.urlparse("/"))
+        self.assertIn('CONNECT WITH GITHUB DEVICE FLOW', html)
         self.assertIn('action="/github/device/init"', html)
-        self.assertNotIn('name="github_token"', html)
-        self.assertNotIn('type="password"', html)
+        self.assertIn('action="/github/token"', html)
 
     @patch('urllib.request.urlopen')
     def test_valid_github_token_succeeds(self, mock_urlopen):
