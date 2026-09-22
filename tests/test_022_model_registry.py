@@ -2,9 +2,10 @@ import pytest
 import os
 import json
 import tempfile
+import dataclasses
 from datetime import datetime, timezone
 from runtime.execution.models import ModelState, Task, ModelDefinition
-from runtime.execution.registry import ModelRegistry, ModelCapabilityBinding, HardwareProfile, ModelPerformanceProfile, EvaluationRecord
+from runtime.execution.registry import ModelRegistry, RegistryRecoveryRequired, RecoveryAttestationError, RecoveryAttestation, ModelCapabilityBinding, HardwareProfile, ModelPerformanceProfile, EvaluationRecord
 from runtime.execution.capability import CapabilityRegistry, CapabilityDefinition, ExecutorType
 from runtime.execution.policy import RuntimePolicy
 from runtime.execution.selector import ExecutorSelector
@@ -225,8 +226,9 @@ def test_20_schema_validation():
         os.unlink(path)
 
 def test_21_persistence_reload():
-    with tempfile.NamedTemporaryFile(delete=False) as f:
-        path = f.name
+    fd, path = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(path)
         
     try:
         reg1 = ModelRegistry(storage_path=path)
@@ -238,23 +240,38 @@ def test_21_persistence_reload():
     finally:
         os.unlink(path)
 
-def test_22_crash_recovery():
+def test_22_crash_recovery_fails_closed():
     import glob
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(b'{"corrupted": json')
         path = f.name
-        
+
+    recovery_path = f"{path}.recovery.json"
     try:
-        # Should recover by quarantining and falling back to initial state
-        reg = ModelRegistry(storage_path=path)
-        assert len(reg.list_models()) == 2
-        assert reg.is_available("luna") is True
-        
-        # Verify quarantine file exists
+        # Corruption must be quarantined and surfaced as blocked recovery,
+        # never silently replaced by a newly synthesized trusted registry.
+        with pytest.raises(RegistryRecoveryRequired, match="explicit recovery required"):
+            ModelRegistry(storage_path=path)
+
         q_files = glob.glob(f"{path}.quarantine.*")
         assert len(q_files) == 1
+        assert not os.path.exists(path)
+
+        with open(recovery_path, "r") as rf:
+            marker = json.load(rf)
+        assert marker["state"] == "BLOCKED_OR_UNKNOWN"
+        assert marker["reconstruction_required"] is True
+        assert marker["verification_required"] is True
+        assert marker["original_sha256"] != "UNKNOWN"
+
+        # The durable marker itself prevents a silent fresh bootstrap.
+        with pytest.raises(RegistryRecoveryRequired, match="recovery is required"):
+            ModelRegistry(storage_path=path)
     finally:
-        os.unlink(path)
+        if os.path.exists(path):
+            os.unlink(path)
+        if os.path.exists(recovery_path):
+            os.unlink(recovery_path)
         for qf in glob.glob(f"{path}.quarantine.*"):
             os.unlink(qf)
 
@@ -280,8 +297,9 @@ def test_23_model_replacement_without_task_mutation(clean_registry):
     assert sel2.model_id == "luna"
 
 def test_24_process_persistence():
-    with tempfile.NamedTemporaryFile(delete=False) as f:
-        path = f.name
+    fd, path = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(path)
         
     try:
         # Process A
@@ -296,8 +314,9 @@ def test_24_process_persistence():
         os.unlink(path)
 
 def test_25_crash_safety():
-    with tempfile.NamedTemporaryFile(delete=False) as f:
-        path = f.name
+    fd, path = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(path)
         
     try:
         # Initial valid write
@@ -314,8 +333,152 @@ def test_25_crash_safety():
         reg2 = ModelRegistry(storage_path=path)
         assert reg2.get_model("luna").version == "1.0"
     finally:
-        os.unlink(path)
+        if os.path.exists(path):
+            os.unlink(path)
         try:
             os.unlink(temp_path)
         except OSError:
             pass
+
+
+def _prepare_corrupted_registry():
+    import glob
+    fd, path = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(path)
+
+    seed = ModelRegistry(storage_path=path)
+    payload = seed._build_data()
+    with open(path, "w") as f:
+        f.write('{"corrupted": true')
+    with pytest.raises(RegistryRecoveryRequired):
+        ModelRegistry(storage_path=path)
+
+    recovery_path = f"{path}.recovery.json"
+    with open(recovery_path, "r") as f:
+        marker = json.load(f)
+    quarantine = marker["quarantine_path"]
+    return seed, payload, path, recovery_path, quarantine
+
+
+def _attestation(seed, payload, path, recovery_path, quarantine):
+    import hashlib
+    serialized = seed._serialize_data(payload)
+    digest = hashlib.sha256(serialized).hexdigest()
+    marker = json.load(open(recovery_path, "r"))
+    return RecoveryAttestation(
+        recovery_id="test-recovery-001",
+        source_registry_hash=marker["original_sha256"],
+        quarantine_reference=quarantine,
+        authority_ref="ANNY-AUTH-TEST-001",
+        authority_decision="APPROVE_RESTORE",
+        source_evidence_ids=["evidence:quarantine", "evidence:source"],
+        reconstructed_registry_digest=digest,
+        registry_payload=payload,
+        verification_evidence_ids=["evidence:verification"],
+        recovery_timestamp="2026-09-22T00:00:00Z",
+    )
+
+
+def test_26_explicit_attestation_restores_only_after_authority():
+    import glob
+    seed, payload, path, recovery_path, quarantine = _prepare_corrupted_registry()
+    try:
+        attestation = _attestation(seed, payload, path, recovery_path, quarantine)
+
+        with pytest.raises(RecoveryAttestationError, match="did not authorize"):
+            seed.restore_from_attestation(attestation, lambda _: False)
+
+        assert os.path.exists(recovery_path)
+        assert not os.path.exists(path)
+
+        seed.restore_from_attestation(attestation, lambda _: True)
+
+        assert os.path.exists(path)
+        assert not os.path.exists(recovery_path)
+        assert seed.get_model("luna") is not None
+        assert seed.get_model("luna").version == "1.0"
+
+        records = glob.glob(f"{path}.recovery-record.test-recovery-001.json")
+        assert len(records) == 1
+        with open(records[0], "r") as f:
+            record = json.load(f)
+        assert record["state"] == "RESTORED_VERIFIED"
+        assert record["authority_ref"] == "ANNY-AUTH-TEST-001"
+
+        restored = ModelRegistry(storage_path=path)
+        assert restored.get_model("luna").version == "1.0"
+    finally:
+        for candidate in [path, recovery_path, f"{path}.recovery-record.test-recovery-001.json", quarantine]:
+            if os.path.exists(candidate):
+                os.unlink(candidate)
+
+
+def test_27_attestation_digest_mismatch_fails_closed():
+    seed, payload, path, recovery_path, quarantine = _prepare_corrupted_registry()
+    try:
+        attestation = _attestation(seed, payload, path, recovery_path, quarantine)
+        invalid = RecoveryAttestation(
+            **{**dataclasses.asdict(attestation), "reconstructed_registry_digest": "0" * 64}
+        )
+        with pytest.raises(RecoveryAttestationError, match="digest mismatch"):
+            seed.restore_from_attestation(invalid, lambda _: True)
+        assert os.path.exists(recovery_path)
+        assert not os.path.exists(path)
+    finally:
+        for candidate in [path, recovery_path, quarantine]:
+            if os.path.exists(candidate):
+                os.unlink(candidate)
+
+
+def test_28_missing_evidence_fails_closed():
+    seed, payload, path, recovery_path, quarantine = _prepare_corrupted_registry()
+    try:
+        attestation = _attestation(seed, payload, path, recovery_path, quarantine)
+        invalid = RecoveryAttestation(
+            **{**dataclasses.asdict(attestation), "verification_evidence_ids": []}
+        )
+        with pytest.raises(RecoveryAttestationError, match="no verification evidence"):
+            seed.restore_from_attestation(invalid, lambda _: True)
+        assert os.path.exists(recovery_path)
+        assert not os.path.exists(path)
+    finally:
+        for candidate in [path, recovery_path, quarantine]:
+            if os.path.exists(candidate):
+                os.unlink(candidate)
+
+
+def test_29_recovery_survives_process_restart():
+    seed, payload, path, recovery_path, quarantine = _prepare_corrupted_registry()
+    try:
+        # Simulate a fresh process after the original Runtime has exited.
+        recovery_runtime = ModelRegistry.open_for_recovery(path)
+        attestation = _attestation(seed, payload, path, recovery_path, quarantine)
+        recovery_runtime.restore_from_attestation(attestation, lambda _: True)
+
+        assert not os.path.exists(recovery_path)
+        restored = ModelRegistry(storage_path=path)
+        assert restored.get_model("luna") is not None
+        assert restored.get_model("luna").version == "1.0"
+    finally:
+        record = f"{path}.recovery-record.test-recovery-001.json"
+        for candidate in [path, recovery_path, record, quarantine]:
+            if os.path.exists(candidate):
+                os.unlink(candidate)
+
+
+def test_30_recovery_id_path_injection_is_rejected():
+    seed, payload, path, recovery_path, quarantine = _prepare_corrupted_registry()
+    try:
+        attestation = _attestation(seed, payload, path, recovery_path, quarantine)
+        invalid = RecoveryAttestation(
+            **{**dataclasses.asdict(attestation), "recovery_id": "../escape"}
+        )
+        with pytest.raises(RecoveryAttestationError, match="invalid characters"):
+            seed.restore_from_attestation(invalid, lambda _: True)
+        assert os.path.exists(recovery_path)
+        assert not os.path.exists(path)
+    finally:
+        for candidate in [path, recovery_path, quarantine]:
+            if os.path.exists(candidate):
+                os.unlink(candidate)
