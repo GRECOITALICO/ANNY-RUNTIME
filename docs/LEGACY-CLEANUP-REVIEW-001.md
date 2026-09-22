@@ -50,3 +50,11 @@ Removed obsolete manual root tests:
 - `test_x11.py`
 
 These files were manual diagnostics/probes outside the canonical `tests/` tree. Several hardcoded local scratch paths; `test_fetch.py` was incomplete. No canonical workflow references these root files.
+
+
+### Systemd entrypoint reconciliation — 2026-09-22
+
+- `packaging/systemd/anny-runtime.service` was a stale startup definition using `python -m runtime.core.engine`.
+- `scripts/install.sh` is the canonical installer and generates a service executing `/usr/local/bin/anny-runtime server` (system mode) or the equivalent user-local CLI path.
+- `cli/main.py::cmd_server` calls `runtime.admin.server.start_admin_server()`, which in turn creates `RuntimeEngine` and executes `engine.startup()`.
+- The static packaging unit was synchronized to the installer-generated entrypoint; the obsolete engine-only unit is no longer an independent runtime-start source.
