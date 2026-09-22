@@ -231,12 +231,23 @@ class AdminServer:
         logger.info("Admin Server stopped")
 
 
+\ndef build_fabric_client(github_client, config):
+    """Build the provider-neutral Repository Fabric adapter from RuntimeConfig.
+
+    Missing Fabric configuration must fail closed in GitHubFabricAdapter; this helper
+    only wires the canonical RuntimeConfig into the adapter and never invents values.
+    """
+    if github_client is None:
+        return None
+    from runtime.fabric.github_adapter import GitHubFabricAdapter
+    return GitHubFabricAdapter(github_client=github_client, config=config)
+
 def start_admin_server(host: str, port: int):
     """Convenience function to instantiate and run the AdminServer."""
     import os
     import time
     import sys
-    from runtime.core.config import get_data_dir
+    from runtime.core.config import get_data_dir, RuntimeConfig
     from runtime.identity.runtime_identity import RuntimeIdentity
     from runtime.admin.auth import AdminSessionManager
     from runtime.admin.audit import AdminAuditLog
@@ -244,6 +255,9 @@ def start_admin_server(host: str, port: int):
     from runtime.secrets.backend import FileSecretBackend
     
     data_dir = get_data_dir()
+    config = RuntimeConfig.load()
+    # Preserve the existing data-directory selection while loading Fabric/admin settings from config.yaml.
+    config.data_dir = str(data_dir)
     identity_manager = RuntimeIdentity.load(data_dir)
     auth_manager = AdminSessionManager(str(data_dir), identity_manager.runtime_id)
     audit_manager = AdminAuditLog(str(data_dir), identity_manager.runtime_id)
@@ -257,7 +271,7 @@ def start_admin_server(host: str, port: int):
     github_client = GitHubClient(secret_backend=secret_backend) if github_manager.has_token() else None
 
     from runtime.fabric.github_adapter import GitHubFabricAdapter
-    fabric_client = GitHubFabricAdapter(github_client=github_client) if github_client else None
+    fabric_client = build_fabric_client(github_client, config)
     
     from runtime.telemetry.collector import TelemetryCollector
     from runtime.telemetry.aggregator import TelemetryAggregator
@@ -283,9 +297,6 @@ def start_admin_server(host: str, port: int):
             logger.warning(f"Startup discovery failed: {e}")
 
     from runtime.core.engine import RuntimeEngine
-    from runtime.core.config import RuntimeConfig
-    
-    config = RuntimeConfig(data_dir=str(data_dir))
     engine = RuntimeEngine(config)
     execution_manager.runtime_engine = engine
     
