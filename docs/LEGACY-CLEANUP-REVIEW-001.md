@@ -54,10 +54,10 @@ These files were manual diagnostics/probes outside the canonical `tests/` tree. 
 
 ### Systemd entrypoint reconciliation — 2026-09-22
 
-- `packaging/systemd/anny-runtime.service` was a stale startup definition using `python -m runtime.core.engine`.
+- `packaging/systemd/anny-runtime.service` was removed on 2026-09-22 because it was a divergent startup definition using `python -m runtime.core.engine`.
 - `scripts/install.sh` is the canonical installer and generates a service executing `/usr/local/bin/anny-runtime server` (system mode) or the equivalent user-local CLI path.
-- `cli/main.py::cmd_server` calls `runtime.admin.server.start_admin_server()`, which in turn creates `RuntimeEngine` and executes `engine.startup()`.
-- The static packaging unit was synchronized to the installer-generated entrypoint; the obsolete engine-only unit is no longer an independent runtime-start source.
+- `cli/main.py::cmd_server` calls `runtime.admin.server.start_admin_server()`, which creates the canonical admin/runtime path.
+- There is now one supported Runtime service-generation source: the installer. Git history preserves the removed static unit.
 
 
 ### Root metadata cleanup — 2026-09-22
@@ -81,7 +81,8 @@ Removed:
 
 Preserved:
 - `systemd/anny-browser-broker.service`, because it targets the real `runtime/browser/broker_server.py` and remains a distinct browser-broker service surface.
-- `audit/` and `tools/certification/` pending separate evidence/tooling review.
+- `audit/` remains historical evidence and is not an active Runtime source.
+- `tools/certification/**` was removed on 2026-09-22; historical commit history is the audit trail.
 
 
 ### Audit/certification surface cleanup — 2026-09-22
