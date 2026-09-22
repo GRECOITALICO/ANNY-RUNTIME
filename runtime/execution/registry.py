@@ -9,6 +9,10 @@ from .models import (
     HardwareProfile, ModelPerformanceProfile, EvaluationRecord
 )
 
+class RegistryRecoveryRequired(RuntimeError):
+    """Raised when durable registry state is corrupted and explicit recovery is required."""
+
+
 class ModelRegistry:
     def __init__(self, storage_path: Optional[str] = None):
         self.storage_path = storage_path
@@ -28,58 +32,85 @@ class ModelRegistry:
         self._performance: Dict[str, ModelPerformanceProfile] = {}
         self._evaluations: List[EvaluationRecord] = []
         
-        if self.storage_path and os.path.exists(self.storage_path):
-            try:
-                self._load_from_disk()
-            except Exception as e:
-                import hashlib
-                import shutil
-                from datetime import datetime, timezone
-                import logging
-                logger = logging.getLogger(__name__)
+        if self.storage_path:
+            recovery_path = f"{self.storage_path}.recovery.json"
 
-                recovery_timestamp = datetime.now(timezone.utc).isoformat()
-                quarantine_path = f"{self.storage_path}.quarantine.{int(datetime.now(timezone.utc).timestamp())}"
-                
-                # compute original hash if possible
-                original_hash = "UNKNOWN"
+            # A durable recovery marker has precedence over normal bootstrap.
+            # Until an explicit, evidence-backed authority clears the marker,
+            # the registry must remain blocked rather than synthesizing trust.
+            if os.path.exists(recovery_path):
+                raise RegistryRecoveryRequired(
+                    f"Model registry recovery is required: {recovery_path}"
+                )
+
+            if os.path.exists(self.storage_path):
                 try:
-                    with open(self.storage_path, "rb") as f:
-                        original_hash = hashlib.sha256(f.read()).hexdigest()
-                except Exception:
-                    pass
+                    self._load_from_disk()
+                except Exception as e:
+                    import hashlib
+                    import shutil
+                    from datetime import datetime, timezone
+                    import logging
+                    logger = logging.getLogger(__name__)
 
-                # quarantine it
-                try:
-                    shutil.move(self.storage_path, quarantine_path)
-                except Exception as move_err:
-                    logger.error(f"Failed to quarantine corrupted registry: {move_err}")
+                    recovery_timestamp = datetime.now(timezone.utc).isoformat()
+                    quarantine_path = (
+                        f"{self.storage_path}.quarantine."
+                        f"{int(datetime.now(timezone.utc).timestamp())}"
+                    )
 
-                # recovery
-                self._models.clear()
-                self._bindings.clear()
+                    original_hash = "UNKNOWN"
+                    try:
+                        with open(self.storage_path, "rb") as f:
+                            original_hash = hashlib.sha256(f.read()).hexdigest()
+                    except Exception:
+                        pass
+
+                    try:
+                        shutil.move(self.storage_path, quarantine_path)
+                    except Exception as move_err:
+                        logger.error(
+                            f"Failed to quarantine corrupted registry: {move_err}"
+                        )
+                        raise RegistryRecoveryRequired(
+                            "Registry is corrupted and could not be quarantined"
+                        ) from move_err
+
+                    recovery_reason = f"CORRUPTED_REGISTRY: {str(e)}"
+                    marker = {
+                        "version": "1.0",
+                        "state": "BLOCKED_OR_UNKNOWN",
+                        "original_registry_path": self.storage_path,
+                        "quarantine_path": quarantine_path,
+                        "original_sha256": original_hash,
+                        "recovery_timestamp": recovery_timestamp,
+                        "recovery_reason": recovery_reason,
+                        "reconstruction_required": True,
+                        "verification_required": True,
+                    }
+                    marker_dir = os.path.dirname(recovery_path)
+                    if marker_dir:
+                        os.makedirs(marker_dir, exist_ok=True)
+                    with open(recovery_path, "w") as f:
+                        json.dump(marker, f, indent=2)
+
+                    logger.warning(
+                        "ModelRegistry blocked after corruption: "
+                        f"original_hash={original_hash}, "
+                        f"quarantine_path={quarantine_path}, "
+                        f"recovery_timestamp={recovery_timestamp}, "
+                        f"recovery_reason={recovery_reason}"
+                    )
+                    raise RegistryRecoveryRequired(
+                        f"Corrupted model registry quarantined; explicit recovery required: "
+                        f"{recovery_path}"
+                    ) from e
+            else:
+                # First bootstrap is allowed only when no durable registry or
+                # recovery marker exists. This is not corruption recovery.
                 self._register_initial_models()
                 self._register_initial_bindings()
                 self._save_to_disk()
-                
-                new_hash = "UNKNOWN"
-                try:
-                    with open(self.storage_path, "rb") as f:
-                        new_hash = hashlib.sha256(f.read()).hexdigest()
-                except Exception:
-                    pass
-
-                recovery_reason = f"CORRUPTED_REGISTRY: {str(e)}"
-                
-                # Emit audit event (via logger as there is no central audit bus for registry yet)
-                logger.warning(
-                    f"ModelRegistry recovery event: "
-                    f"original_hash={original_hash}, "
-                    f"quarantine_path={quarantine_path}, "
-                    f"recovery_timestamp={recovery_timestamp}, "
-                    f"recovery_reason={recovery_reason}, "
-                    f"new_registry_hash={new_hash}"
-                )
         else:
             self._register_initial_models()
             self._register_initial_bindings()
