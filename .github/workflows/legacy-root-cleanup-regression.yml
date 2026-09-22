@@ -74,6 +74,10 @@ jobs:
           test ! -e test_describe_node.py
           test ! -e adapters/fabric_client.py
           test ! -d scratch
+          test ! -d audit/customer_zero_008
+          test ! -d tools/certification
+          test ! -e adapters/fabric_client.py
+          test ! -d adapters
 
 
       - name: Verify canonical systemd entrypoint
