@@ -573,7 +573,7 @@ def first_run_page(error=None, csrf_token="", device_flow_available=False):
             <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">GITHUB ACCESS TOKEN</label>
             <input type="password" name="github_token" id="github_token_input" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
             <button type="submit" class="btn btn-primary login-btn">CONNECT WITH ACCESS TOKEN</button>
-        </form>"
+        </form>"""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
