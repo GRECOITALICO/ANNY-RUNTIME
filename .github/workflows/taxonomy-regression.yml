@@ -8,7 +8,7 @@ on:
       - '.github/workflows/taxonomy-regression.yml'
   push:
     branches:
-      - 'fix/schema-validate-taxonomy-class-2026-09-21-rebased'
+      - 'main'
     paths:
       - 'runtime/intelligence/taxonomy.py'
       - 'tests/test_taxonomy_semantics.py'
