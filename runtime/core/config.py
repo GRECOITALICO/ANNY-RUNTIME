@@ -61,6 +61,9 @@ class RuntimeConfig:
     update_channel: str = 'dev'
     log_level: str = 'INFO'
     
+    # GitHub authentication / application configuration (client ID is public, not a secret)
+    github_client_id: str = field(default_factory=lambda: os.environ.get("ANNY_GITHUB_CLIENT_ID", ""))
+
     # Fabric config
     fabric_org: str = None
     fabric_repo: str = None
@@ -112,6 +115,10 @@ class RuntimeConfig:
                 if flat_key in valid_keys:
                     config_data[flat_key] = av
                     
+        env_client_id = os.environ.get("ANNY_GITHUB_CLIENT_ID")
+        if env_client_id:
+            config_data["github_client_id"] = env_client_id
+
         filtered_data = {k: v for k, v in config_data.items() if k in valid_keys}
         return cls(**filtered_data)
 
