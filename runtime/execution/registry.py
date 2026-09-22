@@ -136,6 +136,39 @@ class ModelRegistry:
             self._register_initial_bindings()
             self._save_to_disk()
 
+    @classmethod
+    def open_for_recovery(cls, storage_path: str):
+        """Open a blocked registry only for an explicit recovery operation.
+
+        Normal construction remains fail-closed when a pending recovery marker
+        exists. This recovery-only entry point performs no bootstrap, model
+        registration, binding creation, authorization, or routing reconstruction.
+        """
+        if not storage_path:
+            raise RecoveryAttestationError("Recovery requires a durable registry path")
+        recovery_path = f"{storage_path}.recovery.json"
+        if not os.path.exists(recovery_path):
+            raise RecoveryAttestationError("No pending recovery marker exists")
+
+        self = cls.__new__(cls)
+        self.storage_path = storage_path
+        self._models = {}
+        self._bindings = []
+        self._hardware = HardwareProfile(
+            cpu="UNKNOWN",
+            cores="UNKNOWN",
+            ram="UNKNOWN",
+            gpu_present="UNKNOWN",
+            gpu_vendor="UNKNOWN",
+            gpu_memory="UNKNOWN",
+            storage_available="UNKNOWN",
+            os="UNKNOWN",
+            python_version="UNKNOWN"
+        )
+        self._performance = {}
+        self._evaluations = []
+        return self
+
     class _EnumEncoder(json.JSONEncoder):
         def default(self, obj):
             if isinstance(obj, ModelState):
@@ -213,6 +246,10 @@ class ModelRegistry:
 
         if not self.storage_path:
             raise RecoveryAttestationError("Recovery requires a durable registry path")
+
+        import re
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", attestation.recovery_id):
+            raise RecoveryAttestationError("Recovery id contains invalid characters")
 
         recovery_path = f"{self.storage_path}.recovery.json"
         if not os.path.exists(recovery_path):
