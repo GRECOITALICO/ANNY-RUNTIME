@@ -8,7 +8,7 @@ on:
       - '.github/workflows/model-registry-recovery-regression.yml'
   push:
     branches:
-      - 'fix/model-registry-fail-closed-recovery-2026-09-21'
+      - 'main'
     paths:
       - 'runtime/execution/registry.py'
       - 'tests/test_022_model_registry.py'
