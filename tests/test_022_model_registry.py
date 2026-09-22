@@ -2,6 +2,7 @@ import pytest
 import os
 import json
 import tempfile
+import dataclasses
 from datetime import datetime, timezone
 from runtime.execution.models import ModelState, Task, ModelDefinition
 from runtime.execution.registry import ModelRegistry, RegistryRecoveryRequired, RecoveryAttestationError, RecoveryAttestation, ModelCapabilityBinding, HardwareProfile, ModelPerformanceProfile, EvaluationRecord
