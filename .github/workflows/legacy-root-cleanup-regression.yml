@@ -72,6 +72,9 @@ jobs:
           test ! -e test_cdp2.py
           test ! -e test_cdp_hide.py
           test ! -e test_describe_node.py
+          test ! -e adapters/fabric_client.py
+          test ! -d scratch
+
 
       - name: Verify canonical systemd entrypoint
         run: |
