@@ -33,6 +33,8 @@ The token is encrypted by `SecretBackend` before persistent storage and is never
 
 ## Credential boundaries
 
+Runtime configuration is also fail-closed. A malformed or structurally invalid `config.yaml` is an error; it is never silently replaced with defaults.
+
 - Admin browser sessions are separate from GitHub credentials.
 - GitHub credentials are separate from ANNY Runtime identity keys.
 - Repository Fabric uses the Runtime GitHub client; Fabric organization/repository binding comes only from `RuntimeConfig`.
