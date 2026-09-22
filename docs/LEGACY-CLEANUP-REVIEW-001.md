@@ -31,3 +31,22 @@ The following root-level files were classified as obsolete development tooling a
 The repository workflows reviewed on the cleanup base execute canonical `runtime/**` modules and tests under `tests/`; none reference the removed root paths.
 
 Deletion is therefore safe for this milestone. Git history remains the historical record of the removed files.
+
+
+Additional root-test cleanup on 2026-09-22:
+
+Removed obsolete manual root tests:
+- `test_dev_broker.py`
+- `test_dynamic_tools.py`
+- `test_fetch.py`
+- `test_find_cdp.py`
+- `test_find_cdp2.py`
+- `test_find_click.py`
+- `test_isolated.py`
+- `test_isolated_nav.py`
+- `test_js.py`
+- `test_obj.py`
+- `test_persistent.py`
+- `test_x11.py`
+
+These files were manual diagnostics/probes outside the canonical `tests/` tree. Several hardcoded local scratch paths; `test_fetch.py` was incomplete. No canonical workflow references these root files.
