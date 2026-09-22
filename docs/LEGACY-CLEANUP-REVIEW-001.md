@@ -82,3 +82,12 @@ Removed:
 Preserved:
 - `systemd/anny-browser-broker.service`, because it targets the real `runtime/browser/broker_server.py` and remains a distinct browser-broker service surface.
 - `audit/` and `tools/certification/` pending separate evidence/tooling review.
+
+
+### Audit/certification surface cleanup — 2026-09-22
+
+Removed:
+- `audit/customer_zero_008/**` — historical customer-zero onboarding audit snapshots; not referenced by current workflows and superseded by canonical durable evidence in the control-plane repository.
+- `tools/certification/**` — historical certification/evidence generators and logs tied to obsolete mission snapshots; no current workflow references these paths.
+
+The Runtime repository remains the execution substrate. Current organizational/certification evidence belongs in the canonical control plane rather than in old Runtime-side report generators.
