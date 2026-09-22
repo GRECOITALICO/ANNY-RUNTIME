@@ -1,0 +1,30 @@
+name: fabric-config-binding-regression
+
+on:
+  push:
+    branches:
+      - fix/runtime-admin-fabric-config-binding-20260922
+  pull_request:
+    paths:
+      - "runtime/admin/server.py"
+      - "runtime/fabric/github_adapter.py"
+      - "runtime/core/config.py"
+      - "tests/test_admin_fabric_config_binding.py"
+
+jobs:
+  fabric-config-binding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install pytest PyYAML
+
+      - name: Run focused Fabric binding regression
+        env:
+          PYTHONPATH: .
+        run: pytest -q tests/test_admin_fabric_config_binding.py
