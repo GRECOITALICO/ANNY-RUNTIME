@@ -231,7 +231,7 @@ class AdminServer:
         logger.info("Admin Server stopped")
 
 
-\ndef build_fabric_client(github_client, config):
+def build_fabric_client(github_client, config):
     """Build the provider-neutral Repository Fabric adapter from RuntimeConfig.
 
     Missing Fabric configuration must fail closed in GitHubFabricAdapter; this helper
