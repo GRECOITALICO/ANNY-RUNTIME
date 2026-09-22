@@ -19,6 +19,8 @@ from runtime.telemetry.context import TraceContext
 
 logger = logging.getLogger(__name__)
 
+REQUIRED_GITHUB_SCOPES = frozenset({"repo", "read:org"})
+
 GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code"
 GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_API_USER_URL = "https://api.github.com/user"
@@ -191,8 +193,13 @@ class GitHubAuthManager:
                 self.secret_backend.store(
                     self.token_ref, token.encode('utf-8'))
                 self._device_flow = None
-                self.validate()
-                return {'status': 'AUTHORIZED'}
+                if self.validate():
+                    return {'status': 'AUTHORIZED'}
+                self.secret_backend.delete(self.token_ref)
+                return {
+                    'status': 'ERROR',
+                    'error': 'GitHub authorization did not satisfy required scopes',
+                }
 
             error = result.get('error', 'unknown')
             if error == 'authorization_pending':
@@ -229,7 +236,7 @@ class GitHubAuthManager:
             req = urllib.request.Request(
                 GITHUB_API_USER_URL,
                 headers={
-                    'Authorization': f'token {token}',
+                    'Authorization': f'Bearer {token}',
                     'Accept': 'application/vnd.github.v3+json'
                 }
             )
@@ -263,12 +270,21 @@ class GitHubAuthManager:
                     ))
                 raise e
 
+            scopes = [s.strip() for s in scopes_header.split(',') if s.strip()]
             self.state.principal = user_data.get('login', 'unknown')
+            self.state.scopes = scopes
+            self.state.last_validation = datetime.now(timezone.utc).isoformat()
+            missing = sorted(REQUIRED_GITHUB_SCOPES.difference(scopes))
+            if missing:
+                self.state.auth_status = "DEGRADED"
+                self.state.token_status = "INSUFFICIENT_SCOPE"
+                self.state.last_failure = self.state.last_validation
+                self.state.last_failure_reason = "Missing required GitHub scopes: " + ", ".join(missing)
+                self._save_state()
+                return False
+
             self.state.auth_status = "AUTHORIZED"
             self.state.token_status = "VALID"
-            self.state.scopes = [s.strip() for s in scopes_header.split(',')
-                                 if s.strip()]
-            self.state.last_validation = datetime.now(timezone.utc).isoformat()
             self.state.last_failure = None
             self.state.last_failure_reason = None
             self._save_state()
@@ -316,7 +332,7 @@ class GitHubAuthManager:
             req = urllib.request.Request(
                 GITHUB_API_USER_URL,
                 headers={
-                    'Authorization': f'token {token}',
+                    'Authorization': f'Bearer {token}',
                     'Accept': 'application/vnd.github.v3+json'
                 }
             )
