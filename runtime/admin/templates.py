@@ -458,18 +458,6 @@ def _nav_link(path, icon, label, active_path):
 
 def base_layout(title, content, active_path="/", csrf_token=""):
     """Wrap content in the full admin shell layout."""
-    device_flow_html = f"""<form method="POST" action="/github/device/init">
-            <input type="hidden" name="csrf_token" value="{csrf_token}">
-            <button type="submit" class="btn btn-primary login-btn">CONNECT WITH GITHUB DEVICE FLOW</button>
-        </form>""" if device_flow_available else ""
-
-    token_html = f"""<form method="POST" action="/github/token" style="margin-top:16px;">
-            <input type="hidden" name="csrf_token" value="{csrf_token}">
-            <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">GITHUB ACCESS TOKEN</label>
-            <input type="password" name="github_token" id="github_token_input" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
-            <button type="submit" class="btn btn-primary login-btn">CONNECT WITH ACCESS TOKEN</button>
-        </form>"""
-
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
