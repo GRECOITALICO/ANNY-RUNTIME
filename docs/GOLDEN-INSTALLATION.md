@@ -1,7 +1,9 @@
-# ANNY-RUNTIME v0.2: Golden Installation Guide
+# ANNY-RUNTIME v0.4.x: Golden Installation Guide
 
-This guide describes how to install and bootstrap ANNY-RUNTIME on a completely clean machine. 
+This guide describes how to install and bootstrap ANNY-RUNTIME on a completely clean machine.
 It assumes no prior knowledge of ANNY and no existing state or cached credentials.
+
+The canonical runtime version is defined by `runtime/core/version.py`. Release artifact identity is governed by `docs/RELEASE-IDENTITY-001.md`.
 
 ## 1. Prerequisites
 
@@ -13,7 +15,8 @@ Before installing, ensure your host environment meets the following requirements
 
 ## 2. Clone the Repository
 
-Download the ANNY-RUNTIME source code. If you do not have direct access, obtain the latest v0.2 release tarball.
+Download the ANNY-RUNTIME source code. For a release artifact, use an artifact whose version, source commit and SHA-256 checksum are recorded under the release identity contract.
+
 ```bash
 git clone https://github.com/GRECOITALICO/ANNY-RUNTIME.git
 cd ANNY-RUNTIME
@@ -41,7 +44,7 @@ Check that the installation succeeded by running the internal diagnostics tool:
 anny-runtime doctor
 ```
 
-All checks should show `[PASS] ✓`. If `Python` or `Cryptography` fails, ensure your environment paths are correct.
+Treat any reported PASS as informational until the full Runtime verification suite has been executed for the target milestone.
 
 ## 5. Start the Runtime Server
 
@@ -51,43 +54,41 @@ Start the ANNY-RUNTIME background daemon:
 systemctl --user start anny-runtime.service
 ```
 
-*(If you do not want to use systemd, you can run it interactively via `anny-runtime server`)*.
+(If you do not want to use systemd, you can run it interactively via `anny-runtime server`.)
 
 Check its status:
 ```bash
 anny-runtime status
 ```
-This should show your new `Runtime ID` and state that Identity is `READY`.
+
+This should report the Runtime identity and current state from the canonical runtime control surfaces.
 
 ## 6. First-Run Setup (Browser)
 
-The Runtime is now waiting for administrative initialization. 
+The Runtime may expose its administrative control surface locally after startup.
 
-1. Open your web browser and navigate to: **http://127.0.0.1:3643**
-2. You will be presented with the **ANNY RUNTIME First-Run Dashboard**.
-3. **Identity Verification**: Confirm your new Runtime Identity pairs successfully.
-4. **GitHub Connection**: Click "CONNECT GITHUB" and follow the OAuth/PAT flow. The credentials will be securely brokered and stored.
-5. **Fabric Connection**: Click "CONNECT FABRIC" to register this installation with the central mesh.
-6. **Enrollment**: Join an existing tenant or create a new one.
-
-Once all steps are green, the status will show **ANNY READY**.
+1. Open the configured local admin endpoint.
+2. Follow the current authentication/initialization flow exposed by the running Runtime.
+3. Confirm Runtime identity and authorization state through the actual Runtime evidence/receipt surfaces.
+4. Do not treat a green UI state as certification, routing authorization, or production readiness without the corresponding durable evidence.
 
 ## 7. Execute First Operation
 
-Through the UI or CLI (if configured), trigger a simple read-only operation (e.g. `System Status Check`).
-Verify that the operation executes successfully inside a Level 1 Sandbox and produces a receipt in `~/.anny-runtime/journal`.
+Through the UI or CLI (if configured), trigger a simple read-only operation.
+
+Verify that the operation executes through the canonical execution path and produces a durable receipt/evidence record. Do not infer successful execution from an audit log entry alone.
 
 ## 8. Persistence Check (Reboot)
 
-To guarantee the installation is robust:
-1. Reboot your machine.
-2. The `anny-runtime.service` should start automatically.
-3. Check `anny-runtime status` — your Runtime ID, Installation ID, and Fabric connection should be preserved without requiring re-authentication.
+To verify installation persistence:
+1. Reboot the machine.
+2. Confirm the `anny-runtime.service` starts automatically when configured.
+3. Check `anny-runtime status` and the durable Runtime state/evidence.
 
 ## 9. Troubleshooting
 
-- **Admin panel unreachable**: Ensure port `3643` is not blocked by a local firewall, and verify the service is running (`systemctl --user status anny-runtime`).
-- **Cryptography installation error**: Ensure `python3-dev` and build tools are installed if building from source.
+- **Admin panel unreachable**: verify the configured admin port and the running service state rather than relying on a hard-coded port assumption.
+- **Cryptography installation error**: ensure `python3-dev` and required build tools are available when building dependencies from source.
 
 ## 10. Uninstall
 
@@ -100,3 +101,5 @@ anny-runtime uninstall
 # Destructive removal of everything, including cryptographic identities:
 anny-runtime uninstall --purge
 ```
+
+The `--purge` operation is destructive and must not be treated as a normal troubleshooting step.
