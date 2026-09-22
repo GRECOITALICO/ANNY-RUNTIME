@@ -58,3 +58,16 @@ These files were manual diagnostics/probes outside the canonical `tests/` tree. 
 - `scripts/install.sh` is the canonical installer and generates a service executing `/usr/local/bin/anny-runtime server` (system mode) or the equivalent user-local CLI path.
 - `cli/main.py::cmd_server` calls `runtime.admin.server.start_admin_server()`, which in turn creates `RuntimeEngine` and executes `engine.startup()`.
 - The static packaging unit was synchronized to the installer-generated entrypoint; the obsolete engine-only unit is no longer an independent runtime-start source.
+
+
+### Root metadata cleanup — 2026-09-22
+
+Removed from the active root tree after reference checks:
+- `evidence_001d.json` — historical Google Colab/browser evidence from MISSION-001D; no current workflow or code reference.
+- `023_QWEN_INTEGRATION_EVIDENCE.md` — historical Qwen integration certification note tied to an old scratch path; canonical Runtime tests remain under `tests/test_023_qwen_integration.py`.
+- `DEPENDENCY-INVENTORY.json` — stale secondary dependency inventory; contained source paths such as `runtime/adapters/...` that are not current tree paths and presented a second dependency truth beside `requirements.txt`.
+
+Preserved:
+- `requirements.txt` as the active packaging dependency declaration;
+- release checksum metadata;
+- README/license/git metadata.
