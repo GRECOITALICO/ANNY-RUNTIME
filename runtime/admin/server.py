@@ -233,6 +233,7 @@ class AdminServer:
 
 def build_github_auth_manager(secret_backend, config):
     """Construct the single Runtime GitHub authentication manager from RuntimeConfig."""
+    from runtime.admin.github import GitHubAuthManager
     return GitHubAuthManager(
         secret_backend,
         client_id=getattr(config, "github_client_id", ""),
@@ -259,7 +260,6 @@ def start_admin_server(host: str, port: int):
     from runtime.identity.runtime_identity import RuntimeIdentity
     from runtime.admin.auth import AdminSessionManager
     from runtime.admin.audit import AdminAuditLog
-    from runtime.admin.github import GitHubAuthManager
     from runtime.secrets.backend import FileSecretBackend
     
     data_dir = get_data_dir()
