@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 ONBOARDING_ROUTES = {
     '/',                 # Dashboard (renders first-run page when no token)
     '/github/token',     # POST: submit GitHub token
+    '/github/device/init',  # POST: start GitHub Device Flow
+    '/github/device/poll',  # GET: poll GitHub Device Flow
     '/api/status',       # Allow reading status anytime
     '/api/bootstrap/verify', # Allow triggering verification anytime
     '/health/live',      # Allow health checks

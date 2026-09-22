@@ -1,26 +1,55 @@
 # GitHub Authorization Architecture
 
-The ANNY Runtime uses **GitHub Access Token** (paste-based) as the **current Customer Zero onboarding method**. The user provides a single GitHub Personal Access Token through the admin panel, which is validated, encrypted, and stored securely.
+ANNY Runtime has one GitHub credential boundary. The Runtime owns the credential, validates it against GitHub, stores it through `SecretBackend`, and exposes only sanitized authentication status to the admin UI.
 
-> **Device Flow (RFC 8628)** is retained internally as an **optional future authentication method**. It is NOT the primary onboarding mechanism for Customer Zero.
+## Onboarding methods
 
-## Authorization Flow (Current — Token-Based)
+The preferred onboarding path is GitHub OAuth Device Flow when a public GitHub OAuth client ID is configured.
 
-1. **First Run:** The user opens the admin panel at `http://127.0.0.1:3643/`.
-2. **Token Entry:** The panel presents a single password input labeled "GITHUB ACCESS TOKEN" and a "CONNECT" button.
-3. **Validation:** The Runtime validates the token against `GET https://api.github.com/user`, checks required scopes (`repo`, `read:org`), and extracts the authenticated principal.
-4. **Secure Storage:** The token is immediately encrypted and persisted to disk via the `SecretBackend`. **It is never returned to the browser.**
-5. **Discovery:** Organizations and repositories are discovered dynamically.
-6. **Session Upgrade:** The onboarding session is revoked and a regular admin session is created.
+The manual Personal Access Token path remains the recovery and fallback method. Both paths are validated before Runtime considers GitHub authorization usable.
 
-## Credential Safety
+### Device Flow
 
-- The admin panel **never** exposes the raw GitHub token.
-- The `/github` endpoint only returns sanitized DTOs containing the principal name, scopes, and status.
-- Token renewal follows the same flow; the new token is validated before replacing the old token (safe rotation).
+Set the public OAuth application client ID through either:
 
-## Runtime Capability Boundary
+- `ANNY_GITHUB_CLIENT_ID` in the Runtime process environment; or
+- `github_client_id` in the Runtime `config.yaml`.
 
-The GitHub credential belongs to the **Runtime Engine**. It is used by the `ExecutionPipeline` to perform authorized operations (e.g., reading organizational state or pushing verified code). 
+The client ID is not a secret. The GitHub OAuth application must have Device Flow enabled.
 
-Even with a valid GitHub credential, a local user *cannot* use the web panel to push arbitrary code to GitHub. They must initiate an authorized operation through the proper ANNY channels.
+The Device Flow requests the scopes required by the current Runtime boundary: `repo` and `read:org`. Runtime also verifies the granted scopes from GitHub before marking the credential `AUTHORIZED`.
+
+A missing client ID does not dead-end onboarding: the first-run UI keeps the manual token path available.
+
+### Manual token fallback
+
+The admin panel accepts a GitHub access token over the authenticated local onboarding route. Runtime validates:
+
+1. `GET https://api.github.com/user`;
+2. the authenticated principal;
+3. the granted GitHub scopes, requiring `repo` and `read:org`.
+
+The token is encrypted by `SecretBackend` before persistent storage and is never returned to HTML, JSON status DTOs, telemetry or audit messages.
+
+## Credential boundaries
+
+Runtime configuration is also fail-closed. A malformed or structurally invalid `config.yaml` is an error; it is never silently replaced with defaults.
+
+- Admin browser sessions are separate from GitHub credentials.
+- GitHub credentials are separate from ANNY Runtime identity keys.
+- Repository Fabric uses the Runtime GitHub client; Fabric organization/repository binding comes only from `RuntimeConfig`.
+- No product repository, organization, Fabric repository, or cloud provider is hardcoded into the authentication path.
+- An invalid or insufficiently scoped credential never becomes `AUTHORIZED`.
+- Device Flow tokens that fail post-authorization validation are removed instead of being retained as unusable credentials.
+
+## Startup contract
+
+The supported installation path is `scripts/install.sh`. It generates the actual systemd/user service and supplies the Runtime environment. A second static systemd service definition is intentionally not shipped, so it cannot diverge from the installer-generated startup path.
+
+## Current source of truth
+
+The current Runtime startup chain is:
+
+`installer → generated systemd service → /usr/local/bin/anny-runtime server → cli/main.py → start_admin_server() → RuntimeConfig → GitHubAuthManager / GitHubClient → Repository Fabric adapter`
+
+The organizational ANNY bootstrap remains separate from the Runtime substrate and is resolved by `GRECOITALICO/ANNY-OPERATIONAL/state/BOOTSTRAP_REGISTRY.yaml`.

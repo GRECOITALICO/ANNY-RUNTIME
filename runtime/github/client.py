@@ -74,9 +74,9 @@ class GitHubClient:
             url += "?" + urllib.parse.urlencode(query_params)
 
         headers = {
-            'Authorization': f'token {token}',
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'ANNY-Runtime-CustomerZero/1.0'
+            'Authorization': f'Bearer {token}',
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'ANNY-Runtime/1.0'
         }
         if headers_extra:
             headers.update(headers_extra)

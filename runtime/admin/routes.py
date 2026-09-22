@@ -214,30 +214,22 @@ class AdminRouter:
             logger.error(f"Error handling POST {path}: {e}", exc_info=True)
             self._send_html(handler, "500 Internal Server Error", status=500)
 
-    def _send_json(self, handler: BaseHTTPRequestHandler, data: Any, status: int = 200) -> None:
-        handler.send_response(status)
-        handler.send_header('Content-type', 'application/json; charset=utf-8')
-        self._set_security_headers(handler)
-        for cookie in self.context.get('set_cookies', []):
-            handler.send_header('Set-Cookie', cookie)
-        handler.end_headers()
-        body = json.dumps(data, indent=2) if not isinstance(data, str) else data
-        handler.wfile.write(body.encode('utf-8'))
-
-    def _send_html(self, handler: BaseHTTPRequestHandler, html: str, status: int = 200) -> None:
-        handler.send_response(status)
-        handler.send_header('Content-type', 'text/html; charset=utf-8')
-        self._set_security_headers(handler)
-        for cookie in self.context.get('set_cookies', []):
-            handler.send_header('Set-Cookie', cookie)
-        handler.end_headers()
-        handler.wfile.write(html.encode('utf-8'))
-
     def _send_json(self, handler: BaseHTTPRequestHandler, data: dict, status: int = 200) -> None:
         import json as json_module
         body = json_module.dumps(data).encode('utf-8')
         handler.send_response(status)
         handler.send_header('Content-Type', 'application/json')
+        self._set_security_headers(handler)
+        for cookie in self.context.get('set_cookies', []):
+            handler.send_header('Set-Cookie', cookie)
+        handler.send_header('Content-Length', str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
+
+    def _send_html(self, handler: BaseHTTPRequestHandler, html: str, status: int = 200) -> None:
+        body = html.encode('utf-8')
+        handler.send_response(status)
+        handler.send_header('Content-Type', 'text/html; charset=utf-8')
         self._set_security_headers(handler)
         for cookie in self.context.get('set_cookies', []):
             handler.send_header('Set-Cookie', cookie)
@@ -541,7 +533,12 @@ class AdminRouter:
 
         if is_first_run or (session and getattr(session, 'scope', '') == "ONBOARDING_ONLY"):
             from runtime.admin.templates import first_run_page
-            return first_run_page(csrf_token=self._get_csrf(), error=error)
+            device_flow_available = bool(getattr(gh_mgr, 'client_id', ''))
+            return first_run_page(
+                csrf_token=self._get_csrf(),
+                error=error,
+                device_flow_available=device_flow_available,
+            )
 
         try:
             from runtime.admin.templates_cc import control_center_page
@@ -564,53 +561,32 @@ class AdminRouter:
         return github_page(status, error=error, csrf_token=self._get_csrf())
 
     def handle_fabric(self, parsed) -> str:
-        import os
-        fabric_endpoint = os.environ.get("FABRIC_ENDPOINT", "")
-        
-        if not fabric_endpoint:
-            status = FabricStatusDTO(False, None, None, None, None, None).to_dict()
+        """Report live Repository Fabric status through the canonical config-driven adapter."""
+        status = FabricStatusDTO(False, None, None, None, None, None).to_dict()
+        fabric_client = self._get_fabric_client()
+        if fabric_client is None:
             status["fabric_status"] = "NOT_CONFIGURED"
             return fabric_page(status, self._get_csrf())
-        
+
         try:
-            from runtime.fabric.github_adapter import GitHubFabricAdapter
-            client = GitHubFabricAdapter(endpoint=fabric_endpoint)
-            health = client.health()
-            identity = client.identity()
-            
-            resource_count = 0
-            try:
-                resources = client.list_resources()
-                resource_count = len(resources)
-            except Exception:
-                pass
-            
-            status = FabricStatusDTO(
-                connected=True,
-                tenant=identity.get("node_id", "unknown"),
-                anny_instance=identity.get("environment", "unknown"),
-                runtime_registration="REGISTERED",
-                last_heartbeat=health.get("timestamp"),
-                last_reconciliation=None
-            ).to_dict()
-            status["fabric_status"] = "CONNECTED"
-            status["resource_count"] = resource_count
-            status["node_id"] = identity.get("node_id")
-            
+            health = fabric_client.probe_health()
+            status["fabric_status"] = "CONNECTED" if health.reachable else "DEGRADED"
+            status["node_id"] = health.node_id
+            status["latency_ms"] = health.latency_ms
+
+            if health.reachable:
+                try:
+                    node = fabric_client.read_node_config()
+                    status["node_id"] = node.node_id
+                    status["runtime_registration"] = "REGISTERED"
+                except Exception:
+                    status["runtime_registration"] = "UNKNOWN"
+
             return fabric_page(status, self._get_csrf())
-            
-        except Exception as e:
-            logger.warning(f"Fabric connection failed: {e}")
-            error_type = type(e).__name__
-            fabric_status = "NETWORK_ERROR"
-            if "AUTH" in str(e).upper():
-                fabric_status = "AUTH_ERROR"
-            elif "TIMEOUT" in str(e).upper():
-                fabric_status = "DEGRADED"
-                
-            status = FabricStatusDTO(False, None, None, None, None, None).to_dict()
-            status["fabric_status"] = fabric_status
-            status["error"] = str(e)
+        except Exception as exc:
+            logger.warning("Repository Fabric status check failed: %s", type(exc).__name__)
+            status["fabric_status"] = "ERROR"
+            status["error"] = type(exc).__name__
             return fabric_page(status, self._get_csrf())
 
     def handle_sessions(self, parsed) -> str:

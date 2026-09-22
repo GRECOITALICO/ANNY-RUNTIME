@@ -1,0 +1,57 @@
+name: distributable authentication hardening
+
+on:
+  pull_request:
+    paths:
+      - "runtime/admin/github.py"
+      - "runtime/admin/server.py"
+      - "runtime/admin/routes.py"
+      - "runtime/admin/templates.py"
+      - "runtime/core/config.py"
+      - "runtime/github/client.py"
+      - "runtime/secrets/backend.py"
+      - "scripts/install.sh"
+      - "docs/GITHUB-AUTH.md"
+      - "docs/INSTALLATION.md"
+      - "tests/test_distributable_github_auth.py"
+      - "tests/test_onboarding_token.py"
+      - ".github/workflows/distributable-auth-hardening.yml"
+  push:
+    branches: [main]
+    paths:
+      - "runtime/admin/github.py"
+      - "runtime/admin/server.py"
+      - "runtime/admin/routes.py"
+      - "runtime/admin/templates.py"
+      - "runtime/core/config.py"
+      - "runtime/github/client.py"
+      - "runtime/secrets/backend.py"
+      - "scripts/install.sh"
+      - "tests/test_distributable_github_auth.py"
+      - "tests/test_onboarding_token.py"
+      - ".github/workflows/distributable-auth-hardening.yml"
+
+jobs:
+  auth-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest PyYAML cryptography
+      - name: Compile canonical auth/startup modules
+        run: |
+          python -m py_compile             runtime/admin/github.py             runtime/admin/server.py             runtime/admin/routes.py             runtime/admin/templates.py             runtime/core/config.py             runtime/github/client.py
+      - name: Run authentication boundary tests
+        run: |
+          pytest -q             tests/test_distributable_github_auth.py             tests/test_onboarding_token.py             tests/test_fresh_first_run.py
+      - name: Assert obsolete Customer Zero identity is absent
+        run: |
+          ! grep -R "ANNY-Runtime-CustomerZero" runtime scripts docs

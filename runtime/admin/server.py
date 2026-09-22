@@ -231,6 +231,15 @@ class AdminServer:
         logger.info("Admin Server stopped")
 
 
+def build_github_auth_manager(secret_backend, config):
+    """Construct the single Runtime GitHub authentication manager from RuntimeConfig."""
+    from runtime.admin.github import GitHubAuthManager
+    return GitHubAuthManager(
+        secret_backend,
+        client_id=getattr(config, "github_client_id", ""),
+    )
+
+
 def build_fabric_client(github_client, config):
     """Build the provider-neutral Repository Fabric adapter from RuntimeConfig.
 
@@ -251,7 +260,6 @@ def start_admin_server(host: str, port: int):
     from runtime.identity.runtime_identity import RuntimeIdentity
     from runtime.admin.auth import AdminSessionManager
     from runtime.admin.audit import AdminAuditLog
-    from runtime.admin.github import GitHubAuthManager
     from runtime.secrets.backend import FileSecretBackend
     
     data_dir = get_data_dir()
@@ -259,10 +267,14 @@ def start_admin_server(host: str, port: int):
     # Preserve the existing data-directory selection while loading Fabric/admin settings from config.yaml.
     config.data_dir = str(data_dir)
     identity_manager = RuntimeIdentity.load(data_dir)
-    auth_manager = AdminSessionManager(str(data_dir), identity_manager.runtime_id)
+    auth_manager = AdminSessionManager(
+        str(data_dir),
+        identity_manager.runtime_id,
+        ttl_seconds=config.admin_session_ttl_seconds,
+    )
     audit_manager = AdminAuditLog(str(data_dir), identity_manager.runtime_id)
     secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
-    github_manager = GitHubAuthManager(secret_backend)
+    github_manager = build_github_auth_manager(secret_backend, config)
     
     from runtime.workspace.ephemeral import EphemeralWorkspaceManager
     from runtime.execution.manager import ExecutionManager

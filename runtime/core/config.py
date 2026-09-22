@@ -4,6 +4,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
+class RuntimeConfigError(RuntimeError):
+    """Raised when Runtime configuration cannot be loaded safely."""
+
+
 def detect_platform() -> str:
     """Auto-detect the platform."""
     return platform.system().lower()
@@ -61,6 +65,9 @@ class RuntimeConfig:
     update_channel: str = 'dev'
     log_level: str = 'INFO'
     
+    # GitHub authentication / application configuration (client ID is public, not a secret)
+    github_client_id: str = field(default_factory=lambda: os.environ.get("ANNY_GITHUB_CLIENT_ID", ""))
+
     # Fabric config
     fabric_org: str = None
     fabric_repo: str = None
@@ -75,33 +82,32 @@ class RuntimeConfig:
 
     @classmethod
     def load(cls) -> "RuntimeConfig":
-        """Loads configuration from YAML if present, merges with defaults."""
+        """Load configuration deterministically and fail closed on malformed input."""
         config_path = get_config_dir() / "config.yaml"
         config_data = {}
         if config_path.exists():
             try:
                 import yaml
+            except ImportError as exc:
+                raise RuntimeConfigError("PyYAML is required to load Runtime configuration") from exc
+
+            try:
                 with open(config_path, "r", encoding="utf-8") as f:
                     data = yaml.safe_load(f)
-                    if isinstance(data, dict):
-                        config_data = data
-            except ImportError:
-                # Basic YAML fallback if python-yaml is not installed
-                with open(config_path, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line or line.startswith("#"):
-                            continue
-                        if ":" in line:
-                            key, val = line.split(":", 1)
-                            key = key.strip()
-                            val = val.strip()
-                            if val.isdigit():
-                                val = int(val)
-                            config_data[key] = val
-            except Exception:
-                pass
-        
+            except (OSError, yaml.YAMLError) as exc:
+                raise RuntimeConfigError(
+                    f"Invalid Runtime configuration at {config_path}: {exc}"
+                ) from exc
+
+            if data is None:
+                config_data = {}
+            elif not isinstance(data, dict):
+                raise RuntimeConfigError(
+                    f"Runtime configuration at {config_path} must be a YAML mapping"
+                )
+            else:
+                config_data = data
+
         valid_keys = cls.__dataclass_fields__.keys()
         
         # Handle nested admin config
@@ -112,6 +118,10 @@ class RuntimeConfig:
                 if flat_key in valid_keys:
                     config_data[flat_key] = av
                     
+        env_client_id = os.environ.get("ANNY_GITHUB_CLIENT_ID")
+        if env_client_id:
+            config_data["github_client_id"] = env_client_id
+
         filtered_data = {k: v for k, v in config_data.items() if k in valid_keys}
         return cls(**filtered_data)
 

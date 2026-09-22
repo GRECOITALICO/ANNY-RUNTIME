@@ -80,10 +80,11 @@ jobs:
           test ! -d adapters
 
 
-      - name: Verify canonical systemd entrypoint
+      - name: Assert installer is the only systemd source
         run: |
-          grep -q 'ExecStart=/usr/local/bin/anny-runtime server' packaging/systemd/anny-runtime.service
-          ! grep -q 'runtime.core.engine' packaging/systemd/anny-runtime.service
+          test ! -e packaging/systemd/anny-runtime.service
+          test -f scripts/install.sh
+          grep -q 'ExecStart=\$BIN_DIR/anny-runtime server' scripts/install.sh
 
       - name: Compile canonical runtime server
         run: python -m py_compile runtime/admin/server.py
