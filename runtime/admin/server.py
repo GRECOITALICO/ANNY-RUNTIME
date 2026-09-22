@@ -270,7 +270,6 @@ def start_admin_server(host: str, port: int):
     from runtime.github.discovery import OrganizationDiscoveryService
     github_client = GitHubClient(secret_backend=secret_backend) if github_manager.has_token() else None
 
-    from runtime.fabric.github_adapter import GitHubFabricAdapter
     fabric_client = build_fabric_client(github_client, config)
     
     from runtime.telemetry.collector import TelemetryCollector
