@@ -446,3 +446,39 @@ def test_28_missing_evidence_fails_closed():
         for candidate in [path, recovery_path, quarantine]:
             if os.path.exists(candidate):
                 os.unlink(candidate)
+
+
+def test_29_recovery_survives_process_restart():
+    seed, payload, path, recovery_path, quarantine = _prepare_corrupted_registry()
+    try:
+        # Simulate a fresh process after the original Runtime has exited.
+        recovery_runtime = ModelRegistry.open_for_recovery(path)
+        attestation = _attestation(seed, payload, path, recovery_path, quarantine)
+        recovery_runtime.restore_from_attestation(attestation, lambda _: True)
+
+        assert not os.path.exists(recovery_path)
+        restored = ModelRegistry(storage_path=path)
+        assert restored.get_model("luna") is not None
+        assert restored.get_model("luna").version == "1.0"
+    finally:
+        record = f"{path}.recovery-record.test-recovery-001.json"
+        for candidate in [path, recovery_path, record, quarantine]:
+            if os.path.exists(candidate):
+                os.unlink(candidate)
+
+
+def test_30_recovery_id_path_injection_is_rejected():
+    seed, payload, path, recovery_path, quarantine = _prepare_corrupted_registry()
+    try:
+        attestation = _attestation(seed, payload, path, recovery_path, quarantine)
+        invalid = RecoveryAttestation(
+            **{**dataclasses.asdict(attestation), "recovery_id": "../escape"}
+        )
+        with pytest.raises(RecoveryAttestationError, match="invalid characters"):
+            seed.restore_from_attestation(invalid, lambda _: True)
+        assert os.path.exists(recovery_path)
+        assert not os.path.exists(path)
+    finally:
+        for candidate in [path, recovery_path, quarantine]:
+            if os.path.exists(candidate):
+                os.unlink(candidate)
