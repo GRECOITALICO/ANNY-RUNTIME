@@ -226,6 +226,17 @@ class AdminRouter:
         handler.end_headers()
         handler.wfile.write(body)
 
+    def _send_html(self, handler: BaseHTTPRequestHandler, html: str, status: int = 200) -> None:
+        body = html.encode('utf-8')
+        handler.send_response(status)
+        handler.send_header('Content-Type', 'text/html; charset=utf-8')
+        self._set_security_headers(handler)
+        for cookie in self.context.get('set_cookies', []):
+            handler.send_header('Set-Cookie', cookie)
+        handler.send_header('Content-Length', str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
+
     def _redirect(self, handler: BaseHTTPRequestHandler, location: str) -> None:
         handler.send_response(303)
         handler.send_header('Location', location)
