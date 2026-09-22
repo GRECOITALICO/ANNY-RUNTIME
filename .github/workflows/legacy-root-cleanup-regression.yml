@@ -41,6 +41,37 @@ jobs:
           test ! -e test_cdp.py
           test ! -e test_cdp2.py
           test ! -e test_backend_node.py
+          test ! -e test_dev_broker.py
+          test ! -e test_dynamic_tools.py
+          test ! -e test_fetch.py
+          test ! -e test_find_cdp.py
+          test ! -e test_find_cdp2.py
+          test ! -e test_find_click.py
+          test ! -e test_isolated.py
+          test ! -e test_isolated_nav.py
+          test ! -e test_js.py
+          test ! -e test_obj.py
+          test ! -e test_persistent.py
+          test ! -e test_x11.py
+          test ! -e diag_browser.py
+          test ! -e fix.py
+          test ! -e generate_001b_s2_evidence.py
+          test ! -e generate_evidence_002.py
+          test ! -e list_tools.py
+          test ! -e patch.py
+          test ! -e patch2.py
+          test ! -e patch_all.py
+          test ! -e patch_broker.py
+          test ! -e patch_broker_submit.py
+          test ! -e patch_dump.py
+          test ! -e patch_error.py
+          test ! -e patch_physical.py
+          test ! -e test.js
+          test ! -e test_node.js
+          test ! -e test_cdp.py
+          test ! -e test_cdp2.py
+          test ! -e test_cdp_hide.py
+          test ! -e test_describe_node.py
 
       - name: Compile canonical runtime server
         run: python -m py_compile runtime/admin/server.py
