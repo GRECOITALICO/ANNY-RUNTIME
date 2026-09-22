@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from runtime.admin.github import GitHubAuthManager
 from runtime.admin.server import build_github_auth_manager
-from runtime.core.config import RuntimeConfig
+from runtime.core.config import RuntimeConfig, RuntimeConfigError
 from runtime.github.client import GitHubClient
 from runtime.secrets.backend import FileSecretBackend
 
@@ -25,6 +25,31 @@ class TestDistributableGithubAuth(unittest.TestCase):
         with patch.dict(os.environ, {"ANNY_GITHUB_CLIENT_ID": "Iv1.public-test"}, clear=False):
             config = RuntimeConfig.load()
         self.assertEqual(config.github_client_id, "Iv1.public-test")
+
+
+    def test_malformed_runtime_config_fails_closed(self):
+        config_dir = tempfile.mkdtemp()
+        try:
+            config_path = os.path.join(config_dir, "config.yaml")
+            with open(config_path, "w", encoding="utf-8") as handle:
+                handle.write("fabric_org: [broken\n")
+            with patch.dict(os.environ, {"ANNY_DATA_DIR": config_dir}, clear=False):
+                with self.assertRaises(RuntimeConfigError):
+                    RuntimeConfig.load()
+        finally:
+            shutil.rmtree(config_dir)
+
+    def test_non_mapping_runtime_config_fails_closed(self):
+        config_dir = tempfile.mkdtemp()
+        try:
+            config_path = os.path.join(config_dir, "config.yaml")
+            with open(config_path, "w", encoding="utf-8") as handle:
+                handle.write("- not-a-mapping\n")
+            with patch.dict(os.environ, {"ANNY_DATA_DIR": config_dir}, clear=False):
+                with self.assertRaises(RuntimeConfigError):
+                    RuntimeConfig.load()
+        finally:
+            shutil.rmtree(config_dir)
 
     def test_server_auth_manager_receives_configured_client_id(self):
         config = RuntimeConfig(github_client_id="Iv1.public-test")
