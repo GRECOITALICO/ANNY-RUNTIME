@@ -541,7 +541,12 @@ class AdminRouter:
 
         if is_first_run or (session and getattr(session, 'scope', '') == "ONBOARDING_ONLY"):
             from runtime.admin.templates import first_run_page
-            return first_run_page(csrf_token=self._get_csrf(), error=error)
+            device_flow_available = bool(getattr(gh_mgr, 'client_id', ''))
+            return first_run_page(
+                csrf_token=self._get_csrf(),
+                error=error,
+                device_flow_available=device_flow_available,
+            )
 
         try:
             from runtime.admin.templates_cc import control_center_page
