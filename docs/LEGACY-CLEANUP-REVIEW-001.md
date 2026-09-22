@@ -71,3 +71,14 @@ Preserved:
 - `requirements.txt` as the active packaging dependency declaration;
 - release checksum metadata;
 - README/license/git metadata.
+
+
+### Root directory cleanup — 2026-09-22
+
+Removed:
+- `scratch/` and its one-off evidence/source-rewrite scripts.
+- `adapters/fabric_client.py` and empty `adapters/__init__.py`; this was a disconnected stub `FabricClient` that always returned `FABRIC_UNAVAILABLE` and was not referenced by the Runtime code path.
+
+Preserved:
+- `systemd/anny-browser-broker.service`, because it targets the real `runtime/browser/broker_server.py` and remains a distinct browser-broker service surface.
+- `audit/` and `tools/certification/` pending separate evidence/tooling review.
