@@ -4,7 +4,7 @@ import json
 import tempfile
 from datetime import datetime, timezone
 from runtime.execution.models import ModelState, Task, ModelDefinition
-from runtime.execution.registry import ModelRegistry, ModelCapabilityBinding, HardwareProfile, ModelPerformanceProfile, EvaluationRecord
+from runtime.execution.registry import ModelRegistry, RegistryRecoveryRequired, ModelCapabilityBinding, HardwareProfile, ModelPerformanceProfile, EvaluationRecord
 from runtime.execution.capability import CapabilityRegistry, CapabilityDefinition, ExecutorType
 from runtime.execution.policy import RuntimePolicy
 from runtime.execution.selector import ExecutorSelector
@@ -225,8 +225,9 @@ def test_20_schema_validation():
         os.unlink(path)
 
 def test_21_persistence_reload():
-    with tempfile.NamedTemporaryFile(delete=False) as f:
-        path = f.name
+    fd, path = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(path)
         
     try:
         reg1 = ModelRegistry(storage_path=path)
@@ -238,23 +239,38 @@ def test_21_persistence_reload():
     finally:
         os.unlink(path)
 
-def test_22_crash_recovery():
+def test_22_crash_recovery_fails_closed():
     import glob
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(b'{"corrupted": json')
         path = f.name
-        
+
+    recovery_path = f"{path}.recovery.json"
     try:
-        # Should recover by quarantining and falling back to initial state
-        reg = ModelRegistry(storage_path=path)
-        assert len(reg.list_models()) == 2
-        assert reg.is_available("luna") is True
-        
-        # Verify quarantine file exists
+        # Corruption must be quarantined and surfaced as blocked recovery,
+        # never silently replaced by a newly synthesized trusted registry.
+        with pytest.raises(RegistryRecoveryRequired, match="explicit recovery required"):
+            ModelRegistry(storage_path=path)
+
         q_files = glob.glob(f"{path}.quarantine.*")
         assert len(q_files) == 1
+        assert not os.path.exists(path)
+
+        with open(recovery_path, "r") as rf:
+            marker = json.load(rf)
+        assert marker["state"] == "BLOCKED_OR_UNKNOWN"
+        assert marker["reconstruction_required"] is True
+        assert marker["verification_required"] is True
+        assert marker["original_sha256"] != "UNKNOWN"
+
+        # The durable marker itself prevents a silent fresh bootstrap.
+        with pytest.raises(RegistryRecoveryRequired, match="recovery is required"):
+            ModelRegistry(storage_path=path)
     finally:
-        os.unlink(path)
+        if os.path.exists(path):
+            os.unlink(path)
+        if os.path.exists(recovery_path):
+            os.unlink(recovery_path)
         for qf in glob.glob(f"{path}.quarantine.*"):
             os.unlink(qf)
 
