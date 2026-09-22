@@ -73,6 +73,11 @@ jobs:
           test ! -e test_cdp_hide.py
           test ! -e test_describe_node.py
 
+      - name: Verify canonical systemd entrypoint
+        run: |
+          grep -q 'ExecStart=/usr/local/bin/anny-runtime server' packaging/systemd/anny-runtime.service
+          ! grep -q 'runtime.core.engine' packaging/systemd/anny-runtime.service
+
       - name: Compile canonical runtime server
         run: python -m py_compile runtime/admin/server.py
 
