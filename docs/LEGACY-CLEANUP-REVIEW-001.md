@@ -54,10 +54,12 @@ These files were manual diagnostics/probes outside the canonical `tests/` tree. 
 
 ### Systemd entrypoint reconciliation — 2026-09-22
 
-- `packaging/systemd/anny-runtime.service` was a stale startup definition using `python -m runtime.core.engine`.
-- `scripts/install.sh` is the canonical installer and generates a service executing `/usr/local/bin/anny-runtime server` (system mode) or the equivalent user-local CLI path.
+- `packaging/systemd/anny-runtime.service` was identified as a stale startup definition using `python -m runtime.core.engine`.
+- `scripts/install.sh` is the canonical installer and generates the service executing `/usr/local/bin/anny-runtime server` (system mode) or the equivalent user-local CLI path.
 - `cli/main.py::cmd_server` calls `runtime.admin.server.start_admin_server()`, which in turn creates `RuntimeEngine` and executes `engine.startup()`.
-- The static packaging unit was synchronized to the installer-generated entrypoint; the obsolete engine-only unit is no longer an independent runtime-start source.
+- The current tree does **not** contain `packaging/systemd/anny-runtime.service`; the cleanup regression workflow explicitly asserts its absence.
+- Therefore the installer is the current single source of the systemd startup definition. The prior statement that the static unit was "synchronized and retained" was stale documentation and is superseded by the current tree and workflow contract.
+- No second static systemd source should be introduced without an explicit architecture decision and corresponding reconciliation of the cleanup regression contract.
 
 
 ### Root metadata cleanup — 2026-09-22
