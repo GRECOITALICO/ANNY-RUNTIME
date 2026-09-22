@@ -68,6 +68,8 @@ When `ANNY_GITHUB_CLIENT_ID` or `github_client_id` is configured, the UI offers 
 Runtime never stores raw GitHub credentials in source files, HTML, status DTOs or audit records.
 
 ## Configuration
+Runtime configuration is fail-closed: a malformed YAML file or a non-mapping root causes Runtime startup to stop with an explicit configuration error rather than silently falling back to defaults.
+
 
 The canonical Runtime configuration file is:
 
