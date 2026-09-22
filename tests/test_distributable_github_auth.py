@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -35,7 +36,7 @@ class TestDistributableGithubAuth(unittest.TestCase):
         manager = GitHubAuthManager(self.backend, client_id="Iv1.public-test")
         manager._device_flow = MagicMock(
             device_code="device",
-            started_at=0.0,
+            started_at=time.time(),
             expires_in=900,
         )
         manager._device_flow.user_code = "USER-CODE"
@@ -101,7 +102,7 @@ class TestDistributableGithubAuth(unittest.TestCase):
         mock_urlopen.return_value.__enter__.return_value = mock_resp
 
         client = GitHubClient(token="gho_test")
-        client.get_current_user()
+        client.get_authenticated_principal()
 
         request = mock_urlopen.call_args.args[0]
         self.assertEqual(request.headers["Authorization"], "Bearer gho_test")
