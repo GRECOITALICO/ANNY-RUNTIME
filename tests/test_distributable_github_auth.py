@@ -68,7 +68,7 @@ class TestDistributableGithubAuth(unittest.TestCase):
         manager = GitHubAuthManager(self.backend, client_id="Iv1.public-test")
         manager._device_flow = MagicMock(
             device_code="device",
-            started_at=0.0,
+            started_at=time.time(),
             expires_in=900,
         )
         manager._device_flow.user_code = "USER-CODE"
