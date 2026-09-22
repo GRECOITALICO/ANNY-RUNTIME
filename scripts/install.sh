@@ -251,6 +251,13 @@ chmod +x "$BIN_DIR/anny-runtime"
 
 # 10. Systemd Registration
 echo "Configuring Systemd..."
+# GitHub OAuth Device Flow client IDs are public application identifiers, not secrets.
+# Persist them into the generated service environment when provided; RuntimeConfig also
+# supports the same value from config.yaml for manual/user-managed installations.
+GITHUB_CLIENT_ID_ENV=""
+if [ -n "${ANNY_GITHUB_CLIENT_ID:-}" ]; then
+    GITHUB_CLIENT_ID_ENV="Environment=ANNY_GITHUB_CLIENT_ID=${ANNY_GITHUB_CLIENT_ID}"
+fi
 mkdir -p "$SYSTEMD_DIR"
 if [ -f "$SYSTEMD_DIR/anny-runtime.service" ]; then
     if [ "$EUID" -eq 0 ]; then
@@ -275,6 +282,7 @@ WorkingDirectory=$FINAL_INSTALL_DIR
 Environment=PYTHONUNBUFFERED=1
 Environment=ANNY_INSTALL_MODE=system
 Environment=ANNY_DATA_DIR=$DATA_DIR
+$GITHUB_CLIENT_ID_ENV
 
 # Hardening
 NoNewPrivileges=yes
@@ -309,6 +317,7 @@ WorkingDirectory=$FINAL_INSTALL_DIR
 Environment=PYTHONUNBUFFERED=1
 Environment=ANNY_INSTALL_MODE=user
 Environment=ANNY_DATA_DIR=$DATA_DIR
+$GITHUB_CLIENT_ID_ENV
 
 [Install]
 WantedBy=default.target
