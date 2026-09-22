@@ -61,3 +61,22 @@ verification:
   activation: false
   authority_expansion: false
   KIRA_P2: "SEPARATE_AND_UNTOUCHED"
+
+additional_retirements:
+  - "evidence_001d.json"
+  - "023_QWEN_INTEGRATION_EVIDENCE.md"
+  - "DEPENDENCY-INVENTORY.json"
+  - "adapters/fabric_client.py"
+  - "adapters/__init__.py"
+  - "scratch/**"
+  - "audit/customer_zero_008/**"
+  - "tools/certification/**"
+
+preserved_runtime_surfaces:
+  - "runtime/**"
+  - "tests/**"
+  - "scripts/**"
+  - "packaging/**"
+  - "systemd/anny-browser-broker.service"
+  - "tools/** excluding retired certification history"
+  - "release checksum and repository metadata"
