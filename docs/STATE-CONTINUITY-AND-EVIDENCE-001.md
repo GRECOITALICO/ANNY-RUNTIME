@@ -181,6 +181,19 @@ checkpoint:
 
 This is the minimum information required to continue without relying on chat history.
 
+
+## 12A. Organizational interaction checkpoint rule
+
+The organizational control plane imposes a stronger continuity requirement on ANNY/L0, registered L1 directors, and registered L2 workers:
+
+constitution/INTERACTION-CHECKPOINT-RULE-001.yaml
+
+Every meaningful operational response or interaction that advances work must create or reference a durable auditable checkpoint before continuation. A checkpoint records state and evidence; it never creates or expands authority.
+
+Minimum checkpoint fields include actor, level, mission/task/step, current state, completed work, unverified work, evidence/test references, commit SHA when applicable, blockers, next action, resume conditions, and untouched/forbidden scope.
+
+Missing checkpoint is a continuation blocker. Conversation history is never a substitute for the durable checkpoint.
+
 ## 13. Handoff rule
 
 A handoff is valid only when it contains enough information for another actor/session to identify:
