@@ -16,3 +16,18 @@ docs/evidence/ (OBSERVABILITY-001-*.md) | HISTORICAL_ONLY | Referenced by MILEST
 docs/evidence/DETERMINISTIC-OBSERVABILITY-001-POST-CLOSEOUT-AUDIT-001..004.md | HISTORICAL_ONLY | Referenced in prior ledger entries | None | HISTORICAL_ONLY: audit trail documents; do not delete; not callable production code | None
 docs/LEGACY-CLEANUP-REVIEW-001.md | RETAIN_WITH_BLOCKER | Referenced by MILESTONE-LEDGER-001.yaml | This document | RETAIN: replaces prior narrative version; now contains mandatory contractual table | Updated by AG-009
 docs/PRE-EXISTING-FAILURES-TRIAGE-001.md | RETAIN_WITH_BLOCKER | Referenced by MILESTONE-LEDGER-001.yaml | This document | RETAIN: replaces prior narrative version; now contains per-failure triage schema or explicit zero-failure record | Updated by AG-009
+
+
+## 2026-09-22 root scratch cleanup
+
+The following root-level files were classified as obsolete development tooling and removed from the cleanup branch:
+
+- `diag_browser.py` — one-off browser diagnostic; no production caller.
+- `fix.py`, `patch.py`, `patch2.py`, `patch_all.py`, `patch_broker.py`, `patch_broker_submit.py`, `patch_dump.py`, `patch_error.py`, `patch_physical.py` — one-off source-rewrite/patch scripts that directly mutate implementation or historical test files; superseded by committed source and canonical tests.
+- `generate_001b_s2_evidence.py`, `generate_evidence_002.py` — historical evidence-generation scripts tied to old scratch paths and providers; evidence is retained as artifacts, not regenerated through these scripts.
+- `list_tools.py` — one-off local MCP bridge inspection script.
+- `test.js`, `test_node.js`, `test_backend_node.py`, `test_cdp.py`, `test_cdp2.py`, `test_cdp_hide.py`, `test_describe_node.py` — root-level manual browser/CDP diagnostics; canonical Runtime tests remain under `tests/`.
+
+The repository workflows reviewed on the cleanup base execute canonical `runtime/**` modules and tests under `tests/`; none reference the removed root paths.
+
+Deletion is therefore safe for this milestone. Git history remains the historical record of the removed files.
