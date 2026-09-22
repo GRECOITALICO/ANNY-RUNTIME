@@ -89,4 +89,6 @@ jobs:
         run: python -m py_compile runtime/admin/server.py
 
       - name: Run focused canonical regression
+        env:
+          PYTHONPATH: .
         run: pytest -q tests/test_022_model_registry.py
