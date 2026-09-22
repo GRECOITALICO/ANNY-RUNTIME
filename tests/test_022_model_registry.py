@@ -4,7 +4,7 @@ import json
 import tempfile
 from datetime import datetime, timezone
 from runtime.execution.models import ModelState, Task, ModelDefinition
-from runtime.execution.registry import ModelRegistry, RegistryRecoveryRequired, ModelCapabilityBinding, HardwareProfile, ModelPerformanceProfile, EvaluationRecord
+from runtime.execution.registry import ModelRegistry, RegistryRecoveryRequired, RecoveryAttestationError, RecoveryAttestation, ModelCapabilityBinding, HardwareProfile, ModelPerformanceProfile, EvaluationRecord
 from runtime.execution.capability import CapabilityRegistry, CapabilityDefinition, ExecutorType
 from runtime.execution.policy import RuntimePolicy
 from runtime.execution.selector import ExecutorSelector
@@ -338,3 +338,110 @@ def test_25_crash_safety():
             os.unlink(temp_path)
         except OSError:
             pass
+
+
+def _prepare_corrupted_registry():
+    import glob
+    fd, path = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(path)
+
+    seed = ModelRegistry(storage_path=path)
+    payload = seed._build_data()
+    with open(path, "w") as f:
+        f.write('{"corrupted": true')
+    with pytest.raises(RegistryRecoveryRequired):
+        ModelRegistry(storage_path=path)
+
+    recovery_path = f"{path}.recovery.json"
+    with open(recovery_path, "r") as f:
+        marker = json.load(f)
+    quarantine = marker["quarantine_path"]
+    return seed, payload, path, recovery_path, quarantine
+
+
+def _attestation(seed, payload, path, recovery_path, quarantine):
+    import hashlib
+    serialized = seed._serialize_data(payload)
+    digest = hashlib.sha256(serialized).hexdigest()
+    marker = json.load(open(recovery_path, "r"))
+    return RecoveryAttestation(
+        recovery_id="test-recovery-001",
+        source_registry_hash=marker["original_sha256"],
+        quarantine_reference=quarantine,
+        authority_ref="ANNY-AUTH-TEST-001",
+        authority_decision="APPROVE_RESTORE",
+        source_evidence_ids=["evidence:quarantine", "evidence:source"],
+        reconstructed_registry_digest=digest,
+        registry_payload=payload,
+        verification_evidence_ids=["evidence:verification"],
+        recovery_timestamp="2026-09-22T00:00:00Z",
+    )
+
+
+def test_26_explicit_attestation_restores_only_after_authority():
+    import glob
+    seed, payload, path, recovery_path, quarantine = _prepare_corrupted_registry()
+    try:
+        attestation = _attestation(seed, payload, path, recovery_path, quarantine)
+
+        with pytest.raises(RecoveryAttestationError, match="did not authorize"):
+            seed.restore_from_attestation(attestation, lambda _: False)
+
+        assert os.path.exists(recovery_path)
+        assert not os.path.exists(path)
+
+        seed.restore_from_attestation(attestation, lambda _: True)
+
+        assert os.path.exists(path)
+        assert not os.path.exists(recovery_path)
+        assert seed.get_model("luna") is not None
+        assert seed.get_model("luna").version == "1.0"
+
+        records = glob.glob(f"{path}.recovery-record.test-recovery-001.json")
+        assert len(records) == 1
+        with open(records[0], "r") as f:
+            record = json.load(f)
+        assert record["state"] == "RESTORED_VERIFIED"
+        assert record["authority_ref"] == "ANNY-AUTH-TEST-001"
+
+        restored = ModelRegistry(storage_path=path)
+        assert restored.get_model("luna").version == "1.0"
+    finally:
+        for candidate in [path, recovery_path, f"{path}.recovery-record.test-recovery-001.json", quarantine]:
+            if os.path.exists(candidate):
+                os.unlink(candidate)
+
+
+def test_27_attestation_digest_mismatch_fails_closed():
+    seed, payload, path, recovery_path, quarantine = _prepare_corrupted_registry()
+    try:
+        attestation = _attestation(seed, payload, path, recovery_path, quarantine)
+        invalid = RecoveryAttestation(
+            **{**dataclasses.asdict(attestation), "reconstructed_registry_digest": "0" * 64}
+        )
+        with pytest.raises(RecoveryAttestationError, match="digest mismatch"):
+            seed.restore_from_attestation(invalid, lambda _: True)
+        assert os.path.exists(recovery_path)
+        assert not os.path.exists(path)
+    finally:
+        for candidate in [path, recovery_path, quarantine]:
+            if os.path.exists(candidate):
+                os.unlink(candidate)
+
+
+def test_28_missing_evidence_fails_closed():
+    seed, payload, path, recovery_path, quarantine = _prepare_corrupted_registry()
+    try:
+        attestation = _attestation(seed, payload, path, recovery_path, quarantine)
+        invalid = RecoveryAttestation(
+            **{**dataclasses.asdict(attestation), "verification_evidence_ids": []}
+        )
+        with pytest.raises(RecoveryAttestationError, match="no verification evidence"):
+            seed.restore_from_attestation(invalid, lambda _: True)
+        assert os.path.exists(recovery_path)
+        assert not os.path.exists(path)
+    finally:
+        for candidate in [path, recovery_path, quarantine]:
+            if os.path.exists(candidate):
+                os.unlink(candidate)
