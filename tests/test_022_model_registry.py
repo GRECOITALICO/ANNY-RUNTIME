@@ -296,8 +296,9 @@ def test_23_model_replacement_without_task_mutation(clean_registry):
     assert sel2.model_id == "luna"
 
 def test_24_process_persistence():
-    with tempfile.NamedTemporaryFile(delete=False) as f:
-        path = f.name
+    fd, path = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(path)
         
     try:
         # Process A
@@ -312,8 +313,9 @@ def test_24_process_persistence():
         os.unlink(path)
 
 def test_25_crash_safety():
-    with tempfile.NamedTemporaryFile(delete=False) as f:
-        path = f.name
+    fd, path = tempfile.mkstemp()
+    os.close(fd)
+    os.unlink(path)
         
     try:
         # Initial valid write
@@ -330,7 +332,8 @@ def test_25_crash_safety():
         reg2 = ModelRegistry(storage_path=path)
         assert reg2.get_model("luna").version == "1.0"
     finally:
-        os.unlink(path)
+        if os.path.exists(path):
+            os.unlink(path)
         try:
             os.unlink(temp_path)
         except OSError:
