@@ -36,9 +36,15 @@ from runtime.browser.broker_server import (
     _validate_profile,
     _validate_schema,
     _FORBIDDEN_FIELDS,
-    CHROME_BINARY,
-    PROFILE_BASE,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolated_browser_runtime(monkeypatch, tmp_path):
+    """Exercise resolver semantics with a fixture executable, not host Chrome."""
+    monkeypatch.setattr(broker_mod, "PROFILE_BASE", tmp_path / "profiles")
+    monkeypatch.setattr(broker_mod, "_resolve_chrome_binary", lambda: "/test/chrome")
+    monkeypatch.setattr(broker_mod, "_check_not_root", lambda: None)
 
 
 # ── URL validation ─────────────────────────────────────────────────────────────
@@ -100,7 +106,7 @@ class TestURLValidation:
 class TestProfileValidation:
     def test_colab_profile_allowed(self):
         p = _validate_profile("colab")
-        assert p.is_relative_to(PROFILE_BASE.resolve())
+        assert p.is_relative_to(broker_mod.PROFILE_BASE.resolve())
 
     def test_path_traversal_dotdot_rejected(self):
         with pytest.raises(ValueError):
@@ -125,7 +131,7 @@ class TestProfileValidation:
 
     def test_profile_stays_under_base(self):
         p = _validate_profile("test-session")
-        assert str(p).startswith(str(PROFILE_BASE.resolve()))
+        assert p.is_relative_to(broker_mod.PROFILE_BASE.resolve())
 
 
 # ── IPC Schema validation ──────────────────────────────────────────────────────
@@ -223,13 +229,13 @@ class TestBrowserBrokerContract:
         assert result["status"] == "ok"
         assert result["running"] is False
         assert result["pid"] is None
-        assert result["binary"] == CHROME_BINARY
+        assert result["binary"] == b.chrome_binary
         assert "profile" in result
 
     def test_status_always_reports_whitelisted_binary(self):
         b = self._make_broker()
         result = b.get_status()
-        assert result["binary"] == CHROME_BINARY
+        assert result["binary"] == b.chrome_binary
 
     def test_start_browser_uses_chrome_binary(self):
         b = self._make_broker()
@@ -244,7 +250,7 @@ class TestBrowserBrokerContract:
 
         call_args = mock_popen.call_args
         args_list = call_args[0][0]
-        assert args_list[0] == CHROME_BINARY
+        assert args_list[0] == b.chrome_binary
 
     def test_start_browser_uses_shell_false(self):
         b = self._make_broker()
@@ -302,7 +308,7 @@ class TestBrowserBrokerContract:
 
         args_list = mock_popen.call_args[0][0]
         user_data = [a for a in args_list if "--user-data-dir" in a][0]
-        assert ".anny/browser-profiles/" in user_data
+        assert user_data == f"--user-data-dir={b.profile_dir}"
         assert ".config/google-chrome" not in user_data
 
     def test_stop_browser_when_not_running_is_safe(self):
@@ -328,9 +334,17 @@ class TestBrowserBrokerContract:
         mock_popen.assert_not_called()
 
     def test_not_root_enforced(self):
-        with patch("os.getuid", return_value=0):
+        with patch.object(broker_mod, "_check_not_root", side_effect=RuntimeError("Browser Broker must not run as root.")):
             with pytest.raises(RuntimeError, match="must not run as root"):
                 BrowserBroker()
+
+    def test_missing_dynamic_resolver_blocks_launch(self, monkeypatch):
+        monkeypatch.setattr(broker_mod, "_resolve_chrome_binary", lambda: None)
+        broker = BrowserBroker()
+        assert broker.get_status()["binary"] is None
+        result = broker.start_browser("https://colab.research.google.com/")
+        assert result["status"] == "error"
+        assert "No supported Chrome" in result["message"]
 
 
 # ── Socket permission test ─────────────────────────────────────────────────────

@@ -1470,7 +1470,10 @@ class BrowserBroker:
             "broker_state": self.broker_state,
             "browser_state": self.browser_state,
             "profile": str(self.profile_dir),
-            "binary": CHROME_BINARY,
+            # The resolver is intentionally dynamic.  Status reports the
+            # executable selected for this broker instance, or ``None`` when
+            # no supported local executable was available at construction.
+            "binary": self.chrome_binary,
         }
 
 

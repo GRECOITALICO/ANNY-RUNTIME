@@ -38,18 +38,22 @@ from runtime.browser.broker_server import (
     _validate_schema,
     _FORBIDDEN_FIELDS,
     _REQUIRED_FIELDS,
-    CHROME_BINARY,
-    PROFILE_BASE,
 )
 
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 
+@pytest.fixture(autouse=True)
+def isolated_browser_runtime(monkeypatch, tmp_path):
+    """Use the canonical dynamic resolver, never a host Chrome path."""
+    monkeypatch.setattr(broker_mod, "PROFILE_BASE", tmp_path / "profiles")
+    monkeypatch.setattr(broker_mod, "_resolve_chrome_binary", lambda: "/test/chrome")
+    monkeypatch.setattr(broker_mod, "_check_not_root", lambda: None)
+
+
 @pytest.fixture()
 def broker():
-    with patch("runtime.browser.broker_server._check_not_root"):
-        b = BrowserBroker()
-    return b
+    return BrowserBroker()
 
 
 @pytest.fixture()
@@ -81,7 +85,7 @@ class TestStartGovernedBrowser:
         assert res["status"] == "ok"
         assert res["pid"] == 99999
         assert res["profile"] == str(broker.profile_dir)
-        assert res["binary"] == CHROME_BINARY
+        assert res["binary"] == broker.chrome_binary
 
     def test_start_stores_last_url(self, broker):
         url = "https://colab.research.google.com/"
@@ -117,7 +121,7 @@ class TestStatusGovernedBrowser:
         assert res["status"] == "ok"
         assert res["running"] is True
         assert res["pid"] == 12345
-        assert res["binary"] == CHROME_BINARY
+        assert res["binary"] == running_broker.chrome_binary
 
     def test_status_stopped(self, broker):
         broker.process = None
@@ -156,8 +160,14 @@ class TestNavigateAllowedURL:
             mock_cdp.assert_called_once_with("Page.navigate", {"url": "https://colab.research.google.com/new"})
 
     def test_navigate_uses_correct_binary(self, running_broker):
-        # Navigation no longer launches a binary directly.
-        pass
+        # Navigation is an in-process CDP operation; it must not relaunch a
+        # browser or introduce a separate executable-selection path.
+        with patch.object(running_broker, "_cdp_request") as mock_cdp, \
+             patch("runtime.browser.broker_server.subprocess.Popen") as mock_popen:
+            result = running_broker.navigate("https://colab.research.google.com/new")
+        assert result["status"] == "ok"
+        mock_cdp.assert_called_once_with("Page.navigate", {"url": "https://colab.research.google.com/new"})
+        mock_popen.assert_not_called()
 
 
 # ─── TEST_NAVIGATE_FORBIDDEN_SCHEME ──────────────────────────────────────────
@@ -182,6 +192,8 @@ class TestNavigateForbiddenScheme:
 class TestHideGovernedBrowser:
     def test_hide_with_xdotool(self, running_broker):
         with patch("runtime.browser.broker_server.shutil.which", return_value="/usr/bin/xdotool"), \
+             patch("runtime.browser.broker_server.os.path.isfile", return_value=True), \
+             patch("runtime.browser.broker_server.os.access", return_value=True), \
              patch("runtime.browser.broker_server.subprocess.run") as mock_run:
             search_res = MagicMock()
             search_res.stdout = "111111\n222222\n"
@@ -195,6 +207,8 @@ class TestHideGovernedBrowser:
 
     def test_hide_sets_hidden_state(self, running_broker):
         with patch("runtime.browser.broker_server.shutil.which", return_value="/usr/bin/xdotool"), \
+             patch("runtime.browser.broker_server.os.path.isfile", return_value=True), \
+             patch("runtime.browser.broker_server.os.access", return_value=True), \
              patch("runtime.browser.broker_server.subprocess.run") as mock_run:
             search_res = MagicMock()
             search_res.stdout = "111111\n"
@@ -204,7 +218,7 @@ class TestHideGovernedBrowser:
         assert running_broker.browser_state == BrowserState.HIDDEN
 
     def test_hide_without_xdotool_returns_unavailable(self, running_broker):
-        with patch("runtime.browser.broker_server.os.path.exists", return_value=False):
+        with patch("runtime.browser.broker_server.shutil.which", return_value=None):
             res = running_broker.hide_browser()
         assert res["status"] == "unavailable"
 
@@ -240,16 +254,14 @@ class TestStopGovernedBrowser:
 
 class TestPersonalProfileUntouchable:
     def test_broker_profile_hardwired_to_colab(self):
-        with patch("runtime.browser.broker_server._check_not_root"):
-            b = BrowserBroker()
+        b = BrowserBroker()
         assert b.profile_name == "colab"
-        assert str(b.profile_dir).startswith(str(PROFILE_BASE))
+        assert str(b.profile_dir).startswith(str(broker_mod.PROFILE_BASE))
         assert "colab" in str(b.profile_dir)
 
     def test_personal_chrome_profile_not_used(self):
         personal = str(Path.home() / ".config" / "google-chrome")
-        with patch("runtime.browser.broker_server._check_not_root"):
-            b = BrowserBroker()
+        b = BrowserBroker()
         assert str(b.profile_dir) != personal
         assert not str(b.profile_dir).startswith(personal)
 

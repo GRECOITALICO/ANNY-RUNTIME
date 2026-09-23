@@ -1,22 +1,23 @@
-"""
-ANNY-CHATGPT-LUNA-BRIDGE-005 Tests
+"""Current Bridge contract tests.
 
-Integration tests proving the governed HTTP bridge for ChatGPT/Luna.
+The ``TEST_ONLY`` fixtures below model a local test boundary. They do not
+claim an external issuer, external secret authority, or physical execution.
+Bridge capability eligibility is resolved only through the Runtime registry.
 """
 import json
-import pytest
-import tempfile
-import os
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-from dataclasses import asdict
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
-from runtime.api.bridge import BridgeRouter, BridgeAuthError, ALLOWED_CAPABILITIES
-from runtime.execution.models import Task, ExecutionStatus, TaskExecutionContext
-from runtime.execution.capability import CapabilityRegistry
+import pytest
+
+from runtime.api.bridge import BridgeRouter
+from runtime.execution.deterministic_executor import DeterministicExecutor
 from runtime.execution.manager import ExecutionManager
-from runtime.journal.journal import OperationJournal, JournalEntry
-from http.server import BaseHTTPRequestHandler
+from runtime.execution.models import ExecutionStatus, Task, TaskExecutionContext
+from runtime.journal.journal import JournalEntry, OperationJournal
+from runtime.security.execution_context import ExecutionContext
+from runtime.workspace.ephemeral import EphemeralWorkspaceManager
+
 
 class MockHandler:
     def __init__(self, command="POST", headers=None):
@@ -24,254 +25,180 @@ class MockHandler:
         self.headers = headers or {}
         self.status = None
         self.body = b""
-        self.wfile = MagicMock()
-        self.wfile.write.side_effect = self._write
-        
+        self.wfile = self
+
     def send_response(self, status):
         self.status = status
-        
-    def send_header(self, *args): pass
-    def end_headers(self): pass
-    
-    def _write(self, data):
+
+    def send_header(self, *_args):
+        pass
+
+    def end_headers(self):
+        pass
+
+    def write(self, data):
         self.body += data
 
-@pytest.fixture
-def mock_exec_mgr():
-    mgr = MagicMock(spec=ExecutionManager)
-    mgr.registry = CapabilityRegistry()
-    # Mock submit_task
-    def mock_submit(task):
-        ctx = TaskExecutionContext(
-            execution_id="exec-123",
-            task_id=task.task_id,
-            account_id=task.account_id,
-            project_id=task.project_id,
-            capability_id=task.capability_id,
-            workspace_path="/tmp",
-            environment={},
-            allowed_tools=[],
-            deadline=task.deadline,
-            resource_limits={},
-            network_policy=task.constraints.get("network", "restricted"),
-            write_policy="deny",
-            status=ExecutionStatus.SUCCEEDED
-        )
-        return ctx
-    mgr.submit_task.side_effect = mock_submit
-    
-    def mock_execute(exec_id):
-        return TaskExecutionContext(
-            execution_id=exec_id,
-            task_id="tsk-123",
-            account_id="test-account",
-            project_id="test-project",
-            capability_id="repository.read",
-            workspace_path="/tmp",
-            environment={},
-            allowed_tools=[],
-            deadline=datetime.now(timezone.utc),
-            resource_limits={},
-            network_policy="restricted",
-            write_policy="deny",
-            status=ExecutionStatus.SUCCEEDED
-        )
-    mgr.execute_sync.side_effect = mock_execute
-    
-    return mgr
+    def flush(self):
+        pass
+
+
+class TestOnlySecretBackend:
+    """Fixture boundary only; it is not a live secret authority."""
+
+    def retrieve(self, reference):
+        return b"test-bridge-token" if reference == "bridge_token" else None
+
+
+class _Generation:
+    def __init__(self, current):
+        self.current = current
+
+
+class _Runtime:
+    def __init__(self, generation):
+        self.generation = _Generation(generation)
+
+
+def _test_context(**changes):
+    now = datetime.now(timezone.utc)
+    values = dict(
+        tenant_id="TEST_ONLY_tenant", account_id="TEST_ONLY_account",
+        project_id="TEST_ONLY_project", anny_instance_id="TEST_ONLY_anny",
+        runtime_id="TEST_ONLY_runtime", session_id="TEST_ONLY_session",
+        actor_id="TEST_ONLY_actor", operation_id="TEST_ONLY_operation",
+        execution_id="TEST_ONLY_execution", generation=7,
+        issued_at=now - timedelta(seconds=1), expires_at=now + timedelta(minutes=1),
+        workspace_id="TEST_ONLY_workspace", capabilities={"filesystem.inspect"},
+    )
+    values.update(changes)
+    return ExecutionContext(**values)
+
 
 @pytest.fixture
-def bridge(mock_exec_mgr):
-    class MockSecretBackend:
-        def retrieve(self, key):
-            return b"secret-token" if key == "bridge_token" else None
-    
-    return BridgeRouter({
-        "secret_backend": MockSecretBackend(),
-        "execution_manager": mock_exec_mgr
+def bridge_runtime(tmp_path):
+    """Real ExecutionManager admission with a TEST_ONLY authenticated context."""
+    manager = ExecutionManager(EphemeralWorkspaceManager(str(tmp_path / "workspaces")))
+    context = _test_context()
+    router = BridgeRouter({
+        "secret_backend": TestOnlySecretBackend(),
+        "execution_manager": manager,
+        "execution_context": context,
+        "runtime_engine": _Runtime(context.generation),
     })
+    return router, manager, context
 
 
-# ============================================================
-# Phase 3: Bridge Authentication
-# ============================================================
-def test_bridge_auth_missing(bridge):
+def _request(router, tmp_path, payload, *, token="test-bridge-token"):
+    handler = MockHandler(headers={"X-Bridge-Token": token})
+    with patch("runtime.api.bridge.get_data_dir", return_value=tmp_path):
+        router.dispatch(type("Parsed", (), {"path": "/api/v1/bridge/tasks"})(), handler, json.dumps(payload).encode())
+    return handler, json.loads(handler.body)
+
+
+def test_bridge_auth_missing(bridge_runtime):
+    router, _, _ = bridge_runtime
     handler = MockHandler(headers={})
-    bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks"), handler)
+    router.dispatch(type("Parsed", (), {"path": "/api/v1/bridge/tasks"})(), handler)
     assert handler.status == 401
-    resp = json.loads(handler.body)
-    assert resp["error"] == "BRIDGE_AUTH_ERROR"
+    assert json.loads(handler.body)["error"] == "BRIDGE_AUTH_ERROR"
 
-def test_bridge_auth_invalid(bridge):
-    handler = MockHandler(headers={"X-Bridge-Token": "bad-token"})
-    bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks"), handler)
+
+def test_bridge_auth_invalid(bridge_runtime, tmp_path):
+    router, _, _ = bridge_runtime
+    handler, response = _request(router, tmp_path, {"intent": "x", "requested_capability": "filesystem.inspect"}, token="invalid")
     assert handler.status == 401
+    assert response["error"] == "BRIDGE_AUTH_ERROR"
 
 
-# ============================================================
-# Phase 2: Bridge Contract (Schema)
-# ============================================================
-def test_bridge_contract_rejects_worker_id(bridge):
-    handler = MockHandler(command="POST", headers={"X-Bridge-Token": "secret-token"})
-    payload = json.dumps({"intent": "read file", "requested_capability": "repository.read", "worker_id": "w-123"}).encode()
-    bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks"), handler, request_body=payload)
-    
-    assert handler.status == 400
-    resp = json.loads(handler.body)
-    assert resp["error"] == "BRIDGE_INVALID_REQUEST"
-    assert "Prohibited fields" in resp["message"]
-
-def test_bridge_contract_missing_required(bridge):
-    handler = MockHandler(command="POST", headers={"X-Bridge-Token": "secret-token"})
-    payload = json.dumps({"intent": "read file"}).encode() # missing capability
-    bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks"), handler, request_body=payload)
-    assert handler.status == 400
-    resp = json.loads(handler.body)
-    assert "Missing intent or" in resp["message"]
-
-
-# ============================================================
-# Phase 5: Capability Resolution
-# ============================================================
-def test_capability_not_found(bridge):
-    handler = MockHandler(command="POST", headers={"X-Bridge-Token": "secret-token"})
-    payload = json.dumps({
-        "intent": "hack the mainframe", 
-        "requested_capability": "system.hack"
-    }).encode()
-    bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks"), handler, request_body=payload)
-    
-    assert handler.status == 404
-    resp = json.loads(handler.body)
-    assert resp["error"] == "CAPABILITY_NOT_FOUND"
-
-
-# ============================================================
-# Phase 6: Policy Enforcement
-# ============================================================
-def test_policy_rejects_network_override(bridge):
-    handler = MockHandler(command="POST", headers={"X-Bridge-Token": "secret-token"})
-    payload = json.dumps({
-        "intent": "get weather", 
-        "requested_capability": "repository.read",
-        "constraints": {"network": "allow_all"}
-    }).encode()
-    bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks"), handler, request_body=payload)
-    
+def test_bridge_rejects_missing_execution_context(bridge_runtime, tmp_path):
+    router, _, _ = bridge_runtime
+    router.context.pop("execution_context")
+    handler, response = _request(router, tmp_path, {"intent": "inspect", "requested_capability": "filesystem.inspect"})
     assert handler.status == 403
-    resp = json.loads(handler.body)
-    assert resp["error"] == "POLICY_DENIED"
+    assert response["error"] == "POLICY_DENIED"
 
 
-# ============================================================
-# Phase 4 & 7: Task Creation & Pipeline
-# ============================================================
-def test_task_creation_success(bridge, mock_exec_mgr):
-    handler = MockHandler(command="POST", headers={"X-Bridge-Token": "secret-token"})
-    payload = json.dumps({
-        "intent": "read config", 
-        "requested_capability": "repository.read",
-        "input": {"target": "config.yaml"}
-    }).encode()
-    
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with patch("runtime.api.bridge.get_data_dir", return_value=tmpdir):
-            bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks"), handler, request_body=payload)
-    
-    if handler.status == 500:
-        print(handler.body.decode())
-    assert handler.status == 201
-    resp = json.loads(handler.body)
-    assert "task_id" in resp
-    assert "execution_id" in resp
-    
-    # Verify submit_task was called with correct requested_by
-    mock_exec_mgr.submit_task.assert_called_once()
-    task = mock_exec_mgr.submit_task.call_args[0][0]
-    assert task.requested_by == "chatgpt_luna"
-
-
-# ============================================================
-# Phase 10: Status API (via Journal)
-# ============================================================
-def test_get_task_status(bridge):
-    """Verify bridge retrieves task status from the OperationJournal."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Write a journal entry so the bridge can find it
-        journal = OperationJournal(tmpdir)
-        journal.record(JournalEntry(
-            entry_id="ev-1",
-            operation_id="tsk-123",
-            tenant_id="test-tenant",
-            account_id="test-account",
-            project_id="test-project",
-            execution_id="exec-456",
-            session_id="bridge_session",
-            actor_id="chatgpt_luna",
-            workspace_id="/tmp",
-            tool="repository.read",
-            state="SUCCEEDED",
-            started_at=datetime.now(timezone.utc).isoformat(),
-            runtime_generation=1,
-            metadata={"intent": "read config", "source": "chatgpt_luna"},
-        ))
-
-        with patch("runtime.api.bridge.get_data_dir", return_value=tmpdir):
-            handler = MockHandler(command="GET", headers={"X-Bridge-Token": "secret-token"})
-            bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks/tsk-123"), handler)
-        
-        assert handler.status == 200
-        resp = json.loads(handler.body)
-        assert resp["source"] == "chatgpt_luna"
-
-
-# ============================================================
-# Phase 7C-Negative: Bridge MUST reject filesystem.inspect
-# ============================================================
-def test_bridge_rejects_filesystem_inspect(bridge):
-    """filesystem.inspect is NOT in the bridge allowlist."""
-    assert "filesystem.inspect" not in ALLOWED_CAPABILITIES
-
-    handler = MockHandler(command="POST", headers={"X-Bridge-Token": "secret-token"})
-    payload = json.dumps({
-        "intent": "inspect file",
-        "requested_capability": "filesystem.inspect",
-    }).encode()
-    bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks"), handler, request_body=payload)
-
-    assert handler.status == 404
-    resp = json.loads(handler.body)
-    assert resp["error"] == "CAPABILITY_NOT_FOUND"
-
-
-# ============================================================
-# Phase 7C-Negative: Bridge MUST reject shell/subprocess/overrides
-# ============================================================
-@pytest.mark.parametrize("bad_cap", [
-    "shell.execute", "subprocess.run", "filesystem.arbitrary",
-    "network.arbitrary", "secret.access", "policy.override",
-    "worker.override", "executor.override",
+@pytest.mark.parametrize("context_changes,runtime_generation", [
+    ({"expires_at": datetime.now(timezone.utc) - timedelta(seconds=1)}, 7),
+    ({}, 8),
 ])
-def test_bridge_rejects_dangerous_capabilities(bridge, bad_cap):
-    handler = MockHandler(command="POST", headers={"X-Bridge-Token": "secret-token"})
-    payload = json.dumps({
-        "intent": "dangerous",
-        "requested_capability": bad_cap,
-    }).encode()
-    bridge.dispatch(MagicMock(path="/api/v1/bridge/tasks"), handler, request_body=payload)
-
-    assert handler.status == 404
-    resp = json.loads(handler.body)
-    assert resp["error"] == "CAPABILITY_NOT_FOUND"
+def test_bridge_rejects_expired_or_stale_execution_context(bridge_runtime, tmp_path, context_changes, runtime_generation):
+    router, _, _ = bridge_runtime
+    invalid = _test_context(**context_changes)
+    router.context["execution_context"] = invalid
+    router.context["runtime_engine"] = _Runtime(runtime_generation)
+    handler, response = _request(router, tmp_path, {"intent": "inspect", "requested_capability": "filesystem.inspect"})
+    assert handler.status == 403
+    assert response["error"] == "POLICY_DENIED"
 
 
-# ============================================================
-# Phase 7C: Bridge allowlist contains exactly the canonical set
-# ============================================================
-def test_bridge_allowlist_exact():
-    assert ALLOWED_CAPABILITIES == frozenset({
-        "fabric.read",
-        "fabric.register",
-        "repository.read",
-        "repository.search",
+def test_bridge_rejects_unknown_and_disabled_registry_capabilities(bridge_runtime, tmp_path):
+    router, _, _ = bridge_runtime
+    for capability in ("unknown.capability", "fabric.register"):
+        handler, response = _request(router, tmp_path, {"intent": "deny", "requested_capability": capability})
+        assert handler.status == 404
+        assert response["error"] == "CAPABILITY_NOT_FOUND"
+
+
+def test_bridge_rejects_prohibited_fields_and_constraint_override(bridge_runtime, tmp_path):
+    router, _, _ = bridge_runtime
+    handler, response = _request(router, tmp_path, {
+        "intent": "inspect", "requested_capability": "filesystem.inspect", "worker_id": "forged",
     })
+    assert handler.status == 400
+    assert response["error"] == "BRIDGE_INVALID_REQUEST"
+
+    handler, response = _request(router, tmp_path, {
+        "intent": "inspect", "requested_capability": "filesystem.inspect", "constraints": {"network": "allow_all"},
+    })
+    assert handler.status == 403
+    assert response["error"] == "POLICY_DENIED"
+
+
+def test_bridge_uses_real_manager_admission_and_reports_actual_terminal_state(bridge_runtime, tmp_path):
+    router, manager, context = bridge_runtime
+    handler, response = _request(router, tmp_path, {
+        "intent": "inspect a missing workspace file",
+        "requested_capability": "filesystem.inspect",
+        "input": {"path": "missing.txt"},
+    })
+
+    assert handler.status == 201
+    execution = manager._executions[response["execution_id"]]
+    assert execution.admission_state == "AUTHORIZED"
+    assert execution.admitted_capability_id == "filesystem.inspect"
+    assert execution.account_id == context.account_id
+    assert execution.project_id == context.project_id
+    assert response["status"] == execution.status.name
+    assert response["status"] in {status.name for status in ExecutionStatus}
+
+
+def test_direct_executor_bypass_remains_denied(tmp_path):
+    """A capability name alone cannot replace canonical manager admission."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "fixture.txt").write_text("ok")
+    now = datetime.now(timezone.utc)
+    task = Task("bridge-direct", "filesystem.inspect", "account", "project", {"path": "fixture.txt"}, {}, now + timedelta(minutes=1), "keep", "required", "TEST_ONLY", now)
+    context = TaskExecutionContext("direct", task.task_id, task.account_id, task.project_id, task.capability_id, str(workspace), {}, [], task.deadline, {}, "disabled", "read_only")
+    DeterministicExecutor(EphemeralWorkspaceManager(str(tmp_path / "unused"))).execute(task, context)
+    assert context.status == ExecutionStatus.FAILED
+    assert context.error_message == "CANONICAL_ADMISSION_REQUIRED"
+
+
+def test_bridge_status_reads_durable_journal_with_authenticated_request(bridge_runtime, tmp_path):
+    router, _, context = bridge_runtime
+    journal = OperationJournal(tmp_path)
+    journal.record(JournalEntry(
+        entry_id="TEST_ONLY-entry", operation_id="TEST_ONLY-task", tenant_id=context.tenant_id,
+        account_id=context.account_id, project_id=context.project_id, execution_id="TEST_ONLY-execution",
+        session_id=context.session_id, actor_id=context.actor_id, workspace_id="", tool="filesystem.inspect",
+        state="FAILED", started_at=datetime.now(timezone.utc).isoformat(), runtime_generation=context.generation,
+        metadata={"intent": "test", "source": "bridge"},
+    ))
+    handler = MockHandler(command="GET", headers={"X-Bridge-Token": "test-bridge-token"})
+    with patch("runtime.api.bridge.get_data_dir", return_value=tmp_path):
+        router.dispatch(type("Parsed", (), {"path": "/api/v1/bridge/tasks/TEST_ONLY-task"})(), handler)
+    assert handler.status == 200
+    assert json.loads(handler.body)["state"] == "FAILED"
