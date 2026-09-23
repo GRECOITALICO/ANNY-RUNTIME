@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import shutil
 
 from runtime.execution.capability import CapabilityRegistry
 from runtime.execution.deterministic_executor import DeterministicExecutor
@@ -28,6 +29,21 @@ def _execute(tmp_path, task):
     manager = EphemeralWorkspaceManager(str(tmp_path / "workspaces"))
     execution_id = "execution-test"
     workspace = manager.create_workspace(execution_id, task.project_id)
+
+    # Fixtures must be materialized inside the governed execution workspace.
+    fixture_path = task.input.get("path")
+    if isinstance(fixture_path, str) and fixture_path:
+        source = Path(fixture_path)
+        if source.exists():
+            if source.is_dir():
+                target = Path(workspace) / source.name
+                shutil.copytree(source, target)
+            else:
+                target = Path(workspace) / source.name
+                shutil.copy2(source, target)
+            task.input = dict(task.input)
+            task.input["path"] = str(target)
+
     context = TaskExecutionContext(
         execution_id=execution_id,
         task_id=task.task_id,
