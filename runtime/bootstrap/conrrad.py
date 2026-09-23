@@ -38,6 +38,19 @@ DEPENDENCY_FIELDS = (
 )
 
 
+# These values are accepted only when they arrive in an externally supplied
+# registry record.  A contract-derived status projection is intentionally not
+# eligible for bootstrap readiness.
+AVAILABLE_ONLINE_STATUSES = frozenset({
+    "READY",
+    "AVAILABLE",
+    "ONLINE",
+    "ONLINE_VERIFIED",
+    "PASS",
+})
+VERIFIED_TRUST_STATUSES = frozenset({"VERIFIED"})
+
+
 def not_configured_dependency_matrix(reason: str) -> List[Dict[str, str]]:
     """Project mandatory contract requirements without claiming service identity."""
     return [
@@ -82,5 +95,21 @@ def normalize_dependency_registry(records: Any) -> List[Dict[str, Any]]:
 
 
 def registry_is_complete(records: List[Dict[str, Any]]) -> bool:
-    """A registry gate passes only when every contract-required service is present."""
-    return {record["service_name"] for record in records} >= set(REQUIRED_CONRRAD_SERVICES)
+    """Require an externally observed, ready record for every required service.
+
+    Names alone establish neither availability nor trust.  In particular,
+    UNKNOWN, UNVERIFIED, NOT_CONFIGURED, OFFLINE, and BLOCKED cannot satisfy
+    this readiness gate.
+    """
+    for service_name in REQUIRED_CONRRAD_SERVICES:
+        matching_records = [
+            record for record in records
+            if record.get("service_name") == service_name
+        ]
+        if not any(
+            str(record.get("online_status", "UNKNOWN")).upper() in AVAILABLE_ONLINE_STATUSES
+            and str(record.get("trust_status", "UNKNOWN")).upper() in VERIFIED_TRUST_STATUSES
+            for record in matching_records
+        ):
+            return False
+    return True

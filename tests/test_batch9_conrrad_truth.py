@@ -40,7 +40,7 @@ class _ExternalConrradDouble:
         self.trust = trust
         self.manifest = manifest
         self.registry = registry if registry is not None else [
-            {"service_name": name, "online_status": "UNKNOWN", "trust_status": "UNKNOWN"}
+            {"service_name": name, "online_status": "ONLINE_VERIFIED", "trust_status": "VERIFIED"}
             for name in REQUIRED_CONRRAD_SERVICES
         ]
 
@@ -127,6 +127,23 @@ def test_b9_t04_missing_dependency_registry_blocks_without_synthesis():
     github.get_authenticated_principal.assert_not_called()
 
 
+def test_complete_unknown_dependency_registry_blocks_before_github():
+    unknown_registry = [
+        {"service_name": name, "online_status": "UNKNOWN", "trust_status": "UNKNOWN"}
+        for name in REQUIRED_CONRRAD_SERVICES
+    ]
+    bootstrap, identity, github = _bootstrap(_ExternalConrradDouble(registry=unknown_registry))
+    report = _resolve(bootstrap, identity)
+
+    assert report.anny_ready is False
+    assert report.get_gate(ReadinessGate.CONRRAD_DEPENDENCY_REGISTRY_LOADED).passed is False
+    assert [item["service_name"] for item in report.conrrad_dependencies] == list(REQUIRED_CONRRAD_SERVICES)
+    assert all(item["online_status"] == "UNKNOWN" for item in report.conrrad_dependencies)
+    assert all(item["trust_status"] == "UNKNOWN" for item in report.conrrad_dependencies)
+    github.get_authenticated_principal.assert_not_called()
+    github.list_organizations.assert_not_called()
+
+
 def test_b9_t05_healthy_github_cannot_mask_unavailable_conrrad():
     github = Mock()
     github.get_authenticated_principal.return_value = {"login": "healthy"}
@@ -191,10 +208,30 @@ def test_b9_t06_status_does_not_manufacture_authority_success():
     assert status["tenant"] == "UNKNOWN"
     assert status["capabilities"] == "UNKNOWN"
     assert status["continuity"]["blockers"] == "BLOCKED"
+    assert len(status["conrrad_dependencies"]) == len(REQUIRED_CONRRAD_SERVICES)
     assert all(item["online_status"] == "NOT_CONFIGURED" for item in status["conrrad_dependencies"])
 
     router.context["bootstrap_snapshot"] = {"result": report, "discovered_repos": []}
     assert router._get_continuity_dto().reconciliation_status == "BLOCKED"
+
+
+def test_empty_bootstrap_dependency_observation_projects_not_configured_entries():
+    report = BootstrapReport(anny_ready=False, runtime_id="runtime-test", fabric_node="UNKNOWN")
+    engine = SimpleNamespace(
+        state=SimpleNamespace(name="ADMIN_MODE"),
+        config=SimpleNamespace(fabric_org="configured-org", fabric_repo="configured-repo"),
+        bootstrap_report=report,
+    )
+    router = AdminRouter({"runtime_engine": engine})
+    handler = _Handler()
+    router.dispatch_get("/api/status", handler)
+    status = json.loads(handler.wfile.body.decode())
+
+    assert status["conrrad_dependencies"] != []
+    assert len(status["conrrad_dependencies"]) == len(REQUIRED_CONRRAD_SERVICES)
+    assert {item["service_name"] for item in status["conrrad_dependencies"]} == set(REQUIRED_CONRRAD_SERVICES)
+    assert all(item["online_status"] == "NOT_CONFIGURED" for item in status["conrrad_dependencies"])
+    assert all(item["trust_status"] == "UNKNOWN" for item in status["conrrad_dependencies"])
 
 
 def test_b9_t07_sync_routes_and_fail_closed_activation_are_preserved(tmp_path):

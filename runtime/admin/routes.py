@@ -335,7 +335,7 @@ class AdminRouter:
             fabric_node = getattr(report, 'fabric_node', "UNKNOWN")
             timestamp = getattr(report, 'timestamp', None)
             observed_dependencies = getattr(report, 'conrrad_dependencies', None)
-            if isinstance(observed_dependencies, list):
+            if isinstance(observed_dependencies, list) and observed_dependencies:
                 dependencies = observed_dependencies
             observed_bootstrap_state = getattr(report, 'bootstrap_state', "UNKNOWN")
             if isinstance(observed_bootstrap_state, str):
