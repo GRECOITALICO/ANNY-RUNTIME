@@ -170,3 +170,12 @@ def test_legacy_secret_broker_is_quarantined():
         broker.exists("ref")
     with pytest.raises(PermissionError, match="LEGACY_SECRET_BROKER_QUARANTINED"):
         broker.revoke("ref")
+
+
+def test_release_identity_uses_canonical_runtime_version():
+    from runtime.core.version import __version__
+    import cli.main as cli_main
+    assert cli_main.VERSION == __version__
+    helper_text = open("scripts/physical-cert-helper.sh", encoding="utf-8").read()
+    assert "v0.2.0-CANDIDATE" not in helper_text
+    assert "RUNTIME_VERSION" in helper_text
