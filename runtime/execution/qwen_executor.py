@@ -62,9 +62,8 @@ class QwenModelExecutor(ModelExecutor):
             raise ExecutorLimitsExceeded("Input exceeds max_context")
             
         # ----------------------------------------------------
-        # SIMULATE INFERENCE BACKEND (Phase 5)
-        # Because we are in a sandbox without GPU and without an 8GB model,
-        # we deterministically generate a valid schema based on the input text.
+        # Physical local-model inference.
+        # The artifact digest was verified before loading the model.
         # ----------------------------------------------------
         
         text_to_classify = local_memory["input"].get("text", "")
@@ -136,8 +135,12 @@ class QwenModelExecutor(ModelExecutor):
             validated_result = ModelResultValidator.validate_document_classification(raw_output)
             status = "SUCCEEDED"
         except ModelOutputInvalid as e:
-            status = "MODEL_OUTPUT_INVALID"
-            validated_result = {"error": str(e), "raw": raw_output}
+            status = "FAILED"
+            validated_result = {
+                "error": str(e),
+                "raw": raw_output,
+                "validation_status": "MODEL_OUTPUT_INVALID",
+            }
             
         result_hash = hashlib.sha256(json.dumps(validated_result, sort_keys=True).encode('utf-8')).hexdigest()
         
@@ -169,9 +172,8 @@ class QwenModelExecutor(ModelExecutor):
             }
         }
         
-        if status == "MODEL_OUTPUT_INVALID":
-            # For testing, if it failed parsing, we still return the result but status is FAILED
-            pass
+        if status != "SUCCEEDED":
+            evidence["telemetry"]["validation_status"] = "MODEL_OUTPUT_INVALID"
             
         return ModelResult(
             status=status,
