@@ -22,6 +22,7 @@ class SecureToolRegistry:
         return self._tools.get(name)
 
     def execute(self, context: ExecutionContext, tool_name: str, args: dict) -> Any:
+        raise SecurityViolationError("LEGACY_TOOL_REGISTRY_QUARANTINED")
         tool = self.get(tool_name)
         if not tool:
             raise SecurityViolationError(f"Tool '{tool_name}' is not registered.")
