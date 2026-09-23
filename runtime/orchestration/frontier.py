@@ -1,7 +1,27 @@
 import abc
+from dataclasses import dataclass
 from typing import Dict, Any, Optional
 from runtime.execution.models import Task
 from runtime.orchestration.plan import ExecutionPlan
+
+
+@dataclass(frozen=True)
+class FrontierExecutionReceipt:
+    """Correlated evidence emitted by an injected physical Frontier executor.
+
+    A plain result payload is not an execution receipt.  Runtime validates this
+    structure before it can transition a worker to ``SUCCEEDED``; the executor
+    must supply the result digest and an evidence reference itself.
+    """
+
+    execution_id: str
+    task_id: str
+    executor_id: str
+    model_id: str
+    result_data: Dict[str, Any]
+    result_hash: str
+    evidence_ref: str
+    completed_at: str
 
 
 class FrontierExecutor(abc.ABC):
@@ -18,32 +38,40 @@ class FrontierExecutor(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def execute_plan(self, task: Task, plan: ExecutionPlan) -> Dict[str, Any]:
-        """Execute a validated FRONTIER_MODEL ExecutionPlan."""
+    def identity(self) -> str:
+        """Return the stable identity of the physically injected executor."""
+        pass
+
+    @abc.abstractmethod
+    def is_authorized(self) -> bool:
+        """Whether this executor was explicitly authorized for Runtime use."""
+        pass
+
+    @abc.abstractmethod
+    def execute_plan(self, task: Task, plan: ExecutionPlan) -> FrontierExecutionReceipt:
+        """Execute a validated plan and return a correlated physical receipt."""
         pass
 
 
 class DefaultFrontierExecutor(FrontierExecutor):
-    """Default implementation of FrontierExecutor boundary."""
+    """Disabled sentinel; never a physical or authorized Frontier executor."""
 
     def __init__(self, enabled: bool = False, available_models: Optional[list] = None):
         self._enabled = enabled
         self._available_models = available_models or ["frontier-gpt4", "frontier-claude-3-5-sonnet"]
 
     def is_available(self, model_id: Optional[str] = None) -> bool:
-        if not self._enabled:
-            return False
-        if model_id is not None:
-            return model_id in self._available_models
-        return len(self._available_models) > 0
+        # ``enabled`` remains accepted for compatibility with old construction
+        # sites, but cannot turn this local sentinel into a remote authority.
+        return False
 
-    def execute_plan(self, task: Task, plan: ExecutionPlan) -> Dict[str, Any]:
-        if not self.is_available(plan.model_id):
-            raise RuntimeError(f"Frontier model {plan.model_id} is unavailable or unauthorized")
-        return {
-            "status": "COMPLETED",
-            "task_id": task.task_id,
-            "plan_id": plan.task_id,
-            "executor": "DefaultFrontierExecutor",
-            "model_id": plan.model_id,
-        }
+    def identity(self) -> str:
+        return "default-frontier-sentinel"
+
+    def is_authorized(self) -> bool:
+        return False
+
+    def execute_plan(self, task: Task, plan: ExecutionPlan) -> FrontierExecutionReceipt:
+        raise RuntimeError(
+            "DefaultFrontierExecutor is a disabled sentinel, not a physical executor"
+        )

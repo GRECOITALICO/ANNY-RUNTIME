@@ -1,5 +1,8 @@
 import uuid
 import logging
+import hashlib
+import json
+import re
 from datetime import datetime, timezone
 import os
 from typing import Dict, List, Optional, Any
@@ -12,19 +15,100 @@ from runtime.execution.selector import ExecutorSelection
 from runtime.execution.interfaces import ContextPackage, ModelExecutor
 from runtime.execution.deterministic_executor import DeterministicExecutor, ExecutorSecurityError, ExecutorLimitsExceeded
 from runtime.telemetry.telemetry import TelemetryEnvelope, TelemetryDomain
+from runtime.orchestration.frontier import FrontierExecutor, FrontierExecutionReceipt
 
 logger = logging.getLogger(__name__)
 
 
 class WorkerManager:
-    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None, telemetry_collector=None, frontier_executor=None):
+    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None, telemetry_collector=None, frontier_executor=None, model_registry=None, capability_registry=None):
         self.workspace_manager = workspace_manager
         self.audit_manager = audit_manager
         self.mcp_gateway = mcp_gateway
         self.telemetry_collector = telemetry_collector
         self.frontier_executor = frontier_executor
+        self.model_registry = model_registry
+        self.capability_registry = capability_registry
         self.workers: Dict[str, WorkerDefinition] = {}
-        self.deterministic_executor = DeterministicExecutor(workspace_manager)
+        self._admissions: Dict[str, Dict[str, Any]] = {}
+        self.deterministic_executor = DeterministicExecutor(workspace_manager, self._is_admitted)
+
+    def _admit_execution(
+        self,
+        context: TaskExecutionContext,
+        task: Task,
+        capability: CapabilityDefinition,
+        selection: ExecutorSelection,
+    ) -> None:
+        """Record a private, binding-preserving admission from ExecutionManager.
+
+        This is deliberately not an authorization API.  It is an internal
+        handoff after the canonical CapabilityRegistry decision and executor
+        selection have already succeeded.
+        """
+        canonical = getattr(self.capability_registry, "get", lambda _id: None)(task.capability_id)
+        if canonical is None or canonical is not capability or not canonical.enabled:
+            raise ExecutorSecurityError("CANONICAL_CAPABILITY_ADMISSION_REQUIRED")
+        if capability.capability_id != context.capability_id:
+            raise ExecutorSecurityError("CAPABILITY_ADMISSION_BINDING_MISMATCH")
+        if selection.executor_type != capability.preferred_executor:
+            raise ExecutorSecurityError("EXECUTOR_ELIGIBILITY_MISMATCH")
+
+        admission_id = f"adm-{uuid.uuid4().hex}"
+        context.admission_id = admission_id
+        context.admission_state = "AUTHORIZED"
+        context.admitted_capability_id = capability.capability_id
+        context.admitted_executor_type = selection.executor_type.value
+        context.admitted_executor_id = selection.executor_id
+        self._admissions[context.execution_id] = {
+            "admission_id": admission_id,
+            "task_id": task.task_id,
+            "account_id": task.account_id,
+            "project_id": task.project_id,
+            "capability_id": capability.capability_id,
+            "executor_type": selection.executor_type.value,
+            "executor_id": selection.executor_id,
+            "deadline": task.deadline,
+        }
+
+    def _is_admitted(self, task: Task, context: TaskExecutionContext, worker: Optional[WorkerDefinition] = None) -> bool:
+        """Validate the private admission against all immutable task bindings."""
+        admission = self._admissions.get(context.execution_id)
+        if not admission or context.admission_state != "AUTHORIZED":
+            return False
+        if admission["admission_id"] != context.admission_id:
+            return False
+        if (
+            admission["task_id"] != task.task_id
+            or admission["account_id"] != task.account_id
+            or admission["project_id"] != task.project_id
+            or admission["capability_id"] != task.capability_id
+            or admission["deadline"] != task.deadline
+            or context.admitted_capability_id != task.capability_id
+        ):
+            return False
+        if worker is not None and (
+            admission["executor_type"] != worker.executor_type
+            or admission["executor_id"] != worker.executor_id
+            or context.admitted_executor_type != worker.executor_type
+            or context.admitted_executor_id != worker.executor_id
+        ):
+            return False
+        return True
+
+    def authorize_tool_request(self, request) -> tuple[bool, str]:
+        """Permit MCP invocation only for an admitted, currently running worker."""
+        worker = self.workers.get(request.worker_id)
+        if worker is None:
+            return False, "CANONICAL_WORKER_NOT_FOUND"
+        if worker.state != WorkerState.RUNNING:
+            return False, "CANONICAL_WORKER_NOT_RUNNING"
+        if worker.execution_id != request.execution_id or worker.capability_id != request.capability_id:
+            return False, "CANONICAL_WORKER_BINDING_MISMATCH"
+        admission = self._admissions.get(request.execution_id)
+        if not admission or admission["capability_id"] != request.capability_id:
+            return False, "CANONICAL_ADMISSION_REQUIRED"
+        return True, "AUTHORIZED"
 
     @staticmethod
     def _routing_class(executor_type: str) -> str:
@@ -103,6 +187,64 @@ class WorkerManager:
     def get_worker(self, worker_id: str) -> Optional[WorkerDefinition]:
         return self.workers.get(worker_id)
 
+    @staticmethod
+    def _validate_frontier_receipt(
+        receipt: FrontierExecutionReceipt,
+        worker: WorkerDefinition,
+        context: TaskExecutionContext,
+        task: Task,
+    ) -> None:
+        """Reject uncorrelated or synthetic remote success material.
+
+        Runtime can validate the receipt's bindings and digest but cannot turn a
+        raw dictionary, locally generated digest, or missing evidence reference
+        into physical remote execution evidence.
+        """
+        if not isinstance(receipt, FrontierExecutionReceipt):
+            raise ExecutorSecurityError(
+                "Frontier executor must return a correlated FrontierExecutionReceipt"
+            )
+        if (
+            receipt.execution_id != context.execution_id
+            or receipt.task_id != task.task_id
+            or receipt.executor_id != worker.executor_id
+            or receipt.model_id != worker.model_id
+        ):
+            raise ExecutorSecurityError("Frontier receipt identity binding mismatch")
+        if not isinstance(receipt.result_data, dict) or not receipt.result_data:
+            raise ExecutorSecurityError("Frontier receipt has no physical result payload")
+        if not receipt.evidence_ref or not receipt.completed_at:
+            raise ExecutorSecurityError("Frontier receipt lacks required execution evidence")
+        if not re.fullmatch(r"[0-9a-f]{64}", receipt.result_hash or ""):
+            raise ExecutorSecurityError("Frontier receipt result hash is invalid")
+        computed_hash = hashlib.sha256(
+            json.dumps(receipt.result_data, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+        if computed_hash != receipt.result_hash:
+            raise ExecutorSecurityError("Frontier receipt result hash mismatch")
+
+    @staticmethod
+    def _validate_local_model_provenance(result, artifact_sha256: str) -> str:
+        """Require Qwen's actual artifact and result provenance before success."""
+        evidence = result.evidence if isinstance(getattr(result, "evidence", None), dict) else {}
+        telemetry = evidence.get("telemetry") if isinstance(evidence.get("telemetry"), dict) else {}
+        provenance = evidence.get("provenance") if isinstance(evidence.get("provenance"), dict) else {}
+        result_hash = telemetry.get("result_hash")
+        if provenance.get("executor_identity") != "QwenModelExecutor":
+            raise ExecutorSecurityError("Local model executor provenance is missing")
+        if provenance.get("artifact_sha256") != artifact_sha256:
+            raise ExecutorSecurityError("Local model artifact provenance mismatch")
+        if provenance.get("result_hash") != result_hash:
+            raise ExecutorSecurityError("Local model result provenance mismatch")
+        if not re.fullmatch(r"[0-9a-f]{64}", result_hash or ""):
+            raise ExecutorSecurityError("Local model result hash is invalid")
+        computed_hash = hashlib.sha256(
+            json.dumps(result.result_data, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+        if computed_hash != result_hash:
+            raise ExecutorSecurityError("Local model result hash mismatch")
+        return result_hash
+
     def list_workers(self) -> List[WorkerDefinition]:
         return list(self.workers.values())
 
@@ -113,6 +255,23 @@ class WorkerManager:
 
         if worker.state != WorkerState.CREATED:
             raise ValueError(f"Worker {worker_id} is in state {worker.state}, cannot start")
+
+        # Worker execution identity is derived from the submitted task/context
+        # and cannot be self-escalated or retargeted between creation/start.
+        if worker.capability_id != task.capability_id or worker.capability_id != context.capability_id:
+            raise ExecutorSecurityError("Worker capability binding mismatch")
+        if worker.account_id != task.account_id or worker.project_id != task.project_id:
+            raise ExecutorSecurityError("Worker scope binding mismatch")
+        if worker.deadline != context.deadline or worker.deadline != task.deadline:
+            raise ExecutorSecurityError("Worker deadline binding mismatch")
+        if not capability.enabled:
+            raise ExecutorSecurityError("Capability is disabled")
+        if capability.capability_id != task.capability_id:
+            raise ExecutorSecurityError("Worker capability definition mismatch")
+        if worker.executor_type != capability.preferred_executor.value:
+            raise ExecutorSecurityError("Worker executor eligibility mismatch")
+        if not self._is_admitted(task, context, worker):
+            raise ExecutorSecurityError("CANONICAL_ADMISSION_REQUIRED")
 
         worker.state = WorkerState.STARTING
         worker.started_at = datetime.now(timezone.utc)
@@ -171,12 +330,42 @@ class WorkerManager:
                     constraints=task.constraints,
                     evidence_policy=task.evidence_policy
                 )
+                model = getattr(self, "model_registry", None)
+                definition = model.get(worker.model_id) if model and worker.model_id else None
+                artifact_sha256 = getattr(definition, "artifact_sha256", None)
+                if not artifact_sha256:
+                    raise ExecutorSecurityError("Local model registry artifact SHA-256 is required")
+                if not re.fullmatch(r"[0-9a-fA-F]{64}", artifact_sha256):
+                    raise ExecutorSecurityError("Local model registry artifact SHA-256 is invalid")
                 from runtime.execution.qwen_executor import QwenModelExecutor
-                executor = QwenModelExecutor(artifact_path=real_artifact_path)
+                executor = QwenModelExecutor(
+                    artifact_path=real_artifact_path,
+                    expected_sha256=artifact_sha256,
+                )
                 result = executor.execute(context_package)
+                if result.status != "SUCCEEDED":
+                    context.status = ExecutionStatus.FAILED
+                    context.failure_reason = FailureReason.EXECUTION_ERROR
+                    context.error_message = f"Local model execution did not succeed: {result.status}"
+                    context.result = result.result_data
+                    context.result_hash = result.evidence.get("telemetry", {}).get("result_hash")
+                    worker.state = WorkerState.FAILED
+                    worker.finished_at = datetime.now(timezone.utc)
+                    self._emit_telemetry(
+                        "execution.failed",
+                        worker,
+                        {
+                            "classification": "MODEL_EXECUTION_FAILED",
+                            "model_status": result.status,
+                        },
+                    )
+                    return
+                result_hash = self._validate_local_model_provenance(
+                    result, artifact_sha256
+                )
                 context.status = ExecutionStatus.SUCCEEDED
                 context.result = result.result_data
-                context.result_hash = result.evidence.get("telemetry", {}).get("result_hash")
+                context.result_hash = result_hash
                 self._emit_telemetry("inference_completed", worker, result.evidence.get("telemetry", {}))
 
             elif worker.executor_type in ("REMOTE_MODEL", "FRONTIER_MODEL"):
@@ -193,16 +382,23 @@ class WorkerManager:
                     policy_version="v1.0",
                 )
                 fe = self.frontier_executor
-                if not fe:
-                    from runtime.orchestration.frontier import DefaultFrontierExecutor
-                    fe = DefaultFrontierExecutor(enabled=True)
+                if not isinstance(fe, FrontierExecutor) or not fe.is_authorized():
+                    raise ExecutorSecurityError("Authorized FrontierExecutor injection is required")
+                if fe.identity() != worker.executor_id:
+                    raise ExecutorSecurityError("Frontier executor identity binding mismatch")
 
                 if fe.is_available(plan.model_id):
-                    result_data = fe.execute_plan(task, plan)
+                    receipt = fe.execute_plan(task, plan)
+                    self._validate_frontier_receipt(receipt, worker, context, task)
                     context.status = ExecutionStatus.SUCCEEDED
-                    context.result = result_data
-                    context.result_hash = "frontier_exec_hash"
-                    self._emit_telemetry("inference_completed", worker, {"executor": "frontier"})
+                    context.result = receipt.result_data
+                    context.result_hash = receipt.result_hash
+                    context.evidence_ref = receipt.evidence_ref
+                    self._emit_telemetry("inference_completed", worker, {
+                        "executor": receipt.executor_id,
+                        "result_hash": context.result_hash,
+                        "evidence_ref": receipt.evidence_ref,
+                    })
                 else:
                     context.status = ExecutionStatus.FAILED
                     context.failure_reason = FailureReason.EXECUTION_ERROR

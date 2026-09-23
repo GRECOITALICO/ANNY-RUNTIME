@@ -49,6 +49,11 @@ class RuntimeEngine:
         
         logger = logging.getLogger(__name__)
         
+        # Read the prior durable state before writing this generation's active
+        # checkpoint.  Otherwise every startup would overwrite the evidence it
+        # is supposed to assess.
+        previous_clean = self._load_previous_clean_state()
+
         # 1. RuntimeGeneration.load() and state=STARTING
         self._state = RuntimeState.STARTING
         self._generation.increment()
@@ -63,20 +68,8 @@ class RuntimeEngine:
             # 4. Load continuity
             self.continuity_engine.load()
             
-            # 5. Inspect previous engine_state
-            state_file = Path(self.config.data_dir) / "engine_state.json"
-            previous_clean = True
-            if state_file.exists():
-                try:
-                    with open(state_file, "r") as f:
-                        state_data = json.load(f)
-                        previous_clean = state_data.get("clean_shutdown", False)
-                        logger.info(f"Recovered previous engine state: {state_data}")
-                except Exception as e:
-                    logger.error(f"Failed to load engine_state.json: {e}")
-                    previous_clean = False
-            
-            # 6. Detect clean vs abnormal previous termination
+            # 5. Detect clean vs abnormal previous termination.  The value was
+            # captured before the active checkpoint above was persisted.
             if not previous_clean:
                 logger.warning("Abnormal termination detected! Requires reconciliation.")
                 # We do not assume success or automatically erase evidence.
@@ -134,15 +127,36 @@ class RuntimeEngine:
             self._persist_state(clean_shutdown=False)
             raise e
 
-    def shutdown(self) -> None:
-        """Executes the runtime shutdown sequence."""
+    def shutdown(self, drain_timeout_seconds: float | None = None) -> Dict[str, Any]:
+        """Request a logical Runtime shutdown; never claim process termination.
+
+        The engine can fence new Runtime work and persist a drain observation,
+        but it has no process supervisor or worker cancellation interface.
+        Consequently a queued/running execution keeps the engine in DRAINING;
+        an unavailable execution registry yields an explicitly unverified
+        shutdown marker rather than a synthetic successful drain.
+        """
+        if self._state == RuntimeState.DRAINING:
+            return {
+                "shutdown_state": "DRAINING_ALREADY_REQUESTED",
+                "process_state": "NOT_IMPLEMENTED",
+                "clean_shutdown": False,
+            }
+        if self._state == RuntimeState.STOPPED:
+            return {
+                "shutdown_state": "ALREADY_STOPPED",
+                "process_state": "NOT_IMPLEMENTED",
+                "clean_shutdown": False,
+            }
+
         # 1. DRAINING
         self._state = RuntimeState.DRAINING
+        self._persist_state(clean_shutdown=False)
         
-        # 2. Stop accepting new work (stubbed logically by state change)
+        # 2. Stop accepting new work by entering DRAINING state.
         
         # 3. Handle active executions
-        self._handle_active_executions()
+        drain = self._handle_active_executions()
         
         # 4. Close sessions
         self._close_sessions()
@@ -153,22 +167,59 @@ class RuntimeEngine:
         # 6. Flush continuity
         self._flush_journal()
         
-        # 7. STOPPED
+        # A Runtime with outstanding work must remain in DRAINING.  There is
+        # no implementation here that cancels or waits for workers.
+        if drain["active_count"]:
+            self._persist_state(clean_shutdown=False)
+            return {
+                "shutdown_state": (
+                    "TIMEOUT_ACTIVE_EXECUTIONS"
+                    if drain_timeout_seconds is not None
+                    else "DRAINING_ACTIVE_EXECUTIONS"
+                ),
+                "process_state": "NOT_IMPLEMENTED",
+                "clean_shutdown": False,
+                "timeout_seconds": drain_timeout_seconds,
+                "active_executions": drain,
+            }
+
+        # STOPPED here means the in-process engine state only.  No physical
+        # process restart or termination has been observed or requested.
         self._state = RuntimeState.STOPPED
-        
-        # 8. Atomic engine_state persistence
-        self._persist_state(clean_shutdown=True)
+        clean_shutdown = drain["registry_state"] == "AVAILABLE"
+        self._persist_state(clean_shutdown=clean_shutdown)
+        return {
+            "shutdown_state": "ENGINE_STOPPED" if clean_shutdown else "ENGINE_STOPPED_UNVERIFIED_DRAIN",
+            "process_state": "NOT_IMPLEMENTED",
+            "clean_shutdown": clean_shutdown,
+            "active_executions": drain,
+        }
 
     def health_check(self) -> Dict[str, Any]:
-        """Returns the status of each subsystem."""
+        """Report observed subsystem health without synthetic success."""
+        checks = {}
+        identity_dir = Path(self.config.data_dir) / "identity"
+        identity_file = identity_dir / "runtime_identity.json"
+        private_key = identity_dir / "private_key.pem"
+        checks["identity"] = "ok" if identity_file.is_file() and private_key.is_file() else "not_ready"
+        continuity = getattr(self, "continuity_engine", None)
+        checks["journal"] = "ok" if continuity is not None else "not_initialized"
+        execution_manager = getattr(self, "execution_manager", None)
+        if execution_manager is None:
+            checks["execution"] = "not_initialized"
+        elif not hasattr(execution_manager, "get_all_executions"):
+            checks["execution"] = "unknown"
+        else:
+            checks["execution"] = "ok"
+
+        values = set(checks.values())
+        overall = "ok" if values == {"ok"} else ("unknown" if "unknown" in values else "degraded")
         return {
-            "status": "ok",
+            "status": overall,
+            "engine_state": self._state.name,
+            "process_state": "UNVERIFIED",
             "generation": self._generation.current,
-            "subsystems": {
-                "identity": "ok",
-                "journal": "ok",
-                "execution": "ok"
-            }
+            "subsystems": checks,
         }
 
     # --- Stubs for internal processes ---
@@ -204,18 +255,48 @@ class RuntimeEngine:
             
         os.replace(temp_file, state_file)
 
-    def _handle_active_executions(self) -> None:
+    def _handle_active_executions(self) -> Dict[str, Any]:
         import logging
         logger = logging.getLogger(__name__)
-        # Active execution classification
-        # In a real system, iterate over active executions and classify them.
-        executions = [] # fetch active executions
+        execution_manager = getattr(self, "execution_manager", None)
+        if execution_manager is None:
+            logger.warning("Active execution registry unavailable; shutdown drain state is UNKNOWN.")
+            return {
+                "registry_state": "UNAVAILABLE",
+                "active_count": 0,
+                "classification": "UNKNOWN",
+            }
+
+        active_states = {"QUEUED", "RUNNING"}
         classifications = {"COMPLETED": 0, "CANCELLED": 0, "FENCED": 0, "ORPHANED_REQUIRES_RECONCILIATION": 0}
-        for exec_obj in executions:
-            # Classification logic goes here
-            classifications["ORPHANED_REQUIRES_RECONCILIATION"] += 1
-            
+        for exec_obj in execution_manager.get_all_executions():
+            state = getattr(getattr(exec_obj, "status", None), "value", None)
+            if state in active_states:
+                classifications["ORPHANED_REQUIRES_RECONCILIATION"] += 1
+
         logger.info(f"Drained active executions: {classifications}")
+        active_count = classifications["ORPHANED_REQUIRES_RECONCILIATION"]
+        return {
+            "registry_state": "AVAILABLE",
+            "active_count": active_count,
+            "classification": "DRAINED" if active_count == 0 else "REQUIRES_RECONCILIATION",
+            "classifications": classifications,
+        }
+
+    def _load_previous_clean_state(self) -> bool:
+        """Return only a durable clean marker; absent/unreadable is unverified."""
+        import json
+        import logging
+
+        state_file = Path(self.config.data_dir) / "engine_state.json"
+        if not state_file.exists():
+            return False
+        try:
+            with open(state_file, "r", encoding="utf-8") as f:
+                return bool(json.load(f).get("clean_shutdown", False))
+        except (OSError, ValueError, TypeError) as exc:
+            logging.getLogger(__name__).warning("Unable to read prior engine state: %s", exc)
+            return False
 
     def _close_sessions(self) -> None:
         import logging

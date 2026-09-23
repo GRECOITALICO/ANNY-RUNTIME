@@ -42,11 +42,16 @@ class BootstrapReport:
     workers: ComponentInventory = field(default_factory=ComponentInventory)
     connectors: ComponentInventory = field(default_factory=ComponentInventory)
 
+    # These are local observations of external-authority gates, never authority.
+    bootstrap_state: str = "UNKNOWN"
+    conrrad_dependencies: List[Dict[str, Any]] = field(default_factory=list)
+
     def add_result(self, result: GateResult) -> None:
         self.gates.append(result)
 
     def finish(self, ready: bool) -> None:
         self.anny_ready = ready
+        self.bootstrap_state = "READY" if ready else "BLOCKED"
         self.completed_at = datetime.now(timezone.utc).isoformat()
 
     def get_gate(self, gate: ReadinessGate) -> GateResult:

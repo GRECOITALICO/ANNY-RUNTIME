@@ -12,7 +12,6 @@ from typing import Dict, Any
 from runtime.admin.routes import AdminRouter
 from runtime.admin.middleware import AdminMiddleware
 from runtime.sync.service import SyncService
-from runtime.sync.github_source import GitHubReleaseSource
 from runtime.admin.sync_ui import inject_sync_controls
 
 logger = logging.getLogger(__name__)
@@ -310,21 +309,18 @@ def start_admin_server(host: str, port: int):
     from runtime.core.engine import RuntimeEngine
     engine = RuntimeEngine(config)
     execution_manager.runtime_engine = engine
+    engine.execution_manager = execution_manager
     
-    update_source_repo = os.environ.get("ANNY_UPDATE_SOURCE_REPO", "").strip()
-    update_source = None
-    if github_client and update_source_repo:
-        try:
-            update_source = GitHubReleaseSource(github_client, update_source_repo)
-        except ValueError as e:
-            logger.warning(f"Invalid ANNY_UPDATE_SOURCE_REPO: {e}")
-
     from runtime.core.version import __version__
     local_version = os.environ.get("ANNY_RUNTIME_VERSION", __version__)
     sync_service = SyncService(
         data_dir=data_dir,
         local_version=local_version,
-        discover=update_source.discover if update_source else None,
+        # GitHub release metadata is not the canonical Runtime update
+        # authority. Until a receipt-backed external update authority exists,
+        # discovery remains unavailable rather than treating a repository as a
+        # deployment or Fabric substitute.
+        discover=None,
         verify=None,
     )
 

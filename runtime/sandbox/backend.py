@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from runtime.sandbox.policy import SandboxPolicy, IsolationLevel
+from runtime.security.path_containment import require_contained_path
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +36,18 @@ class WorkspaceBackend(SandboxBackend):
     def __init__(self, base_dir: str):
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(parents=True, exist_ok=True)
+        self.base_dir = Path(require_contained_path(str(self.base_dir), ".").resolved_path)
         self._active: dict[str, Path] = {}
+
+    def _sandbox_path(self, sandbox_id: str) -> Path:
+        if not isinstance(sandbox_id, str) or not sandbox_id or sandbox_id in {".", ".."}:
+            raise ValueError("sandbox_id is required")
+        if Path(sandbox_id).name != sandbox_id:
+            raise ValueError("sandbox_id must be a single path component")
+        return Path(require_contained_path(str(self.base_dir), sandbox_id).resolved_path)
     
     def create(self, policy: SandboxPolicy) -> str:
-        sandbox_path = self.base_dir / policy.sandbox_id
+        sandbox_path = self._sandbox_path(policy.sandbox_id)
         sandbox_path.mkdir(parents=True, exist_ok=True)
         
         # Create workspace subdirectories
@@ -52,11 +61,12 @@ class WorkspaceBackend(SandboxBackend):
     def destroy(self, sandbox_id: str) -> None:
         sandbox_path = self._active.pop(sandbox_id, None)
         if sandbox_path and sandbox_path.exists():
+            sandbox_path = self._sandbox_path(str(sandbox_path))
             # Remove only temporary state, preserve journals/receipts
-            tmp_path = sandbox_path / "tmp"
+            tmp_path = Path(require_contained_path(str(sandbox_path), "tmp").resolved_path)
             if tmp_path.exists():
                 shutil.rmtree(tmp_path)
-            workspace_path = sandbox_path / "workspace"
+            workspace_path = Path(require_contained_path(str(sandbox_path), "workspace").resolved_path)
             if workspace_path.exists():
                 shutil.rmtree(workspace_path)
             # Remove the sandbox directory itself if empty

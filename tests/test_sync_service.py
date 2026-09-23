@@ -36,7 +36,7 @@ def test_sync_no_change_is_verified_without_activation(tmp_path: Path):
     status = service.status()
 
     assert status["sync_state"] == SyncState.VERIFIED.value
-    assert status["comparison"] == "NO_CHANGE"
+    assert status["comparison"] == "NO_UPDATE"
     assert status["verification"] == "NOT_REQUIRED"
     assert status["activation_performed"] is False
 
@@ -58,7 +58,7 @@ def test_sync_candidate_requires_verifier(tmp_path: Path):
     status = service.status()
 
     assert status["sync_state"] == SyncState.UNKNOWN.value
-    assert status["comparison"] == "CANDIDATE_AVAILABLE"
+    assert status["comparison"] == "CANDIDATE_DISCOVERED"
     assert status["error_classification"] == "CANDIDATE_VERIFIER_UNAVAILABLE"
     assert status["activation_performed"] is False
 
@@ -300,27 +300,19 @@ def test_sync_stage_activate_rollback(tmp_path: Path):
     status = service.status()
     assert status["sync_state"] == SyncState.VERIFIED.value
 
-    # 2. Stage
+    # 2. Stage cannot claim a physical state transition without an implementation.
     res = service.stage()
-    assert res["status"] == "staging"
-    service.wait()
-    status = service.status()
-    assert status["sync_state"] == SyncState.STAGED.value
-    assert status["stage"] == "STAGE"
-
-    # 3. Activate (now fails closed to BLOCKED because not implemented physically)
-    res = service.activate()
-    assert res["status"] == "activating"
-    service.wait()
+    assert res["status"] == "blocked"
+    assert res["error"] == "STAGING_NOT_IMPLEMENTED"
     status = service.status()
     assert status["sync_state"] == SyncState.BLOCKED.value
-    assert status["error_classification"] == "ACTIVATION_NOT_IMPLEMENTED"
+    assert status["error_classification"] == "STAGING_NOT_IMPLEMENTED"
     assert status["activation_performed"] is False
     assert service.local_version == "v0.4.0"
-    # 4. Rollback (blocked because activation failed)
+    # 3. Rollback is unavailable because no physical apply occurred.
     res = service.rollback()
     assert res["status"] == "blocked"
-    assert res["error"] == "Cannot rollback when not activated"
+    assert res["error"] == "ROLLBACK_REQUIRES_PHYSICAL_APPLY"
 def test_stage_blocked_if_not_verified(tmp_path: Path):
     service = SyncService(tmp_path)
     res = service.stage()
@@ -330,11 +322,13 @@ def test_activate_blocked_if_not_staged(tmp_path: Path):
     service = SyncService(tmp_path)
     res = service.activate()
     assert res["status"] == "blocked"
+    assert res["error"] == "APPLY_REQUIRES_PHYSICAL_STAGE"
 
 def test_rollback_blocked_if_not_activated(tmp_path: Path):
     service = SyncService(tmp_path)
     res = service.rollback()
     assert res["status"] == "blocked"
+    assert res["error"] == "ROLLBACK_REQUIRES_PHYSICAL_APPLY"
 
 def test_concurrent_start_is_atomic(tmp_path: Path):
     import threading

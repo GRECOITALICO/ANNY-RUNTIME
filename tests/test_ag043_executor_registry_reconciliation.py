@@ -85,7 +85,7 @@ def test_unregistered_model_removed_from_intelligence_layer(tmp_path):
         context_window=32000,
         quantization="int8",
         artifact_uri="local://temp",
-        artifact_sha256="dummy_hash",
+        artifact_sha256="b" * 64,
         runtime_interface="llama.cpp",
         max_concurrency=1,
         max_runtime=300,
@@ -133,12 +133,13 @@ def test_frontier_executor_availability_interlock(tmp_path):
     luna_profile = layer._implementations.get("luna")
     assert luna_profile.availability is False
 
-    # Enable frontier
+    # An enabled DefaultFrontierExecutor remains a local sentinel and cannot
+    # make a remote model available.
     enabled_frontier = DefaultFrontierExecutor(enabled=True, available_models=["luna"])
     orchestrator.frontier_executor = enabled_frontier
     orchestrator._reconcile_registries()
     luna_profile = layer._implementations.get("luna")
-    assert luna_profile.availability is True
+    assert luna_profile.availability is False
 
 
 def test_bijective_routing_class_mapping():
@@ -148,7 +149,7 @@ def test_bijective_routing_class_mapping():
     assert WorkerManager._routing_class("UNKNOWN") == "UNKNOWN"
 
 
-def test_remote_model_worker_execution(tmp_path):
+def test_remote_model_worker_rejects_default_frontier_sentinel(tmp_path):
     frontier = DefaultFrontierExecutor(enabled=True, available_models=["luna"])
     worker_mgr = WorkerManager(workspace_manager=None, frontier_executor=frontier)
     
@@ -203,11 +204,18 @@ def test_remote_model_worker_execution(tmp_path):
         fallback_executor=None,
         enabled=True
     )
-    
+    # Isolated WorkerManager test: inject an explicit test-only admission so
+    # the assertion reaches the Frontier sentinel rather than a direct-route
+    # denial. Runtime production wiring performs this in ExecutionManager.
+    test_registry = CapabilityRegistry()
+    test_registry.register(cap_def)
+    worker_mgr.capability_registry = test_registry
+    worker_mgr._admit_execution(context, task, cap_def, selection)
+
     worker_mgr.start_worker(worker.worker_id, context, task, cap_def)
-    assert context.status == ExecutionStatus.SUCCEEDED
-    assert context.result["status"] == "COMPLETED"
-    assert context.result["model_id"] == "luna"
+    assert context.status == ExecutionStatus.FAILED
+    assert context.failure_reason.name == "AUTHORIZATION_DENIED"
+    assert "Authorized FrontierExecutor" in context.error_message
 
 
 def test_capability_support_reconciliation(tmp_path):

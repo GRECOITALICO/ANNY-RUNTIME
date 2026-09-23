@@ -1,7 +1,7 @@
 from typing import List, Dict, Optional
 import uuid
 
-from runtime.execution.models import Task, TaskExecutionContext, ExecutionStatus
+from runtime.execution.models import Task, TaskExecutionContext, ExecutionStatus, FailureReason
 from runtime.workspace.ephemeral import EphemeralWorkspaceManager
 from runtime.execution.capability import CapabilityRegistry
 from runtime.execution.policy import RuntimePolicy
@@ -47,8 +47,11 @@ class ExecutionManager:
             workspace_manager,
             audit_manager,
             mcp_gateway=self.mcp_gateway,
-            telemetry_collector=self.telemetry_collector
+            telemetry_collector=self.telemetry_collector,
+            model_registry=self.model_registry,
+            capability_registry=self.registry,
         )
+        self.mcp_gateway.set_execution_authorizer(self.worker_manager.authorize_tool_request)
 
     def submit_task(self, task: Task) -> TaskExecutionContext:
         execution_id = str(uuid.uuid4())
@@ -96,6 +99,15 @@ class ExecutionManager:
             department_id=task.department_id,
             capability_family=cap.family,
             routing_class=routing_class,
+            # An execution workspace is an explicit ephemeral resource.  It is
+            # not an implicit authorization for a repository or any other
+            # path.  Repository resources must be supplied by a later,
+            # authoritative resource-binding boundary.
+            authorized_resource_id=f"workspace:{execution_id}",
+            authorized_resource_project_id=task.project_id,
+            authorized_resource_root=workspace_path,
+            resource_access_mode="READ_ONLY",
+            resource_kind="EPHEMERAL_WORKSPACE",
         )
         context.executor_type = selection.executor_type.value
         context.executor_id = selection.executor_id
@@ -104,6 +116,11 @@ class ExecutionManager:
         context.model_version = selection.model_version
         context.policy_version = selection.policy_version
         context.generation = self.runtime_engine.generation.current if self.runtime_engine else 1
+
+        # This internal admission is the single Runtime transition from an
+        # enabled capability to an eligible executor.  It does not manufacture
+        # an external identity or replace the separate ExecutionContext layer.
+        self.worker_manager._admit_execution(context, task, cap, selection)
 
         self._tasks[execution_id] = task
         self._executions[execution_id] = context
@@ -167,6 +184,11 @@ class ExecutionManager:
         cap = self.registry.get(task.capability_id)
         if not cap:
             raise ValueError("Capability not found for execution")
+        if not cap.enabled:
+            context.status = ExecutionStatus.FAILED
+            context.failure_reason = FailureReason.AUTHORIZATION_DENIED
+            context.error_message = "Capability is disabled"
+            return context
         worker = next((w for w in self.worker_manager.list_workers() if w.execution_id == execution_id), None)
         if not worker:
             raise ValueError("Worker not found for execution")
@@ -294,6 +316,8 @@ class ExecutionManager:
             )
             self.continuity_engine.append_event(event)
 
+        return context
+
     def get_execution(self, execution_id: str) -> Optional[TaskExecutionContext]:
         if execution_id in self._executions:
             return self._executions[execution_id]
@@ -333,4 +357,3 @@ class ExecutionManager:
 
     def get_all_executions(self) -> List[TaskExecutionContext]:
         return sorted(list(self._executions.values()), key=lambda x: x.execution_id)
-

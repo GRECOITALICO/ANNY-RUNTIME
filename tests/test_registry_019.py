@@ -13,6 +13,8 @@ def execution_manager(tmp_path):
     ws_manager = EphemeralWorkspaceManager(base_dir=str(tmp_path / "workspaces"))
     return ExecutionManager(ws_manager)
 
+import os
+
 def create_mock_task(cap_id="filesystem.inspect", path="/tmp"):
     return Task(
         task_id="task-019",
@@ -27,6 +29,13 @@ def create_mock_task(cap_id="filesystem.inspect", path="/tmp"):
         requested_by="test",
         created_at=datetime.now(timezone.utc)
     )
+
+def _bind_fixture(ctx, task, name="harmless.txt", content="hello"):
+    path = os.path.join(ctx.workspace_path, name)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(content)
+    task.input["path"] = path
+    return path
 
 def test_1_capability_registry():
     registry = CapabilityRegistry()
@@ -65,8 +74,15 @@ def test_5_deterministic_selection():
     assert selection.executor_id == "deterministic-v1"
 
 def test_6_model_selection_abstraction():
-    # ModelExecutor interface tested implicitly by its definition being valid Python
-    pass
+    registry = CapabilityRegistry()
+    policy = RuntimePolicy()
+    selector = ExecutorSelector()
+    cap = registry.get("filesystem.inspect")
+    task = create_mock_task()
+    selection = selector.select(task, cap, policy)
+    assert selection.executor_type == ExecutorType.DETERMINISTIC
+    assert selection.executor_id == "deterministic-v1"
+    assert selection.execution_mode == "DETERMINISTIC"
 
 def test_7_authority_isolation(execution_manager):
     t = create_mock_task()
@@ -74,20 +90,17 @@ def test_7_authority_isolation(execution_manager):
     assert ctx.executor_type == "DETERMINISTIC"
 
 def test_9_executor_integration(execution_manager, tmp_path):
-    safe_path = tmp_path / "harmless.txt"
-    safe_path.write_text("hello")
-    t = create_mock_task(path=str(safe_path))
+    t = create_mock_task()
     ctx = execution_manager.submit_task(t)
+    _bind_fixture(ctx, t)
     assert ctx.executor_type == "DETERMINISTIC"
     execution_manager.execute_sync(ctx.execution_id)
     assert ctx.status == ExecutionStatus.SUCCEEDED
 
 def test_10_execution_record(execution_manager, tmp_path):
-    safe_path = tmp_path / "harmless.txt"
-    safe_path.write_text("hello")
-    t = create_mock_task(path=str(safe_path))
+    t = create_mock_task()
     ctx = execution_manager.submit_task(t)
-    
+    _bind_fixture(ctx, t)
     assert ctx.executor_type == "DETERMINISTIC"
     assert ctx.executor_id == "deterministic-v1"
     assert ctx.policy_version == "1.0.0"
@@ -100,11 +113,10 @@ def test_13_timeout(execution_manager):
     execution_manager.execute_sync(ctx.execution_id)
     assert ctx.status == ExecutionStatus.TIMED_OUT
 
-def test_14_output_limit(execution_manager, tmp_path):
-    safe_path = tmp_path / "harmless.txt"
-    safe_path.write_text("hello")
-    t = create_mock_task(path=str(safe_path))
+def test_14_output_limit(execution_manager):
+    t = create_mock_task()
     ctx = execution_manager.submit_task(t)
+    _bind_fixture(ctx, t)
     ctx.resource_limits["max_output_size"] = 1
     execution_manager.execute_sync(ctx.execution_id)
     assert ctx.status == ExecutionStatus.LIMIT_EXCEEDED
@@ -129,14 +141,14 @@ def test_16_control_plane(execution_manager, tmp_path):
     assert len(execs) == 1
 
 def test_17_multiple_executions(execution_manager, tmp_path):
-    safe_path = tmp_path / "harmless.txt"
-    safe_path.write_text("hello")
-    t1 = create_mock_task(path=str(safe_path))
+    t1 = create_mock_task()
     ctx1 = execution_manager.submit_task(t1)
+    _bind_fixture(ctx1, t1)
     execution_manager.execute_sync(ctx1.execution_id)
     
-    t2 = create_mock_task(cap_id="filesystem.hash", path=str(safe_path))
+    t2 = create_mock_task(cap_id="filesystem.hash")
     ctx2 = execution_manager.submit_task(t2)
+    _bind_fixture(ctx2, t2)
     execution_manager.execute_sync(ctx2.execution_id)
     
     assert ctx1.status == ExecutionStatus.SUCCEEDED

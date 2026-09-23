@@ -3,7 +3,6 @@
 import os
 import sys
 import ast
-import json
 import subprocess
 import tempfile
 import textwrap
@@ -43,6 +42,13 @@ class TestInstallShNoSilentFailures(unittest.TestCase):
         self.assertIn('rollback_success=', content)
         self.assertIn('rollback_failure=', content)
 
+    def test_installer_runs_preflight_in_isolated_mode(self):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        install_sh = os.path.join(script_dir, '..', 'scripts', 'install.sh')
+        with open(install_sh, 'r') as f:
+            content = f.read()
+        self.assertIn('venv/bin/python3" -I "$STAGING_DIR/scripts/preflight_check.py"', content)
+
 
 class TestPreflightSemantics(unittest.TestCase):
     """P0-C / P0-D: Preflight error and warning semantics."""
@@ -57,18 +63,20 @@ class TestPreflightSemantics(unittest.TestCase):
             f.write(py_code)
         with open(os.path.join(tmpdir, 'requirements.txt'), 'w') as f:
             f.write(requirements)
+        # A legacy inventory may exist as historical evidence, but it is not a
+        # preflight input and must not override the canonical mapping.
         if inventory is not None:
             with open(os.path.join(tmpdir, 'DEPENDENCY-INVENTORY.json'), 'w') as f:
-                json.dump(inventory, f)
+                f.write(inventory)
 
     def _run_preflight(self, tmpdir):
         """Run preflight_check.py in a subprocess against tmpdir."""
         script = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               '..', 'scripts', 'preflight_check.py')
         result = subprocess.run(
-            [sys.executable, script, tmpdir],
+            [sys.executable, '-I', script, tmpdir],
             cwd=tmpdir,
-            env={**os.environ, 'PYTHONPATH': tmpdir},
+            env={key: value for key, value in os.environ.items() if key != 'PYTHONPATH'},
             capture_output=True, text=True
         )
         return result
@@ -79,19 +87,18 @@ class TestPreflightSemantics(unittest.TestCase):
             self._make_project(tmpdir,
                 py_code='import yaml\n',
                 requirements='',
-                inventory=[{"import": "yaml", "python_package": "PyYAML",
-                           "source_file": "test"}])
+                inventory='[{"import": "yaml", "python_package": "forged-package"}]')
             result = self._run_preflight(tmpdir)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('DEPENDENCY_PREFLIGHT_FAILED', result.stderr)
 
-    def test_missing_inventory_mapping_fails(self):
-        """Import without inventory entry → FAIL."""
+    def test_unknown_import_mapping_fails(self):
+        """Import without a canonical mapping → FAIL."""
         with tempfile.TemporaryDirectory() as tmpdir:
             self._make_project(tmpdir,
                 py_code='import someunknownpkg\n',
                 requirements='',
-                inventory=[])
+                inventory='[]')
             result = self._run_preflight(tmpdir)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('DEPENDENCY_MAPPING_MISSING', result.stderr)
@@ -102,7 +109,7 @@ class TestPreflightSemantics(unittest.TestCase):
             self._make_project(tmpdir,
                 py_code='def broken(:\n',
                 requirements='',
-                inventory=[])
+                inventory='[]')
             result = self._run_preflight(tmpdir)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('STATIC_PARSE_ERROR', result.stderr)
@@ -113,9 +120,7 @@ class TestPreflightSemantics(unittest.TestCase):
             self._make_project(tmpdir,
                 py_code='import nonexistent_package_xyz\n',
                 requirements='nonexistent_package_xyz\n',
-                inventory=[{"import": "nonexistent_package_xyz",
-                           "python_package": "nonexistent_package_xyz",
-                           "source_file": "test"}])
+                inventory='[{"import": "nonexistent_package_xyz", "python_package": "forged-package"}]')
             result = self._run_preflight(tmpdir)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('DEPENDENCY_MISSING', result.stderr)
@@ -126,14 +131,69 @@ class TestPreflightSemantics(unittest.TestCase):
             # runtime/module.py has no third-party imports
             self._make_project(tmpdir,
                 py_code='import os\nimport sys\n',
-                requirements='somepkg>=1.0\n',
-                inventory=[])
+                requirements='PyYAML>=6.0\n',
+                inventory='[]')
             result = self._run_preflight(tmpdir)
             # Should PASS (exit 0) but emit warning
             self.assertEqual(result.returncode, 0,
                 f"Unused requirement should not cause failure. stderr: {result.stderr}")
             self.assertIn('DEPENDENCY_PREFLIGHT_WARNING', result.stderr)
             self.assertIn('DEPENDENCY_UNUSED', result.stderr)
+
+    def test_installed_and_compatible_dependency_passes(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_project(
+                tmpdir,
+                py_code='import yaml\n',
+                requirements='PyYAML>=6.0\n',
+            )
+            result = self._run_preflight(tmpdir)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn('DEPENDENCY_PREFLIGHT_PASS', result.stdout)
+
+    def test_missing_declared_distribution_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_project(
+                tmpdir,
+                py_code='import os\n',
+                requirements='definitely-not-installed-anny-test>=1.0\n',
+            )
+            result = self._run_preflight(tmpdir)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('DEPENDENCY_NOT_INSTALLED', result.stderr)
+
+    def test_incompatible_installed_distribution_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_project(
+                tmpdir,
+                py_code='import yaml\n',
+                requirements='PyYAML>=999.0\n',
+            )
+            result = self._run_preflight(tmpdir)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('DEPENDENCY_VERSION_INCOMPATIBLE', result.stderr)
+
+    def test_malformed_requirement_fails_closed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_project(
+                tmpdir,
+                py_code='import os\n',
+                requirements='PyYAML @ https://example.invalid/PyYAML.whl\n',
+            )
+            result = self._run_preflight(tmpdir)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('REQUIREMENT_PARSE_UNKNOWN', result.stderr)
+
+    def test_legacy_inventory_cannot_override_canonical_mapping(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_project(
+                tmpdir,
+                py_code='import yaml\n',
+                requirements='PyYAML>=6.0\n',
+                inventory='[{"import": "yaml", "python_package": "forged-package"}]',
+            )
+            result = self._run_preflight(tmpdir)
+            self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_baseline_requirements_pass(self):
         """The actual project requirements must pass preflight."""
@@ -143,7 +203,7 @@ class TestPreflightSemantics(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, script],
             cwd=project_root,
-            env={**os.environ, 'PYTHONPATH': project_root},
+            env={key: value for key, value in os.environ.items() if key != 'PYTHONPATH'},
             capture_output=True, text=True
         )
         self.assertEqual(result.returncode, 0,

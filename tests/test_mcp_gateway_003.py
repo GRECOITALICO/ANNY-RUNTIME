@@ -117,11 +117,15 @@ def gateway(tool_registry, cap_registry, workspace, fabric_dir):
         fabric_data_dir=fabric_dir,
         github_client=mock_gh,
         fabric_client=mock_fab,
+        # Unit-test seam for the tool layer. Production wiring injects
+        # WorkerManager.authorize_tool_request; a gateway without an explicit
+        # authorizer is fail-closed (covered by Batch 3 tests).
+        execution_authorizer=lambda _request: (True, "TEST_ONLY"),
     )
 
 
-def _make_request(tool_id, cap_id, input_data=None):
-    return ToolRequest.create(
+def _make_request(tool_id, cap_id, input_data=None, caller_context=None):
+    request = ToolRequest.create(
         tool_id=tool_id,
         capability_id=cap_id,
         worker_id="wrk-test1234",
@@ -129,6 +133,9 @@ def _make_request(tool_id, cap_id, input_data=None):
         input_data=input_data or {},
         deadline=datetime.now(timezone.utc) + timedelta(minutes=5),
     )
+    if caller_context:
+        request.caller_context.update(caller_context)
+    return request
 
 
 # ============ Phase 2: Domain Model Tests ============
@@ -217,8 +224,12 @@ class TestGatewayPipeline:
 
     def test_fabric_register_then_read(self, gateway):
         # Register
-        req = _make_request("fabric.register", "fabric.register",
-                            {"resource_id": "test-res-001", "resource_type": "test", "metadata": {"k": "v"}})
+        req = _make_request(
+            "fabric.register",
+            "fabric.register",
+            {"resource_id": "test-res-001", "resource_type": "test", "metadata": {"k": "v"}},
+            {"governed_write_receipt": {"status": "AUTHORIZED", "test_only": True}},
+        )
         result = gateway.invoke(req)
         assert result.succeeded
         assert result.output_data["provenance_id"].startswith("prov-")

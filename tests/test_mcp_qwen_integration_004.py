@@ -195,7 +195,9 @@ def integration_env(tmp_path):
     for cap_id in ["fabric.read", "fabric.register", "model.tool_request"]:
         cap = cap_registry.get(cap_id)
         if cap:
-            cap.enabled = True
+            # ``fabric.register`` is a governed write and remains disabled
+            # unless an authoritative Fabric transport is integrated.
+            cap.enabled = cap_id != "fabric.register"
         else:
             cap_registry.register(CapabilityDefinition(
                 capability_id=cap_id, name=cap_id, description=cap_id,
@@ -218,6 +220,7 @@ def integration_env(tmp_path):
         fabric_data_dir=str(fabric_dir),
         github_client=MockGitHubClient(str(workspace)),
         fabric_client=MockFabricClient(str(fabric_dir)),
+        execution_authorizer=lambda _request: (True, "TEST_ONLY"),
     )
 
     return {
@@ -370,7 +373,7 @@ class TestPhase7RealFabric:
         assert result.succeeded
         assert result.output_data["resource"]["provenance_id"] == "prov-integration001"
 
-    def test_fabric_register_new_resource(self, integration_env):
+    def test_fabric_register_is_denied_without_governance(self, integration_env):
         gw = integration_env["gateway"]
         req = _simulate_qwen_tool_request(
             tool_id="fabric.register",
@@ -381,20 +384,8 @@ class TestPhase7RealFabric:
             capability_id="fabric.register",
         )
         result = gw.invoke(req)
-        assert result.succeeded
-        assert result.output_data["state"] == "ACTIVE"
-
-        # Verify it persisted
-        req2 = _simulate_qwen_tool_request(
-            tool_id="fabric.read",
-            arguments={"resource_id": "new-qwen-res"},
-            worker_id="wrk-fabric003",
-            execution_id="exec-fabric003",
-            capability_id="fabric.read",
-        )
-        result2 = gw.invoke(req2)
-        assert result2.succeeded
-        assert result2.output_data["found"] is True
+        assert result.succeeded is False
+        assert result.status.value == "DENIED"
 
 
 # ============================================================

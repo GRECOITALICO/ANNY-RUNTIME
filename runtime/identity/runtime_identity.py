@@ -136,3 +136,18 @@ class RuntimeIdentity:
             return True
         except (InvalidSignature, ValueError):
             return False
+
+
+class RuntimeIdentityManager:
+    """Canonical identity lifecycle facade used by the distributable CLI."""
+
+    def __init__(self, data_dir: str):
+        self.data_dir = data_dir
+
+    def create_identity(self) -> RuntimeIdentity:
+        identity = RuntimeIdentity.generate()
+        identity.save(self.data_dir)
+        return identity
+
+    def load_identity(self) -> RuntimeIdentity:
+        return RuntimeIdentity.load(self.data_dir)

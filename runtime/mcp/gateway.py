@@ -11,7 +11,7 @@ import json
 import logging
 import hashlib
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Callable, Dict, Any, Optional
 
 from runtime.mcp import (
     ToolDefinition, ToolRequest, ToolResult, ToolPolicy,
@@ -52,7 +52,8 @@ class MCPGateway:
 
     def __init__(self, tool_registry: ToolRegistry, capability_registry: CapabilityRegistry,
                  audit_manager=None, workspace_path: str = "", fabric_data_dir: str = "",
-                 github_client=None, fabric_client=None):
+                 github_client=None, fabric_client=None,
+                 execution_authorizer: Optional[Callable[[ToolRequest], object]] = None):
         self.tool_registry = tool_registry
         self.capability_registry = capability_registry
         self.audit_manager = audit_manager
@@ -60,11 +61,16 @@ class MCPGateway:
         self.fabric_data_dir = fabric_data_dir
         self.github_client = github_client
         self.fabric_client = fabric_client
+        self._execution_authorizer = execution_authorizer
 
         # Track invocation counts per execution_id per tool_id
         self._invocation_counts: Dict[str, Dict[str, int]] = {}
 
         logger.info(f"MCPGateway initialized with {len(tool_registry.list_tools())} tools")
+
+    def set_execution_authorizer(self, execution_authorizer: Callable[[ToolRequest], object]) -> None:
+        """Inject the WorkerManager-only admission verifier during Runtime wiring."""
+        self._execution_authorizer = execution_authorizer
 
     def invoke(self, request: ToolRequest) -> ToolResult:
         """
@@ -81,6 +87,7 @@ class MCPGateway:
 
         # Step 2: Authorize (capability boundary - Phase 5)
         try:
+            self._authorize_execution(request)
             self._authorize(request)
         except AuthorizationDeniedError as e:
             self._emit_audit("TOOL_AUTHORIZATION_DENIED", request, str(e))
@@ -216,6 +223,15 @@ class MCPGateway:
 
         if not cap.enabled:
             raise AuthorizationDeniedError(f"Capability {request.capability_id} is disabled")
+
+    def _authorize_execution(self, request: ToolRequest) -> None:
+        """Reject direct MCP invocation without a live admitted WorkerManager path."""
+        if not callable(self._execution_authorizer):
+            raise AuthorizationDeniedError("CANONICAL_WORKER_AUTHORIZATION_REQUIRED")
+        verdict = self._execution_authorizer(request)
+        allowed, reason = verdict if isinstance(verdict, tuple) else (bool(verdict), "CANONICAL_ADMISSION_REQUIRED")
+        if not allowed:
+            raise AuthorizationDeniedError(reason)
 
     def _enforce_policy(self, request: ToolRequest, tool: ToolDefinition):
         """Enforce tool policy limits."""

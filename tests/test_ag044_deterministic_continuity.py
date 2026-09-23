@@ -29,7 +29,10 @@ def make_test_task(task_id: str = "t-001", cap_id: str = "filesystem.inspect"):
         capability_id=cap_id,
         account_id="acc-1",
         project_id="proj-1",
-        input={"path": "/tmp"},
+        # A deterministic task must not use the process-level /tmp as an
+        # implicit authority.  Relative paths resolve from its created,
+        # authorized ephemeral workspace.
+        input={"path": "."},
         constraints={},
         deadline=datetime.now(timezone.utc) + timedelta(minutes=5),
         workspace_policy="workspace_only",

@@ -4,9 +4,16 @@ import time
 import hashlib
 import subprocess
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Callable, Dict, Any, Optional
+from pathlib import Path
 
 from runtime.execution.models import Task, TaskExecutionContext, ExecutionStatus, FailureReason
+from runtime.security.path_containment import (
+    AuthorizedResourceScope,
+    ContainmentError,
+    require_contained_path,
+    require_resource_scope,
+)
 from runtime.workspace.ephemeral import EphemeralWorkspaceManager
 
 
@@ -21,8 +28,15 @@ class ExecutorSecurityError(Exception):
 class DeterministicExecutor:
     """Execute local deterministic capabilities with bounded, auditable behavior."""
 
-    def __init__(self, workspace_manager: EphemeralWorkspaceManager):
+    def __init__(
+        self,
+        workspace_manager: EphemeralWorkspaceManager,
+        admission_validator: Optional[Callable[[Task, TaskExecutionContext], bool]] = None,
+    ):
         self.workspace_manager = workspace_manager
+        # A direct executor instance has no authority to accept a task.  The
+        # WorkerManager injects its binding validator for admitted executions.
+        self._admission_validator = admission_validator
         self.runtime_version = "1.1.0"
         self.tool_version = "1.1.0"
 
@@ -31,6 +45,12 @@ class DeterministicExecutor:
             context.failure_reason = FailureReason.INVALID_TASK
             context.status = ExecutionStatus.FAILED
             context.error_message = "Execution context is not QUEUED"
+            return
+
+        if not self._is_admitted(task, context):
+            context.status = ExecutionStatus.FAILED
+            context.failure_reason = FailureReason.AUTHORIZATION_DENIED
+            context.error_message = "CANONICAL_ADMISSION_REQUIRED"
             return
 
         context.status = ExecutionStatus.RUNNING
@@ -77,25 +97,66 @@ class DeterministicExecutor:
             context.duration_ms = int((context.completed_at - context.started_at).total_seconds() * 1000)
             self._finalize_workspace(task, context)
 
+    def _is_admitted(self, task: Task, context: TaskExecutionContext) -> bool:
+        """Require a WorkerManager-issued Runtime admission before execution."""
+        if context.admission_state != "AUTHORIZED" or not context.admission_id:
+            return False
+        if not callable(self._admission_validator):
+            return False
+        try:
+            return bool(self._admission_validator(task, context))
+        except Exception:
+            return False
+
     def _deadline(self, context: TaskExecutionContext) -> None:
         if datetime.now(timezone.utc) > context.deadline:
             raise TimeoutError("Deadline exceeded")
 
-    def _target(self, task: Task) -> str:
-        target_path = task.input.get("path")
-        if not isinstance(target_path, str) or not target_path:
-            raise ValueError("Missing 'path' in input")
-        return os.path.abspath(target_path)
+    def _resource_scope(self, task: Task, context: TaskExecutionContext) -> AuthorizedResourceScope:
+        """Resolve the authorized identity scope; path containment is separate."""
+        # Once an explicit resource identity is supplied, its root is required
+        # too.  Do not silently fall back to the workspace for a malformed
+        # repository/resource binding.
+        explicit_scope = context.authorized_resource_id is not None
+        root = context.authorized_resource_root if explicit_scope else context.workspace_path
+        resource_id = context.authorized_resource_id or f"workspace:{context.execution_id}"
+        scope = AuthorizedResourceScope(
+            resource_id=resource_id,
+            project_id=context.authorized_resource_project_id or context.project_id,
+            tenant_id=context.authorized_resource_tenant_id or context.tenant_id,
+            authorized_root=root,
+            access_mode=context.resource_access_mode,
+            resource_kind=context.resource_kind,
+        )
+        try:
+            return require_resource_scope(
+                scope,
+                resource_id=task.input.get("resource_id"),
+                project_id=task.input.get("project_id", context.project_id),
+                tenant_id=task.input.get("tenant_id", context.tenant_id),
+                operation=task.input.get("operation", "READ"),
+            )
+        except ContainmentError as exc:
+            raise ExecutorSecurityError(str(exc)) from exc
 
-    def _enforce_path(self, path: str) -> None:
-        forbidden_paths = [
-            "/var/lib/anny-runtime/secrets",
-            "/home/anny/.ssh",
-            "/root",
-        ]
-        for forbidden in forbidden_paths:
-            if path == os.path.abspath(forbidden) or path.startswith(os.path.abspath(forbidden) + os.sep):
-                raise ExecutorSecurityError(f"Access to {forbidden} is explicitly denied")
+    def _enforce_path(self, path: str, task: Task, context: TaskExecutionContext) -> str:
+        """Require both resource authorization and physical path containment."""
+        scope = self._resource_scope(task, context)
+        try:
+            target = Path(require_contained_path(scope.authorized_root, path).resolved_path)
+        except ContainmentError as exc:
+            raise ExecutorSecurityError(str(exc)) from exc
+        forbidden_paths = [Path.home() / ".ssh"]
+        data_dir = os.environ.get("ANNY_DATA_DIR")
+        if data_dir:
+            forbidden_paths.append(Path(data_dir).expanduser().resolve(strict=False) / "secrets")
+        for forbidden_path in forbidden_paths:
+            forbidden_path = forbidden_path.resolve(strict=False)
+            if target == forbidden_path or forbidden_path in target.parents:
+                raise ExecutorSecurityError(
+                    f"Access to {forbidden_path} is explicitly denied"
+                )
+        return str(target)
 
     def _limit_output(self, context: TaskExecutionContext, result: Dict[str, Any]) -> None:
         encoded = json.dumps(result, sort_keys=True, default=str).encode("utf-8")
@@ -109,8 +170,7 @@ class DeterministicExecutor:
         target_path = task.input.get("path")
         if not isinstance(target_path, str) or not target_path:
             raise ValueError("Missing 'path' in input")
-        abs_target = os.path.abspath(target_path)
-        self._enforce_path(abs_target)
+        abs_target = self._enforce_path(target_path, task, context)
         if not os.path.exists(abs_target):
             result = {"error": "Path does not exist", "path": target_path}
         else:
@@ -131,8 +191,7 @@ class DeterministicExecutor:
         target_path = task.input.get("path")
         if not isinstance(target_path, str) or not target_path:
             raise ValueError("Missing 'path' in input")
-        abs_target = os.path.abspath(target_path)
-        self._enforce_path(abs_target)
+        abs_target = self._enforce_path(target_path, task, context)
         if not os.path.isdir(abs_target):
             result = {"error": "Directory does not exist", "path": target_path, "entries": []}
         else:
@@ -153,8 +212,7 @@ class DeterministicExecutor:
         target_path = task.input.get("path")
         if not isinstance(target_path, str) or not target_path:
             raise ValueError("Missing 'path' in input")
-        abs_target = os.path.abspath(target_path)
-        self._enforce_path(abs_target)
+        abs_target = self._enforce_path(target_path, task, context)
         if not os.path.exists(abs_target):
             result = {"error": "Path does not exist", "path": target_path}
         elif os.path.isdir(abs_target):
@@ -177,12 +235,11 @@ class DeterministicExecutor:
             timeout=30,
         )
 
-    def _repository_path(self, task: Task) -> str:
+    def _repository_path(self, task: Task, context: TaskExecutionContext) -> str:
         repo_path = task.input.get("path")
         if not isinstance(repo_path, str) or not repo_path:
             raise ValueError("Missing repository 'path' in input")
-        abs_target = os.path.abspath(repo_path)
-        self._enforce_path(abs_target)
+        abs_target = self._enforce_path(repo_path, task, context)
         if not os.path.exists(os.path.join(abs_target, ".git")):
             raise ValueError("Path is not a Git repository")
         return abs_target
@@ -192,8 +249,7 @@ class DeterministicExecutor:
         repo_path = task.input.get("path")
         if not isinstance(repo_path, str) or not repo_path:
             raise ValueError("Missing 'path' in input")
-        abs_target = os.path.abspath(repo_path)
-        self._enforce_path(abs_target)
+        abs_target = self._enforce_path(repo_path, task, context)
         if not os.path.exists(abs_target):
             result = {"error": "Repository path does not exist", "path": repo_path}
         else:
@@ -204,7 +260,7 @@ class DeterministicExecutor:
 
     def _execute_repository_search(self, task: Task, context: TaskExecutionContext) -> None:
         self._deadline(context)
-        repo_path = self._repository_path(task)
+        repo_path = self._repository_path(task, context)
         pattern = task.input.get("pattern")
         if not isinstance(pattern, str) or not pattern:
             raise ValueError("Missing search 'pattern'")
@@ -214,7 +270,7 @@ class DeterministicExecutor:
 
     def _execute_repository_read(self, task: Task, context: TaskExecutionContext) -> None:
         self._deadline(context)
-        repo_path = self._repository_path(task)
+        repo_path = self._repository_path(task, context)
         head = self._git(repo_path, ["rev-parse", "HEAD"]).stdout.strip()
         branch = self._git(repo_path, ["branch", "--show-current"]).stdout.strip()
         status = self._git(repo_path, ["status", "--porcelain=v1"]).stdout.splitlines()
@@ -229,7 +285,7 @@ class DeterministicExecutor:
 
     def _execute_repository_diff(self, task: Task, context: TaskExecutionContext) -> None:
         self._deadline(context)
-        repo_path = self._repository_path(task)
+        repo_path = self._repository_path(task, context)
         base = task.input.get("base")
         head = task.input.get("head")
         if not isinstance(base, str) or not base:
@@ -252,8 +308,7 @@ class DeterministicExecutor:
         target_path = task.input.get("path")
         if not isinstance(target_path, str) or not target_path:
             raise ValueError("Missing artifact 'path' in input")
-        abs_target = os.path.abspath(target_path)
-        self._enforce_path(abs_target)
+        abs_target = self._enforce_path(target_path, task, context)
         if not os.path.exists(abs_target):
             result = {"error": "Artifact does not exist", "path": target_path}
         else:

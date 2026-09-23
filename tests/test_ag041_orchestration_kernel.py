@@ -52,7 +52,7 @@ def _make_model_def(model_id: str, name: str, capabilities: list, status=ModelSt
         context_window=32000,
         quantization="int8",
         artifact_uri=f"local://models/{model_id}",
-        artifact_sha256="dummy_sha",
+        artifact_sha256="a" * 64,
         runtime_interface="llama.cpp",
         max_concurrency=1,
         max_runtime=300,
@@ -128,16 +128,15 @@ def test_local_model_selection(base_orchestrator):
     assert plan.model_id == "qwen-2.5-7b"
 
 
-# 3. Frontier Fallback
-def test_frontier_fallback(base_orchestrator):
+# 3. Frontier fallback is blocked without an injected physical executor
+def test_frontier_fallback_is_blocked_without_physical_executor(base_orchestrator):
     for m in base_orchestrator.model_registry.list_models():
         base_orchestrator.model_registry.unregister(m.model_id)
 
     task = MockTask(task_id="t-003", type="document.classify", allow_frontier=True)
     plan = base_orchestrator.plan_task(task, policy=RuntimePolicy(allow_llm=True))
-    assert plan.routing_class == RoutingClass.FRONTIER_MODEL
-    assert plan.executor_id == "frontier-executor"
-    assert plan.model_id == "frontier-gpt4"
+    assert plan.routing_class == RoutingClass.BLOCKED
+    assert "No valid executor" in plan.decision_reason
 
 
 # 4. Blocked When No Executor Exists
@@ -308,7 +307,7 @@ def test_model_availability_reconciliation(base_orchestrator):
 # 18. Frontier Executor Boundary
 def test_frontier_executor_boundary(base_orchestrator):
     frontier = DefaultFrontierExecutor(enabled=True)
-    assert frontier.is_available("frontier-gpt4") is True
+    assert frontier.is_available("frontier-gpt4") is False
     plan = ExecutionPlan(
         task_id="t-018",
         capability_id="document.classify",
@@ -319,6 +318,5 @@ def test_frontier_executor_boundary(base_orchestrator):
         model_id="frontier-gpt4",
     )
     task = MockTask(task_id="t-018", type="document.classify")
-    res = frontier.execute_plan(task, plan)
-    assert res["status"] == "COMPLETED"
-    assert res["model_id"] == "frontier-gpt4"
+    with pytest.raises(RuntimeError, match="not a physical executor"):
+        frontier.execute_plan(task, plan)

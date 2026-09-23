@@ -27,6 +27,17 @@ done
 
 MANIFEST_FILE="$EVIDENCE_DIR/MANIFEST.json"
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RUNTIME_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+RUNTIME_VERSION=$(cd "$RUNTIME_ROOT" && python3 -c 'from runtime.core.version import __version__; print(__version__)') || {
+    echo "FAIL: canonical Runtime version could not be loaded."
+    exit 1
+}
+if [[ -z "$RUNTIME_VERSION" ]]; then
+    echo "FAIL: canonical Runtime version is empty."
+    exit 1
+fi
+
 # --- CORE FUNCTIONS ---
 
 init_dir() {
@@ -128,7 +139,8 @@ write_event() {
            --arg mach "$MACHINE_ID" \
            --arg op "$OPERATOR_ID" \
            --arg created "$timestamp" \
-           '{machine_id: $mach, candidate_version: "v0.2.0-CANDIDATE", operator_id: $op, created_at: $created, event_count: 0, events: [], final_hash: ""}' > "$MANIFEST_FILE.tmp"
+           --arg ver "$RUNTIME_VERSION" \
+           '{machine_id: $mach, candidate_version: ("v" + $ver), operator_id: $op, created_at: $created, event_count: 0, events: [], final_hash: ""}' > "$MANIFEST_FILE.tmp"
         mv "$MANIFEST_FILE.tmp" "$MANIFEST_FILE"
     fi
     
@@ -223,7 +235,7 @@ if [ "$EXPORT_MODE" -eq 1 ]; then
         echo "No evidence to export."
         exit 1
     fi
-    ARCHIVE_NAME="ANNY-RUNTIME-v0.2-${MACHINE_ID}-EVIDENCE.tar.gz"
+    ARCHIVE_NAME="ANNY-RUNTIME-v${RUNTIME_VERSION}-${MACHINE_ID}-EVIDENCE.tar.gz"
     tar -czf "$ARCHIVE_NAME" -C "$(dirname "$EVIDENCE_DIR")" "$(basename "$EVIDENCE_DIR")"
     echo "Exported to $ARCHIVE_NAME"
     exit 0

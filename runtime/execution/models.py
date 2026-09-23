@@ -108,6 +108,21 @@ class TaskExecutionContext:
     capability_family: Optional[str] = None
     department_id: Optional[str] = None
     generation: Optional[int] = None
+    tenant_id: Optional[str] = None
+    authorized_resource_id: Optional[str] = None
+    authorized_resource_project_id: Optional[str] = None
+    authorized_resource_tenant_id: Optional[str] = None
+    authorized_resource_root: Optional[str] = None
+    resource_access_mode: str = "READ_ONLY"
+    resource_kind: str = "EPHEMERAL_WORKSPACE"
+    # Internal Runtime admission, issued only after ExecutionManager has
+    # resolved an enabled capability and an eligible executor.  This is not an
+    # external identity issuer or a replacement for ExecutionContext.
+    admission_id: Optional[str] = None
+    admission_state: str = "UNAUTHORIZED"
+    admitted_capability_id: Optional[str] = None
+    admitted_executor_type: Optional[str] = None
+    admitted_executor_id: Optional[str] = None
 
 @dataclass
 class ExecutionResult:

@@ -3,9 +3,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 from runtime.security.execution_context import ExecutionContext
-
-class SecurityViolationError(Exception):
-    pass
+from runtime.security.authority_validator import SecurityViolationError
 
 @dataclass
 class ExecutionReceipt:
@@ -17,8 +15,11 @@ class ExecutionReceipt:
 
 class AuthorizedExecutionPipeline:
     """
-    The singular Authorized Execution Pipeline for all physical effects in ANNY-RUNTIME.
-    Enforces the strict 10-step security validation sequence.
+    Legacy authorization path retained only for compatibility.
+
+    The canonical execution path is ExecutionManager -> WorkerManager -> MCPGateway.
+    This legacy path is quarantined so it cannot become a second executable
+    authorization boundary.
     """
     
     def __init__(self, runtime_identity_service: Any, capability_gate: Any, tool_registry: Any):
@@ -27,8 +28,8 @@ class AuthorizedExecutionPipeline:
         self.tool_registry = tool_registry
 
     def execute(self, context: ExecutionContext, tool_name: str, tool_args: Dict[str, Any]) -> ExecutionReceipt:
-        now = datetime.utcnow()
-        
+        raise SecurityViolationError("LEGACY_AUTH_PIPELINE_QUARANTINED")
+
         # 1. Context Integrity
         if not context:
             raise SecurityViolationError("ExecutionContext missing")

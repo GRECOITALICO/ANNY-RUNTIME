@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import secrets
 import threading
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -39,6 +38,9 @@ class SyncService:
         self._active: Optional[SyncResult] = None
         self._active_thread: Optional[threading.Thread] = None
         self._latest: Optional[SyncResult] = self._load_latest()
+        self._last_verified: Optional[SyncResult] = (
+            self._latest if self._latest and self._latest.sync_state == SyncState.VERIFIED else None
+        )
         self._lock = threading.Lock()
 
     def wait(self, timeout: Optional[float] = None) -> None:
@@ -72,6 +74,41 @@ class SyncService:
             "details": {},
         }
 
+    def update_check(self) -> Dict[str, Any]:
+        """Run discovery and verification only; never stage, apply, or roll back.
+
+        The admin surface uses this synchronous result so it can report a
+        truthful update-check outcome rather than treating handler existence or
+        request acceptance as success.
+        """
+        with self._lock:
+            if self._active is not None:
+                return {
+                    "status": "UPDATE_CHECK_IN_PROGRESS",
+                    "sync_state": self._active.sync_state.value,
+                    "sync_id": self._active.sync_id,
+                    "operation_id": self._active.operation_id,
+                }
+            result = self._new_result("UPDATE_CHECK")
+            self._active = result
+            self._persist(result)
+
+        try:
+            self._discover_compare_verify(result)
+        except Exception as exc:
+            result.sync_state = SyncState.FAILED
+            result.stage = "REPORT"
+            result.error_classification = "UPDATE_CHECK_EXCEPTION"
+            result.details = {"message": str(exc)[:500], "activation_performed": False}
+        finally:
+            with self._lock:
+                self._active = None
+                self._latest = result
+                if result.sync_state == SyncState.VERIFIED and result.candidate_digest:
+                    self._last_verified = result
+                self._persist(result)
+        return self._update_check_response(result)
+
     def start(self) -> Dict[str, Any]:
         with self._lock:
             if self._active is not None and self._active.sync_state in (SyncState.SYNCING, SyncState.STAGING, SyncState.ACTIVATING, SyncState.ROLLING_BACK):
@@ -82,14 +119,7 @@ class SyncService:
                     "trace_id": self._active.trace_id,
                 }
 
-            now = datetime.now(timezone.utc).isoformat()
-            result = SyncResult(
-                sync_id=f"sync-{secrets.token_hex(12)}",
-                trace_id=f"trace-{secrets.token_hex(12)}",
-                requested_at=now,
-                sync_state=SyncState.SYNCING,
-                local_version=self.local_version,
-            )
+            result = self._new_result("DISCOVER_VERIFY")
             self._active = result
             self._persist(result)
 
@@ -105,110 +135,101 @@ class SyncService:
                 with self._lock:
                     self._active = None
                     self._latest = result
+                    if result.sync_state == SyncState.VERIFIED and result.candidate_digest:
+                        self._last_verified = result
                     self._persist(result)
 
         self._active_thread = threading.Thread(target=_run_sync, daemon=True)
         self._active_thread.start()
 
-        return {"status": "started", "sync_state": SyncState.SYNCING.value, "sync_id": result.sync_id, "trace_id": result.trace_id}
+        return {
+            "status": "started",
+            "sync_state": SyncState.SYNCING.value,
+            "sync_id": result.sync_id,
+            "trace_id": result.trace_id,
+            "operation_id": result.operation_id,
+        }
 
     def stage(self) -> Dict[str, Any]:
         with self._lock:
             if self._active is not None:
                 return {"status": "already_running", "sync_state": self._active.sync_state.value}
-            if self._latest is None or self._latest.sync_state != SyncState.VERIFIED:
-                return {"status": "blocked", "error": "Cannot stage without a VERIFIED candidate"}
+            prior = self._last_verified
+            if prior is None or prior.sync_state != SyncState.VERIFIED or not prior.candidate_digest:
+                return {"status": "blocked", "error": "STAGING_REQUIRES_VERIFIED_ARTIFACT"}
 
-            result = self._latest
-            result.sync_state = SyncState.STAGING
-            result.stage = "STAGE"
-            self._active = result
+            result = self._new_operation_result("STAGE", prior)
+            result.sync_state = SyncState.BLOCKED
+            result.stage = "REPORT"
+            result.error_classification = "STAGING_NOT_IMPLEMENTED"
+            result.post_state = SyncState.BLOCKED.value
+            result.details = {
+                "reason": "No physical staging implementation, stage location, or receipt is configured.",
+                "physical_stage_created": False,
+            }
+            self._latest = result
             self._persist(result)
-
-        def _run_stage():
-            try:
-                time.sleep(0.1) # Stub implementation
-                result.sync_state = SyncState.STAGED
-            except Exception as exc:
-                result.sync_state = SyncState.FAILED
-                result.error_classification = exc.__class__.__name__
-                result.details = {"message": str(exc)[:500]}
-            finally:
-                with self._lock:
-                    self._active = None
-                    self._persist(result)
-
-        self._active_thread = threading.Thread(target=_run_stage, daemon=True)
-        self._active_thread.start()
-
-        return {"status": "staging", "sync_state": SyncState.STAGING.value, "sync_id": result.sync_id}
+            return {
+                "status": "blocked",
+                "error": "STAGING_NOT_IMPLEMENTED",
+                "sync_id": result.sync_id,
+                "operation_id": result.operation_id,
+            }
 
     def activate(self) -> Dict[str, Any]:
         with self._lock:
             if self._active is not None:
                 return {"status": "already_running", "sync_state": self._active.sync_state.value}
-            if self._latest is None or self._latest.sync_state != SyncState.STAGED:
-                return {"status": "blocked", "error": "Cannot activate without a STAGED candidate"}
-
-            result = self._latest
-            result.sync_state = SyncState.ACTIVATING
-            result.stage = "ACTIVATE"
-            self._active = result
+            prior = self._latest
+            if (
+                prior is None
+                or prior.sync_state != SyncState.STAGED
+                or not prior.details.get("physical_stage_created")
+                or not prior.details.get("stage_location")
+            ):
+                return {"status": "blocked", "error": "APPLY_REQUIRES_PHYSICAL_STAGE"}
+            result = self._new_operation_result("APPLY", prior)
+            result.sync_state = SyncState.BLOCKED
+            result.stage = "REPORT"
+            result.error_classification = "APPLY_NOT_IMPLEMENTED"
+            result.post_state = SyncState.BLOCKED.value
+            result.details = {
+                "reason": "No physical apply implementation, target transition, or receipt is configured.",
+                "activation_performed": False,
+            }
+            self._latest = result
             self._persist(result)
-
-        def _run_activate():
-            try:
-                # Activation is not physically implemented yet.
-                # Must fail-closed and leave explicitly blocked to avoid faking state.
-                result.sync_state = SyncState.BLOCKED
-                result.error_classification = "ACTIVATION_NOT_IMPLEMENTED"
-            except Exception as exc:
-                result.sync_state = SyncState.FAILED
-                result.error_classification = exc.__class__.__name__
-                result.details = {"message": str(exc)[:500]}
-            finally:
-                with self._lock:
-                    self._active = None
-                    self._persist(result)
-
-        self._active_thread = threading.Thread(target=_run_activate, daemon=True)
-        self._active_thread.start()
-
-        return {"status": "activating", "sync_state": SyncState.ACTIVATING.value, "sync_id": result.sync_id}
+            return {
+                "status": "blocked",
+                "error": "APPLY_NOT_IMPLEMENTED",
+                "sync_id": result.sync_id,
+                "operation_id": result.operation_id,
+            }
 
     def rollback(self) -> Dict[str, Any]:
         with self._lock:
             if self._active is not None:
                 return {"status": "already_running", "sync_state": self._active.sync_state.value}
-            if self._latest is None or not self._latest.activation_performed:
-                return {"status": "blocked", "error": "Cannot rollback when not activated"}
-
-            result = self._latest
-            result.sync_state = SyncState.ROLLING_BACK
-            result.stage = "ROLLBACK"
-            self._active = result
+            prior = self._latest
+            if prior is None or not prior.activation_performed:
+                return {"status": "blocked", "error": "ROLLBACK_REQUIRES_PHYSICAL_APPLY"}
+            result = self._new_operation_result("ROLLBACK", prior)
+            result.sync_state = SyncState.BLOCKED
+            result.stage = "REPORT"
+            result.error_classification = "ROLLBACK_NOT_IMPLEMENTED"
+            result.post_state = SyncState.BLOCKED.value
+            result.details = {
+                "reason": "No physical rollback implementation, prior-state restoration, or receipt is configured.",
+                "activation_performed": False,
+            }
+            self._latest = result
             self._persist(result)
-
-        def _run_rollback():
-            try:
-                time.sleep(0.1) # Stub implementation
-                result.sync_state = SyncState.ROLLED_BACK
-                result.activation_performed = False
-                if result.local_version:
-                    self.local_version = result.local_version
-            except Exception as exc:
-                result.sync_state = SyncState.FAILED
-                result.error_classification = exc.__class__.__name__
-                result.details = {"message": str(exc)[:500]}
-            finally:
-                with self._lock:
-                    self._active = None
-                    self._persist(result)
-
-        self._active_thread = threading.Thread(target=_run_rollback, daemon=True)
-        self._active_thread.start()
-
-        return {"status": "rolling_back", "sync_state": SyncState.ROLLING_BACK.value, "sync_id": result.sync_id}
+            return {
+                "status": "blocked",
+                "error": "ROLLBACK_NOT_IMPLEMENTED",
+                "sync_id": result.sync_id,
+                "operation_id": result.operation_id,
+            }
 
     def _discover_compare_verify(self, result: SyncResult) -> None:
         result.stage = "DISCOVER"
@@ -220,10 +241,32 @@ class SyncService:
             result.details = {"reason": "No authoritative discovery provider is configured."}
             return
 
-        discovered = self.discover() or {}
+        try:
+            discovered = self.discover()
+            if discovered is None:
+                discovered = {}
+        except Exception as exc:
+            result.sync_state = SyncState.UNKNOWN
+            result.error_classification = "UPDATE_SOURCE_UNKNOWN"
+            result.stage = "REPORT"
+            result.details = {"reason": f"Discovery failed: {type(exc).__name__}", "activation_performed": False}
+            return
+        if not isinstance(discovered, dict):
+            result.sync_state = SyncState.FAILED
+            result.error_classification = "UPDATE_METADATA_INVALID"
+            result.stage = "REPORT"
+            result.details = {"reason": "Discovery provider returned non-mapping metadata.", "activation_performed": False}
+            return
         result.source = str(discovered.get("source", "UNKNOWN"))
         result.discovered_revision = discovered.get("revision")
         result.candidate_version = discovered.get("candidate_version")
+
+        if result.source == "UNKNOWN":
+            result.sync_state = SyncState.UNKNOWN
+            result.error_classification = "UPDATE_SOURCE_UNKNOWN"
+            result.stage = "REPORT"
+            result.details = {"reason": "Discovery metadata did not identify a source.", "activation_performed": False}
+            return
 
         if not discovered.get("authorized", False):
             result.sync_state = SyncState.BLOCKED
@@ -234,15 +277,42 @@ class SyncService:
 
         result.stage = "COMPARE"
         candidate = result.candidate_version
-        if not candidate or candidate == self.local_version:
-            result.comparison = "NO_CHANGE"
+        if not candidate or not isinstance(candidate, str):
+            result.comparison = "UNKNOWN"
+            result.verification = "INVALID"
+            result.sync_state = SyncState.FAILED
+            result.error_classification = "UPDATE_METADATA_INVALID"
+            result.stage = "REPORT"
+            result.details = {"reason": "Authoritative discovery did not provide a candidate version.", "activation_performed": False}
+            return
+        if candidate == self.local_version:
+            result.comparison = "NO_UPDATE"
             result.verification = "NOT_REQUIRED"
             result.sync_state = SyncState.VERIFIED
             result.stage = "REPORT"
-            result.details = {"reason": "No verified candidate requiring change was discovered."}
+            result.details = {"reason": "Authoritative source reports the current version; no candidate is available.", "activation_performed": False}
             return
 
-        result.comparison = "CANDIDATE_AVAILABLE"
+        # A different version is merely discovered. No filename ordering is
+        # used to infer that it is newer or safe to apply.
+        result.comparison = "CANDIDATE_DISCOVERED"
+
+        # The admin update-check is a Runtime release check, not a generic
+        # synchronization assertion.  It therefore requires release-shaped
+        # metadata before a verifier may report UPDATE_AVAILABLE.
+        if (
+            result.operation_type == "UPDATE_CHECK"
+            and discovered.get("candidate_kind") != "RUNTIME_RELEASE"
+        ):
+            result.sync_state = SyncState.FAILED
+            result.verification = "INVALID"
+            result.error_classification = "UPDATE_METADATA_INVALID"
+            result.stage = "REPORT"
+            result.details = {
+                "reason": "Update candidate is not declared as a Runtime release artifact.",
+                "activation_performed": False,
+            }
+            return
 
         result.stage = "VERIFY"
         if self.verify_candidate is None:
@@ -268,6 +338,12 @@ class SyncService:
         result.digest = v_dict.get("digest")
         result.proof_reference = v_dict.get("proof_reference")
         result.verifier_identity = v_dict.get("verifier_identity")
+        result.candidate_id = (
+            (result.candidate_identity or {}).get("release_id")
+            or result.discovered_revision
+        )
+        result.candidate_digest = result.digest
+        result.target = "RUNTIME_INSTALLATION_UNKNOWN"
 
         if not v_dict.get("verified", False):
             status_val = v_dict.get("status", "FAILED")
@@ -282,6 +358,58 @@ class SyncService:
         result.sync_state = SyncState.VERIFIED
         result.stage = "REPORT"
         result.details = {"activation_performed": False}
+
+    def _new_result(self, operation_type: str) -> SyncResult:
+        now = datetime.now(timezone.utc).isoformat()
+        sync_id = f"sync-{secrets.token_hex(12)}"
+        return SyncResult(
+            sync_id=sync_id,
+            trace_id=f"trace-{secrets.token_hex(12)}",
+            requested_at=now,
+            sync_state=SyncState.SYNCING,
+            local_version=self.local_version,
+            operation_id=f"op-{secrets.token_hex(12)}",
+            operation_type=operation_type,
+            prior_state=SyncState.IDLE.value,
+        )
+
+    def _new_operation_result(self, operation_type: str, prior: Optional[SyncResult]) -> SyncResult:
+        result = self._new_result(operation_type)
+        result.source = prior.source if prior else "UNKNOWN"
+        result.candidate_version = prior.candidate_version if prior else None
+        result.discovered_revision = prior.discovered_revision if prior else None
+        result.candidate_identity = prior.candidate_identity if prior else None
+        result.digest_algorithm = prior.digest_algorithm if prior else None
+        result.digest = prior.digest if prior else None
+        result.candidate_id = prior.candidate_id if prior else None
+        result.candidate_digest = prior.candidate_digest if prior else None
+        result.target = prior.target if prior else "RUNTIME_INSTALLATION_UNKNOWN"
+        result.prior_state = prior.sync_state.value if prior else SyncState.IDLE.value
+        return result
+
+    @staticmethod
+    def _update_check_response(result: SyncResult) -> Dict[str, Any]:
+        if result.comparison == "NO_UPDATE" and result.sync_state == SyncState.VERIFIED:
+            status = "UPDATE_NOT_AVAILABLE"
+        elif result.comparison == "CANDIDATE_DISCOVERED" and result.sync_state == SyncState.VERIFIED:
+            status = "UPDATE_AVAILABLE"
+        elif result.error_classification == "UPDATE_METADATA_INVALID":
+            status = "UPDATE_METADATA_INVALID"
+        elif result.error_classification in {"AUTHORITATIVE_SOURCE_UNAVAILABLE", "UPDATE_SOURCE_UNKNOWN", "AUTHORITY_UNVERIFIED"}:
+            status = "UPDATE_SOURCE_UNAVAILABLE"
+        else:
+            status = "UPDATE_VERIFICATION_UNAVAILABLE"
+        return {
+            "status": status,
+            "sync_state": result.sync_state.value,
+            "sync_id": result.sync_id,
+            "trace_id": result.trace_id,
+            "operation_id": result.operation_id,
+            "candidate_version": result.candidate_version,
+            "verification": result.verification,
+            "error_classification": result.error_classification,
+            "activation_performed": False,
+        }
 
     def _persist(self, result: SyncResult) -> None:
         path = self.data_dir / "sync"

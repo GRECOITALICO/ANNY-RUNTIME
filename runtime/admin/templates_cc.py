@@ -123,6 +123,8 @@ def control_center_page(csrf_token: str) -> str:
         <div class="kv"><span class="lbl">ANNY STATUS</span><span class="val" id="st-anny">--</span></div>
         <div class="kv"><span class="lbl">RUNTIME HEALTH</span><span class="val" id="st-health">--</span></div>
         <div class="kv"><span class="lbl">GITHUB STATUS</span><span class="val" id="st-github">--</span></div>
+        <div class="kv"><span class="lbl">CONRRAD GATE</span><span class="val" id="st-conrrad-gate">--</span></div>
+        <div class="kv"><span class="lbl">CONRRAD COVERAGE</span><span class="val mono" id="st-conrrad-count">--</span></div>
         <div class="kv"><span class="lbl">FABRIC STATUS</span><span class="val" id="st-fabric">--</span></div>
         <div class="kv"><span class="lbl">ADMISSION STATUS</span><span class="val" id="st-admission">--</span></div>
         <div class="kv"><span class="lbl">RECONCILIATION</span><span class="val" id="st-recon">--</span></div>
@@ -167,6 +169,27 @@ def control_center_page(csrf_token: str) -> str:
     <h2>Repository Fabric</h2>
     <table><thead><tr><th>Component</th><th>Status</th></tr></thead>
     <tbody id="fabric-tbody"></tbody></table>
+</div>
+
+<!-- CONRRAD Mandatory Services -->
+<div class="panel full">
+    <h2>CONRRAD Mandatory Services — Live Truth</h2>
+    <div style="margin-bottom:.75rem;color:var(--text-secondary);font-size:.72rem">
+        ONLINE_VERIFIED is displayed only when the external authoritative dependency record explicitly reports
+        ONLINE_VERIFIED + VERIFIED. UNKNOWN/NOT_CONFIGURED/BLOCKED are never promoted to online.
+    </div>
+    <div style="overflow-x:auto">
+        <table>
+            <thead><tr>
+                <th>Service</th><th>Class</th><th>Endpoint</th><th>Node</th><th>Deployment</th>
+                <th>Contract</th><th>Online</th><th>Trust</th><th>Certification</th>
+                <th>Last Check</th><th>Evidence / Failure</th>
+            </tr></thead>
+            <tbody id="conrrad-deps-tbody">
+                <tr><td colspan="11" style="color:var(--text-secondary)">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-- Access Verification -->
@@ -270,10 +293,13 @@ const CSRF_TOKEN = "__CSRF__";
 function badge(text) {
     if (!text) return '<span class="badge unknown">UNKNOWN</span>';
     const u = String(text).toUpperCase().split(' ').join('_');
-    const cls = (['PASS','READY','OK','CONNECTED','ADMITTED','COHERENT','AUTHORIZED'].includes(u) ? 'pass' :
-                 ['FAIL','BLOCKED','ERROR','DENIED'].includes(u) ? 'fail' :
+    const cls = ([
+                 'PASS','READY','OK','CONNECTED','ADMITTED','COHERENT','AUTHORIZED',
+                 'ONLINE_VERIFIED','VERIFIED','CERTIFIED_BY_LIVE_EVIDENCE'
+               ].includes(u) ? 'pass' :
+                 ['FAIL','BLOCKED','ERROR','DENIED','OFFLINE','REJECTED'].includes(u) ? 'fail' :
                  ['VERIFYING','STARTING'].includes(u) ? 'verifying' :
-                 ['STALE','PENDING','NOT_CONFIGURED','UNAVAILABLE','UNAUTHORIZED'].includes(u) ? 'stale' : 'unknown');
+                 ['STALE','PENDING','NOT_CONFIGURED','UNAVAILABLE','UNAUTHORIZED','ONLINE_UNVERIFIED'].includes(u) ? 'stale' : 'unknown');
     return '<span class="badge ' + cls + '">' + u + '</span>';
 }
 
@@ -313,6 +339,22 @@ function updateUI(d) {
     setInner('st-anny', badge(d.anny_ready ? 'READY' : 'BLOCKED'));
     setInner('st-health', badge(d.runtime_health));
     setInner('st-github', badge(d.github_status));
+
+    var deps = Array.isArray(d.conrrad_dependencies) ? d.conrrad_dependencies : [];
+    setInner('st-conrrad-gate', badge(d.conrrad_gate_status || 'UNKNOWN'));
+    var requiredCount = Number.isFinite(Number(d.conrrad_required_service_count))
+        ? Number(d.conrrad_required_service_count) : 8;
+    var observedCount = Number.isFinite(Number(d.conrrad_observed_service_count))
+        ? Number(d.conrrad_observed_service_count) : 0;
+    var onlineVerifiedCount = Number.isFinite(Number(d.conrrad_online_verified_count))
+        ? Number(d.conrrad_online_verified_count) : 0;
+    var trustVerifiedCount = Number.isFinite(Number(d.conrrad_trust_verified_count))
+        ? Number(d.conrrad_trust_verified_count) : 0;
+    setText('st-conrrad-count',
+        onlineVerifiedCount + '/' + requiredCount + ' ONLINE • ' +
+        trustVerifiedCount + '/' + requiredCount + ' TRUST • ' +
+        observedCount + ' SEEN');
+
     setInner('st-fabric', badge(d.fabric_status));
     setInner('st-admission', badge(d.admission_status));
     setInner('st-recon', badge(d.reconciliation_status));
@@ -346,6 +388,33 @@ function updateUI(d) {
         setInner('health-tbody', Object.entries(d.health).map(function(kv) {
             return '<tr><td class="mono">' + kv[0] + '</td><td>' + badge(kv[1]) + '</td></tr>';
         }).join(''));
+    }
+
+    // CONRRAD mandatory dependency matrix
+    if (deps.length) {
+        setInner('conrrad-deps-tbody', deps.map(function(dep) {
+            var online = dep.online_status || 'UNKNOWN';
+            var trust = dep.trust_status || 'UNKNOWN';
+            var certification = dep.certification_state || 'UNKNOWN';
+            var evidenceOrFailure = dep.evidence_ref && dep.evidence_ref !== 'UNKNOWN'
+                ? dep.evidence_ref
+                : (dep.failure_reason || 'UNKNOWN');
+            return '<tr>' +
+                '<td class="mono">' + (dep.service_name || 'UNKNOWN') + '</td>' +
+                '<td>' + badge(dep.service_class || 'UNKNOWN') + '</td>' +
+                '<td class="mono">' + (dep.endpoint || 'UNKNOWN') + '</td>' +
+                '<td class="mono">' + (dep.node_id || 'UNKNOWN') + '</td>' +
+                '<td class="mono">' + (dep.deployment_id || 'UNKNOWN') + '</td>' +
+                '<td class="mono">' + (dep.contract_version || 'UNKNOWN') + '</td>' +
+                '<td>' + badge(online) + '</td>' +
+                '<td>' + badge(trust) + '</td>' +
+                '<td>' + badge(certification) + '</td>' +
+                '<td class="mono">' + (dep.last_live_check || 'UNKNOWN') + '</td>' +
+                '<td class="mono" style="font-size:.7rem">' + evidenceOrFailure + '</td>' +
+            '</tr>';
+        }).join(''));
+    } else {
+        setInner('conrrad-deps-tbody', '<tr><td colspan="11" style="color:var(--text-secondary)">No CONRRAD dependency records available</td></tr>');
     }
 
     // Fabric details
