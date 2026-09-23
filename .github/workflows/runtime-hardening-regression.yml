@@ -7,6 +7,7 @@ on:
       - "cli/**"
       - "scripts/**"
       - "tests/test_runtime_hardening_20260922.py"
+      - "tests/test_batch9_conrrad_truth.py"
       - "tests/test_worker_020.py"
       - "tests/test_workspace_execution_018.py"
       - "tests/test_deterministic_local_execution.py"
@@ -32,7 +33,7 @@ jobs:
           python -m pip install pytest PyYAML cryptography psutil azure-identity httpx mcp websocket-client python-dateutil
       - name: Compile hardened runtime modules
         run: |
-          python -m py_compile             runtime/execution/registry.py             runtime/execution/worker.py             runtime/execution/qwen_executor.py             runtime/execution/deterministic_executor.py             runtime/mcp/gateway.py             runtime/mcp/tools.py             runtime/api/bridge.py             runtime/core/engine.py             cli/main.py
+          python -m py_compile             runtime/execution/registry.py             runtime/execution/worker.py             runtime/execution/qwen_executor.py             runtime/execution/deterministic_executor.py             runtime/mcp/gateway.py             runtime/mcp/tools.py             runtime/api/bridge.py             runtime/core/engine.py             runtime/bootstrap/conrrad.py             runtime/bootstrap/planes.py             runtime/admin/routes.py             cli/main.py
       - name: Run runtime hardening suite
         run: |
-          pytest -q             tests/test_runtime_hardening_20260922.py             tests/test_worker_020.py             tests/test_workspace_execution_018.py             tests/test_deterministic_local_execution.py             tests/test_sync_service.py             tests/test_registry_019.py             tests/test_mcp_gateway_003.py
+          pytest -q             tests/test_runtime_hardening_20260922.py             tests/test_batch9_conrrad_truth.py             tests/test_worker_020.py             tests/test_workspace_execution_018.py             tests/test_deterministic_local_execution.py             tests/test_sync_service.py             tests/test_registry_019.py             tests/test_mcp_gateway_003.py

@@ -26,6 +26,7 @@ from runtime.admin.dto import (
 from runtime.github.client import GitHubClient
 from runtime.github.discovery import OrganizationDiscoveryService
 from runtime.core.version import __version__
+from runtime.bootstrap.conrrad import not_configured_dependency_matrix
 
 logger = logging.getLogger(__name__)
 
@@ -328,9 +329,17 @@ class AdminRouter:
         gates_list = []
         fabric_node = "UNKNOWN"
         timestamp = None
+        dependencies = not_configured_dependency_matrix("No authoritative CONRRAD dependency registry has been observed")
+        bootstrap_state = "UNKNOWN"
         if report:
             fabric_node = getattr(report, 'fabric_node', "UNKNOWN")
             timestamp = getattr(report, 'timestamp', None)
+            observed_dependencies = getattr(report, 'conrrad_dependencies', None)
+            if isinstance(observed_dependencies, list):
+                dependencies = observed_dependencies
+            observed_bootstrap_state = getattr(report, 'bootstrap_state', "UNKNOWN")
+            if isinstance(observed_bootstrap_state, str):
+                bootstrap_state = observed_bootstrap_state
             
             for g in getattr(report, 'gates', []):
                 name = getattr(g.gate, 'name', str(g.gate)) if hasattr(g, 'gate') else 'UNKNOWN'
@@ -346,41 +355,67 @@ class AdminRouter:
                     "evidence": evidence
                 })
             
+        def _report_status(attribute: str, allowed: set) -> str:
+            value = getattr(report, attribute, None) if report else None
+            if isinstance(value, str) and value in allowed and value != "UNKNOWN":
+                return value
+            return "BLOCKED" if bootstrap_state == "BLOCKED" else "UNKNOWN"
+
+        def _report_value(attribute: str) -> str:
+            value = getattr(report, attribute, None) if report else None
+            return value if isinstance(value, str) and value else "UNKNOWN"
+
+        def _inventory(attribute: str):
+            inventory = getattr(report, attribute, None) if report else None
+            declared = getattr(inventory, 'declared', None)
+            return declared if isinstance(declared, list) and declared else "UNKNOWN"
+
+        repository_fabric = next(
+            (item for item in dependencies if item.get("service_name") == "CONRRAD.REPOSITORY_FABRIC"),
+            None,
+        )
+        fabric_status = repository_fabric.get("online_status", "UNKNOWN") if repository_fabric else "UNKNOWN"
+        admission_status = _report_status("admission_status", {"ADMITTED", "BLOCKED", "UNKNOWN"})
+        reconciliation_status = _report_status("reconciliation_status", {"COHERENT", "INCOHERENT", "BLOCKED", "UNKNOWN"})
+
         data = {
             "anny_ready": anny_ready,
+            "bootstrap_state": bootstrap_state,
             "runtime_state": state_name,
             "runtime_health": runtime_health,
             "github_status": gh_status,
-            "fabric_status": "CONNECTED" if fabric_node and fabric_node != "UNKNOWN" else "NOT_CONFIGURED",
-            "admission_status": "ADMITTED" if anny_ready else "PENDING",
-            "reconciliation_status": "COHERENT" if anny_ready else "PENDING",
+            "fabric_status": fabric_status,
+            "admission_status": admission_status,
+            "reconciliation_status": reconciliation_status,
             "timestamp": timestamp,
             
             "runtime_id": runtime_id,
             "runtime_version": __version__,
-            "github_org": gh_status, 
+            # GitHub authentication does not establish an organization identity.
+            "github_org": "UNKNOWN",
             "fabric_org": fabric_org,
             "fabric_repo": fabric_repo,
             "fabric_node": fabric_node,
-            "tenant": "N/A",
-            "policy_revision": "N/A",
-            "contract_revision": "N/A",
+            "tenant": "UNKNOWN",
+            "policy_revision": _report_value("policy_revision"),
+            "contract_revision": "UNKNOWN",
             
             "gates": gates_list,
-            "capabilities": [], 
-            "health": {"engine": state_name, "github": gh_status},
-            "access": [],
-            "tools": [],
-            "models": [],
-            "workers": [],
-            "connectors": [],
+            "capabilities": _inventory("capabilities"),
+            "health": {"engine": state_name, "github": gh_status, "conrrad_dependencies": dependencies},
+            "conrrad_dependencies": dependencies,
+            "access": "UNKNOWN",
+            "tools": _inventory("tools"),
+            "models": _inventory("models"),
+            "workers": _inventory("workers"),
+            "connectors": _inventory("connectors"),
             "continuity": {
-                "mission": "N/A",
-                "task": "N/A",
-                "step": "N/A",
-                "action": "N/A",
-                "blockers": "0",
-                "status": state_name
+                "mission": "UNKNOWN",
+                "task": "UNKNOWN",
+                "step": "UNKNOWN",
+                "action": "UNKNOWN",
+                "blockers": "BLOCKED" if bootstrap_state == "BLOCKED" else "UNKNOWN",
+                "status": "BLOCKED" if bootstrap_state == "BLOCKED" else "UNKNOWN",
             }
         }
         
@@ -444,7 +479,12 @@ class AdminRouter:
         if isinstance(result, ThreePlaneReport):
             # Three-plane bootstrap result
             status_val = "READY" if result.anny_ready else "BLOCKED"
-            recon_status = "COHERENT" if result.anny_ready else "INCOHERENT"
+            reported_reconciliation = getattr(result, "reconciliation_status", "UNKNOWN")
+            recon_status = (
+                reported_reconciliation
+                if reported_reconciliation in {"COHERENT", "INCOHERENT", "BLOCKED"}
+                else "BLOCKED" if getattr(result, "bootstrap_state", None) == "BLOCKED" else "UNKNOWN"
+            )
             fabric_node = result.fabric_node
 
             engine = self.context.get('runtime_engine')
@@ -489,7 +529,7 @@ class AdminRouter:
             # Unknown/mock result type — safe defaults
             anny_ready = getattr(result, 'anny_ready', False)
             status_val = "READY" if anny_ready else "BLOCKED"
-            recon_status = "COHERENT" if anny_ready else "INCOHERENT"
+            recon_status = "BLOCKED" if getattr(result, "bootstrap_state", None) == "BLOCKED" else "UNKNOWN"
             fabric_node = getattr(result, 'fabric_node', None)
             canonical_src = "NOT_CONFIGURED"
             current_mission = None

@@ -399,8 +399,8 @@ class TestMandatoryGateCoverage_Extended:
         assert not missing, f"Gates not in MANDATORY_GATES: {missing}"
 
     def test_total_mandatory_gate_count(self):
-        """Ensure we have exactly 25 mandatory gates."""
-        assert len(MANDATORY_GATES) == 25
+        """Ensure the three CONRRAD-first gates remain mandatory."""
+        assert len(MANDATORY_GATES) == 28
 
     def test_formatter_reports_all_phases(self):
         from runtime.bootstrap.report import ChatGPTBootstrapFormatter
