@@ -38,7 +38,19 @@ logger = logging.getLogger(__name__)
 
 # ── Security constants ─────────────────────────────────────────────────────────
 
-CHROME_BINARY = "/usr/bin/google-chrome"
+def _resolve_chrome_binary() -> str | None:
+    candidates = [
+        os.environ.get("ANNY_CHROME_BINARY"),
+        shutil.which("google-chrome"),
+        shutil.which("google-chrome-stable"),
+        shutil.which("chromium"),
+        shutil.which("chromium-browser"),
+    ]
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return os.path.abspath(candidate)
+    return None
+
 PROFILE_BASE = Path.home() / ".anny" / "browser-profiles"
 SOCKET_PATH = Path.home() / ".anny" / "browser-broker.sock"
 MAX_REQUEST_BYTES = 4096
@@ -132,6 +144,7 @@ class BrowserBroker:
 
     def __init__(self):
         _check_not_root()
+        self.chrome_binary = _resolve_chrome_binary()
         self.process: subprocess.Popen | None = None
         self.profile_name: str = "colab"
         self.profile_dir: Path = _validate_profile(self.profile_name)
@@ -360,12 +373,15 @@ class BrowserBroker:
                 "pid": self.process.pid,
                 "browser_state": self.browser_state,
                 "profile": str(self.profile_dir),
-                "binary": CHROME_BINARY,
+                "binary": self.chrome_binary,
             }
 
-        if not Path(CHROME_BINARY).exists():
+        if not self.chrome_binary:
             self.browser_state = BrowserState.FAILED
-            return {"status": "error", "message": f"Chrome binary not found: {CHROME_BINARY}"}
+            return {
+                "status": "error",
+                "message": "No supported Chrome/Chromium binary was found",
+            }
 
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self.browser_state = BrowserState.LAUNCHING
@@ -381,7 +397,7 @@ class BrowserBroker:
 
         # Build args — no shell, no string interpolation, structured list only.
         args = [
-            CHROME_BINARY,
+            self.chrome_binary,
             f"--user-data-dir={self.profile_dir}",
         ] + _CHROME_FLAGS + [f"--app={url}"]
 
@@ -443,8 +459,8 @@ class BrowserBroker:
                     "message": "Browser not running — nothing to hide"}
 
         pid = self.process.pid
-        xdotool = "/home/anny/.local/bin/xdotool"
-        if not os.path.exists(xdotool):
+        xdotool = os.environ.get("ANNY_XDOTOOL_PATH") or shutil.which("xdotool")
+        if not xdotool or not os.path.isfile(xdotool) or not os.access(xdotool, os.X_OK):
             logger.warning("[broker] xdotool not found — HIDE unavailable")
             return {
                 "status": "unavailable",
@@ -453,7 +469,9 @@ class BrowserBroker:
             }
 
         env = os.environ.copy()
-        env["LD_LIBRARY_PATH"] = "/home/anny/.local/lib:" + env.get("LD_LIBRARY_PATH", "")
+        xdotool_lib = os.environ.get("ANNY_XDOTOOL_LIB_DIR")
+        if xdotool_lib:
+            env["LD_LIBRARY_PATH"] = xdotool_lib + os.pathsep + env.get("LD_LIBRARY_PATH", "")
 
         try:
             # Search for window(s) by PID, then iconify each
