@@ -7,6 +7,7 @@ import logging
 import json
 import shutil
 import socket
+import subprocess
 from pathlib import Path
 
 from runtime.core.config import get_install_mode, get_data_dir, get_admin_port, get_runtime_dir, RuntimeConfig
@@ -126,7 +127,9 @@ def cmd_doctor(args):
     
     # Sandbox
     sandbox_dir = DATA_DIR / "sandboxes"
-    check("Sandbox directory", sandbox_dir.exists() or True, "Will be created on first use")
+    sandbox_ok = sandbox_dir.exists() or sandbox_dir.parent.exists()
+    check("Sandbox directory", sandbox_ok, str(sandbox_dir))
+
     
     print()
     fails = sum(1 for _, s, _ in results if s == "FAIL")
@@ -159,50 +162,9 @@ def cmd_identity_bootstrap(args):
         identity = manager.create_identity()
         print(f"Identity created: {identity.runtime_id}")
         print(f"Installation ID:  {identity.installation_id}")
-    except ImportError:
-        # Fallback: generate identity manually
-        import uuid
-        from datetime import datetime, timezone
-        try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-            from cryptography.hazmat.primitives import serialization
-            
-            private_key = Ed25519PrivateKey.generate()
-            public_key = private_key.public_key()
-            
-            pub_bytes = public_key.public_bytes(
-                serialization.Encoding.Raw,
-                serialization.PublicFormat.Raw
-            ).hex()
-            
-            priv_pem = private_key.private_bytes(
-                serialization.Encoding.PEM,
-                serialization.PrivateFormat.PKCS8,
-                serialization.NoEncryption()
-            )
-            
-            pk_file = id_dir / "private_key.pem"
-            pk_file.write_bytes(priv_pem)
-            pk_file.chmod(0o600)
-            
-            identity_data = {
-                "runtime_id": f"rt-{uuid.uuid4().hex[:16]}",
-                "installation_id": f"inst-{uuid.uuid4().hex[:16]}",
-                "public_key": pub_bytes,
-                "platform": sys.platform,
-                "runtime_version": VERSION,
-                "protocol_version": "1.0",
-                "generation": 1,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-            
-            id_file.write_text(json.dumps(identity_data, indent=2))
-            print(f"Identity created: {identity_data['runtime_id']}")
-            print(f"Installation ID:  {identity_data['installation_id']}")
-        except ImportError:
-            print("Error: cryptography library not installed.")
-            print("Run: pip install cryptography>=41.0.0")
-            sys.exit(1)
+    except ImportError as exc:
+        logger.error("Canonical RuntimeIdentityManager is unavailable; refusing alternate identity generation.")
+        raise RuntimeError("CANONICAL_IDENTITY_MANAGER_UNAVAILABLE") from exc
 
 
 def cmd_server(args):
@@ -253,42 +215,52 @@ def cmd_uninstall(args):
             print("Cancelled.")
             return
     
+    install_mode = get_install_mode()
+
+    def remove_path(path: Path, recursive: bool = False) -> None:
+        if not path.exists() and not path.is_symlink():
+            return
+        if path in (Path("/"), Path.home()) or str(path) in ("", "."):
+            raise RuntimeError(f"Refusing unsafe uninstall target: {path}")
+        if install_mode == "system":
+            args = ["sudo", "rm", "-rf" if recursive else "-f", str(path)]
+            subprocess.run(args, check=True)
+        elif recursive:
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+
     # Remove systemd
-    if get_install_mode() == "system":
+    if install_mode == "system":
         unit = Path("/etc/systemd/system/anny-runtime.service")
-        cmd_disable = "sudo systemctl disable anny-runtime.service 2>/dev/null || true"
+        disable_cmd = ["sudo", "systemctl", "disable", "anny-runtime.service"]
     else:
         unit = Path.home() / ".config" / "systemd" / "user" / "anny-runtime.service"
-        cmd_disable = "systemctl --user disable anny-runtime.service 2>/dev/null || true"
-        
+        disable_cmd = ["systemctl", "--user", "disable", "anny-runtime.service"]
+
     if unit.exists():
-        os.system(cmd_disable)
-        if get_install_mode() == "system":
-            os.system(f"sudo rm {unit}")
-        else:
-            unit.unlink()
+        result = subprocess.run(disable_cmd, check=False)
+        if result.returncode not in (0, 1):
+            raise RuntimeError("Failed to disable the Runtime systemd unit")
+        remove_path(unit)
+        if install_mode == "system":
+            subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
         print("  Removed systemd unit.")
-    
+
     # Remove CLI symlink
-    if get_install_mode() == "system":
-        cli_link = Path("/usr/local/bin/anny-runtime")
-    else:
-        cli_link = Path.home() / ".local" / "bin" / "anny-runtime"
-    
-    if cli_link.exists():
-        if get_install_mode() == "system":
-            os.system(f"sudo rm {cli_link}")
-        else:
-            cli_link.unlink()
+    cli_link = (
+        Path("/usr/local/bin/anny-runtime")
+        if install_mode == "system"
+        else Path.home() / ".local" / "bin" / "anny-runtime"
+    )
+    if cli_link.exists() or cli_link.is_symlink():
+        remove_path(cli_link)
         print("  Removed CLI.")
-    
+
     # Remove software
     install_dir = get_runtime_dir()
     if install_dir.exists():
-        if get_install_mode() == "system":
-            os.system(f"sudo rm -rf {install_dir}")
-        else:
-            shutil.rmtree(install_dir)
+        remove_path(install_dir, recursive=True)
         print("  Removed software.")
     
     if getattr(args, 'purge', False):
@@ -317,7 +289,7 @@ def main():
     p_uninstall.set_defaults(func=cmd_uninstall)
     
     p_server = subparsers.add_parser("server", help="Start admin web server")
-    p_server.add_argument("--port", type=int, default=3643)
+    p_server.add_argument("--port", type=int, default=get_admin_port())
     p_server.set_defaults(func=cmd_server)
     
     p_id = subparsers.add_parser("identity-bootstrap", help="Create initial identity")
