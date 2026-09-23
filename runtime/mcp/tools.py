@@ -7,6 +7,7 @@ These are the actual implementations backing the ToolDefinitions in the registry
 import os
 import json
 import logging
+from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 
@@ -18,6 +19,25 @@ class ToolImplementationError(Exception):
     pass
 
 
+def _require_workspace_path(path: str, workspace: str) -> str:
+    """Resolve *path* and fail closed unless it is contained by *workspace*.
+
+    ``str.startswith`` is not a containment check: it admits sibling prefixes
+    (``/work`` vs ``/work-escape``) and is ambiguous in the presence of
+    symlinks.  Both paths are resolved before using ``relative_to`` so this
+    single boundary also rejects symlink escapes.
+    """
+    if not workspace:
+        raise ToolImplementationError("Workspace boundary is required")
+    try:
+        workspace_path = Path(workspace).resolve(strict=True)
+        resolved_path = Path(path).resolve(strict=False)
+        resolved_path.relative_to(workspace_path)
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise ToolImplementationError(f"Path {path} is outside workspace boundary") from exc
+    return str(resolved_path)
+
+
 def filesystem_inspect(input_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     """Inspect file metadata: existence, size, timestamps, permissions."""
     path = input_data.get("path")
@@ -25,10 +45,7 @@ def filesystem_inspect(input_data: Dict[str, Any], context: Dict[str, Any]) -> D
         raise ToolImplementationError("Missing required field: path")
 
     # Security: resolve and validate path is within allowed workspace
-    workspace = context.get("workspace_path", "")
-    resolved = os.path.realpath(path)
-    if workspace and not resolved.startswith(os.path.realpath(workspace)):
-        raise ToolImplementationError(f"Path {path} is outside workspace boundary")
+    resolved = _require_workspace_path(path, context.get("workspace_path", ""))
 
     if not os.path.exists(resolved):
         return {"exists": False, "path": path}
@@ -135,6 +152,12 @@ def fabric_read(input_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str
 
 def fabric_register(input_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     """Register a new resource in Repository Fabric."""
+    # A local tool invocation is not an authoritative Fabric write.  The
+    # governed client must inject a receipt after binding identity, scope,
+    # authorization, policy and endpoint.  No implicit GitHub/local fallback.
+    receipt = context.get("governed_write_receipt")
+    if not isinstance(receipt, dict) or receipt.get("status") != "AUTHORIZED":
+        raise ToolImplementationError("Governed Fabric write authorization is required")
     fabric_client = context.get("fabric_client")
     if not fabric_client:
         raise ToolImplementationError("FabricClient not provided in context")

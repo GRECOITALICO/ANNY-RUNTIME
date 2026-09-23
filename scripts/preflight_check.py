@@ -5,6 +5,19 @@ import importlib
 import ast
 import json
 
+# The project has one requirements source of truth.  Python import names that
+# differ from distribution names live here, beside the preflight validator,
+# instead of in a second mutable inventory file.
+CANONICAL_IMPORT_TO_PACKAGE = {
+    "cryptography": "cryptography",
+    "dateutil": "python-dateutil",
+    "llama_cpp": "llama-cpp-python",
+    "mcp": "mcp",
+    "psutil": "psutil",
+    "websocket": "websocket-client",
+    "yaml": "PyYAML",
+}
+
 def get_stdlib_module_names():
     if sys.version_info >= (3, 10):
         return sys.stdlib_module_names
@@ -36,8 +49,13 @@ def parse_requirements(base_dir):
     return reqs
 
 def load_inventory(base_dir):
+    """Return canonical import mapping, with legacy fixture support only.
+
+    A legacy DEPENDENCY-INVENTORY.json can supplement isolated historical test
+    fixtures, but production preflight never requires it and does not create it.
+    """
     inv_file = os.path.join(base_dir, 'DEPENDENCY-INVENTORY.json')
-    mapping = {}
+    mapping = dict(CANONICAL_IMPORT_TO_PACKAGE)
     if os.path.exists(inv_file):
         with open(inv_file, 'r') as f:
             data = json.load(f)
@@ -94,7 +112,7 @@ def run_preflight(base_dir):
             continue
         # Map import name to package name explicitly
         if imp not in inventory:
-            errors.append(f"DEPENDENCY_MAPPING_MISSING: Import '{imp}' is not in DEPENDENCY-INVENTORY.json")
+            errors.append(f"DEPENDENCY_MAPPING_MISSING: Import '{imp}' has no canonical package mapping")
             continue
         pkg_name = inventory[imp]
         used_requirements.add(pkg_name.lower())
@@ -150,4 +168,3 @@ if __name__ == '__main__':
         script_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.abspath(os.path.join(script_dir, '..'))
     run_preflight(project_root)
-
