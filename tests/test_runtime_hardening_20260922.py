@@ -330,6 +330,43 @@ def test_worker_propagates_registry_model_digest_to_qwen_executor():
     assert captured["expected_sha256"] == "registry-sha256"
 
 
+def test_distributable_runtime_has_no_host_specific_home_paths():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    production_roots = [root / "runtime", root / "cli"]
+    violations = []
+    for base in production_roots:
+        for source in base.rglob("*.py"):
+            text = source.read_text(encoding="utf-8", errors="replace")
+            if "/home/anny" in text or ".gemini/antigravity" in text:
+                violations.append(str(source.relative_to(root)))
+    assert violations == []
+
+
+def test_browser_binary_resolution_is_environment_portable(monkeypatch):
+    from runtime.browser import broker_server
+
+    monkeypatch.setenv("ANNY_CHROME_BINARY", "/tmp/fake-chrome")
+    original_isfile = broker_server.os.path.isfile
+    monkeypatch.setattr(broker_server.os.path, "isfile", lambda p: p == "/tmp/fake-chrome" or original_isfile(p))
+    monkeypatch.setattr(broker_server.os, "access", lambda p, mode: p == "/tmp/fake-chrome" or original_isfile(p))
+    assert broker_server._resolve_chrome_binary() == "/tmp/fake-chrome"
+
+
+def test_evidence_builder_default_is_not_host_specific():
+    import os
+    from runtime.intelligence.evidence_builder import EvidenceBuilder
+
+    old = os.environ.pop("ANNY_EVIDENCE_DIR", None)
+    try:
+        builder = EvidenceBuilder()
+        assert "/home/anny" not in builder.output_dir
+    finally:
+        if old is not None:
+            os.environ["ANNY_EVIDENCE_DIR"] = old
+
+
 def test_active_release_checksums_resolve_to_real_commits():
     from pathlib import Path
     import re
