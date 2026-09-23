@@ -379,6 +379,7 @@ class TestPhase7RealFabric:
             worker_id="wrk-fabric002",
             execution_id="exec-fabric002",
             capability_id="fabric.register",
+            caller_context={"governed_write_receipt": {"status": "AUTHORIZED", "test_only": True}},
         )
         result = gw.invoke(req)
         assert result.succeeded
