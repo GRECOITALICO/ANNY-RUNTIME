@@ -19,6 +19,7 @@ from http.server import BaseHTTPRequestHandler
 from typing import Any, Dict, Optional
 
 from runtime.execution.models import Task, ExecutionStatus
+from runtime.security.execution_context import ExecutionContext
 from runtime.core.config import get_data_dir
 from runtime.journal.journal import OperationJournal, JournalEntry
 
@@ -29,14 +30,6 @@ class BridgeAuthError(Exception):
 class BridgeError(Exception):
     pass
 
-
-# ── Allowed bridge capabilities ──────────────────────────────────
-ALLOWED_CAPABILITIES = frozenset({
-    "fabric.read",
-    "repository.read",
-    "repository.search",
-    "fabric.register",
-})
 
 # ── Allowed top-level request fields ─────────────────────────────
 ALLOWED_FIELDS = frozenset({
@@ -96,6 +89,31 @@ class BridgeRouter:
         """Send a sanitized error response. Never includes internal details."""
         self._send_json(handler, {"error": error_type, "message": message},
                         status=status)
+
+    def _get_execution_context(self) -> ExecutionContext:
+        """Require a real, current Runtime ExecutionContext; never synthesize identity."""
+        context = self.context.get("execution_context")
+        if not isinstance(context, ExecutionContext):
+            raise BridgeAuthError()
+        runtime_engine = self.context.get("runtime_engine")
+        current_generation = (
+            runtime_engine.generation.current
+            if runtime_engine and getattr(runtime_engine, "generation", None)
+            else context.generation
+        )
+        if not context.is_valid(datetime.now(timezone.utc), current_generation):
+            raise BridgeAuthError()
+        return context
+
+    @staticmethod
+    def _resolve_capability(execution_manager: Any, capability: str):
+        registry = getattr(execution_manager, "registry", None)
+        if registry is None:
+            return None
+        cap = registry.get(capability)
+        if cap is None or not cap.enabled:
+            return None
+        return cap
 
     # ── Dispatch ─────────────────────────────────────────────────
     def dispatch(self, parsed: urllib.parse.ParseResult,
@@ -177,17 +195,25 @@ class BridgeRouter:
                              "Constraint override not permitted", 403)
             return
 
-        # Check capability exists in bridge allowlist
-        if capability not in ALLOWED_CAPABILITIES:
-            self._send_error(handler, ERROR_CAPABILITY_404,
-                             "Capability not available via bridge", 404)
-            return
-
-        # ── Execution via Canonical Architecture ───────────────────
+        # Capability eligibility comes only from the canonical Runtime registry.
         execution_manager = self.context.get("execution_manager")
+
         if not execution_manager:
             self._send_error(handler, ERROR_EXECUTION_FAILED,
                              "Execution subsystem unavailable", 503)
+            return
+
+        try:
+            runtime_context = self._get_execution_context()
+        except BridgeAuthError:
+            self._send_error(handler, ERROR_POLICY_DENIED,
+                             "Valid Runtime execution context required", 403)
+            return
+
+        cap = self._resolve_capability(execution_manager, capability)
+        if cap is None:
+            self._send_error(handler, ERROR_CAPABILITY_404,
+                             "Capability not available via Runtime registry", 404)
             return
 
         try:
@@ -197,14 +223,14 @@ class BridgeRouter:
             task = Task(
                 task_id=task_id,
                 capability_id=capability,
-                account_id="bridge-account",
-                project_id="bridge-project",
+                account_id=runtime_context.account_id,
+                project_id=runtime_context.project_id,
                 input=input_data,
                 constraints=constraints,
                 deadline=now + timedelta(seconds=60),
                 workspace_policy="keep",
                 evidence_policy="journal",
-                requested_by="chatgpt_luna",
+                requested_by=runtime_context.actor_id,
                 created_at=now,
             )
 
@@ -215,36 +241,36 @@ class BridgeRouter:
             journal.record(JournalEntry(
                 entry_id=f"ev-q-{exec_ctx.execution_id}",
                 operation_id=task_id,
-                tenant_id="test-tenant",
-                account_id="bridge-account",
-                project_id="bridge-project",
+                tenant_id=runtime_context.tenant_id,
+                account_id=runtime_context.account_id,
+                project_id=runtime_context.project_id,
                 execution_id=exec_ctx.execution_id,
-                session_id="bridge_session",
-                actor_id="chatgpt_luna",
+                session_id=runtime_context.session_id,
+                actor_id=runtime_context.actor_id,
                 workspace_id=exec_ctx.workspace_path or "",
                 tool=capability,
                 state="QUEUED",
                 started_at=now.isoformat(),
-                runtime_generation=1,
-                metadata={"intent": intent, "source": "chatgpt_luna"},
+                runtime_generation=runtime_context.generation,
+                metadata={"intent": intent, "source": "bridge"},
             ))
 
             # ── PHASE: RUNNING → terminal ──────────────────────────
             journal.record(JournalEntry(
                 entry_id=f"ev-r-{exec_ctx.execution_id}",
                 operation_id=task_id,
-                tenant_id="test-tenant",
-                account_id="bridge-account",
-                project_id="bridge-project",
+                tenant_id=runtime_context.tenant_id,
+                account_id=runtime_context.account_id,
+                project_id=runtime_context.project_id,
                 execution_id=exec_ctx.execution_id,
-                session_id="bridge_session",
-                actor_id="chatgpt_luna",
+                session_id=runtime_context.session_id,
+                actor_id=runtime_context.actor_id,
                 workspace_id=exec_ctx.workspace_path or "",
                 tool=capability,
                 state="RUNNING",
                 started_at=now.isoformat(),
-                runtime_generation=1,
-                metadata={"intent": intent, "source": "chatgpt_luna"},
+                runtime_generation=runtime_context.generation,
+                metadata={"intent": intent, "source": "bridge"},
             ))
 
             exec_ctx = execution_manager.execute_sync(exec_ctx.execution_id)
@@ -254,26 +280,26 @@ class BridgeRouter:
             journal.record(JournalEntry(
                 entry_id=f"ev-t-{exec_ctx.execution_id}",
                 operation_id=task_id,
-                tenant_id="test-tenant",
-                account_id="bridge-account",
-                project_id="bridge-project",
+                tenant_id=runtime_context.tenant_id,
+                account_id=runtime_context.account_id,
+                project_id=runtime_context.project_id,
                 execution_id=exec_ctx.execution_id,
-                session_id="bridge_session",
-                actor_id="chatgpt_luna",
+                session_id=runtime_context.session_id,
+                actor_id=runtime_context.actor_id,
                 workspace_id=exec_ctx.workspace_path or "",
                 tool=capability,
                 state=terminal_state,
                 started_at=now.isoformat(),
-                runtime_generation=1,
+                runtime_generation=runtime_context.generation,
                 finished_at=finished.isoformat(),
-                metadata={"intent": intent, "source": "chatgpt_luna"},
+                metadata={"intent": intent, "source": "bridge"},
             ))
 
             self._send_json(handler, {
                 "task_id": task_id,
                 "execution_id": exec_ctx.execution_id,
                 "status": terminal_state,
-                "source": "chatgpt_luna",
+                "source": "bridge",
             }, status=201)
 
         except Exception:
@@ -297,7 +323,7 @@ class BridgeRouter:
                 "capability": latest.tool,
                 "state": latest.state,
                 "intent": latest.metadata.get("intent", ""),
-                "source": latest.metadata.get("source", "chatgpt_luna"),
+                "source": latest.metadata.get("source", "bridge"),
             })
         except Exception as e:
             import traceback
@@ -325,7 +351,7 @@ class BridgeRouter:
                 "task_id": latest.operation_id,
                 "capability": latest.tool,
                 "state": latest.state,
-                "source": latest.metadata.get("source", "chatgpt_luna"),
+                "source": latest.metadata.get("source", "bridge"),
                 "evidence_durability": "DURABLE",
             })
         except Exception as e:
