@@ -1,5 +1,6 @@
 import uuid
 import logging
+import hashlib
 from datetime import datetime, timezone
 import os
 from typing import Dict, List, Optional, Any
@@ -17,12 +18,13 @@ logger = logging.getLogger(__name__)
 
 
 class WorkerManager:
-    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None, telemetry_collector=None, frontier_executor=None):
+    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None, telemetry_collector=None, frontier_executor=None, model_registry=None):
         self.workspace_manager = workspace_manager
         self.audit_manager = audit_manager
         self.mcp_gateway = mcp_gateway
         self.telemetry_collector = telemetry_collector
         self.frontier_executor = frontier_executor
+        self.model_registry = model_registry
         self.workers: Dict[str, WorkerDefinition] = {}
         self.deterministic_executor = DeterministicExecutor(workspace_manager)
 
@@ -171,8 +173,14 @@ class WorkerManager:
                     constraints=task.constraints,
                     evidence_policy=task.evidence_policy
                 )
+                model = getattr(self, "model_registry", None)
+                definition = model.get(worker.model_id) if model and worker.model_id else None
+                artifact_sha256 = getattr(definition, "artifact_sha256", None)
                 from runtime.execution.qwen_executor import QwenModelExecutor
-                executor = QwenModelExecutor(artifact_path=real_artifact_path)
+                executor = QwenModelExecutor(
+                    artifact_path=real_artifact_path,
+                    expected_sha256=artifact_sha256,
+                )
                 result = executor.execute(context_package)
                 context.status = ExecutionStatus.SUCCEEDED
                 context.result = result.result_data
@@ -194,15 +202,21 @@ class WorkerManager:
                 )
                 fe = self.frontier_executor
                 if not fe:
-                    from runtime.orchestration.frontier import DefaultFrontierExecutor
-                    fe = DefaultFrontierExecutor(enabled=True)
+                    raise ExecutorSecurityError("Authorized FrontierExecutor injection is required")
 
                 if fe.is_available(plan.model_id):
                     result_data = fe.execute_plan(task, plan)
+                    if not isinstance(result_data, dict) or not result_data:
+                        raise ExecutorSecurityError("Frontier executor returned no physical result")
                     context.status = ExecutionStatus.SUCCEEDED
                     context.result = result_data
-                    context.result_hash = "frontier_exec_hash"
-                    self._emit_telemetry("inference_completed", worker, {"executor": "frontier"})
+                    context.result_hash = hashlib.sha256(
+                        __import__("json").dumps(result_data, sort_keys=True, default=str).encode("utf-8")
+                    ).hexdigest()
+                    self._emit_telemetry("inference_completed", worker, {
+                        "executor": worker.executor_id,
+                        "result_hash": context.result_hash,
+                    })
                 else:
                     context.status = ExecutionStatus.FAILED
                     context.failure_reason = FailureReason.EXECUTION_ERROR

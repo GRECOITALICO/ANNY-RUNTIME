@@ -47,7 +47,8 @@ class ExecutionManager:
             workspace_manager,
             audit_manager,
             mcp_gateway=self.mcp_gateway,
-            telemetry_collector=self.telemetry_collector
+            telemetry_collector=self.telemetry_collector,
+            model_registry=self.model_registry,
         )
 
     def submit_task(self, task: Task) -> TaskExecutionContext:
@@ -333,4 +334,3 @@ class ExecutionManager:
 
     def get_all_executions(self) -> List[TaskExecutionContext]:
         return sorted(list(self._executions.values()), key=lambda x: x.execution_id)
-
