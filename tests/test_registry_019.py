@@ -74,8 +74,15 @@ def test_5_deterministic_selection():
     assert selection.executor_id == "deterministic-v1"
 
 def test_6_model_selection_abstraction():
-    # ModelExecutor interface tested implicitly by its definition being valid Python
-    pass
+    registry = CapabilityRegistry()
+    policy = RuntimePolicy()
+    selector = ExecutorSelector()
+    cap = registry.get("filesystem.inspect")
+    task = create_mock_task()
+    selection = selector.select(task, cap, policy)
+    assert selection.executor_type == ExecutorType.DETERMINISTIC
+    assert selection.executor_id == "deterministic-v1"
+    assert selection.execution_mode == "DETERMINISTIC"
 
 def test_7_authority_isolation(execution_manager):
     t = create_mock_task()
