@@ -310,6 +310,7 @@ def start_admin_server(host: str, port: int):
     from runtime.core.engine import RuntimeEngine
     engine = RuntimeEngine(config)
     execution_manager.runtime_engine = engine
+    engine.execution_manager = execution_manager
     
     update_source_repo = os.environ.get("ANNY_UPDATE_SOURCE_REPO", "").strip()
     update_source = None
