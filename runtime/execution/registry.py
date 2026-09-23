@@ -373,7 +373,7 @@ class ModelRegistry:
             context_window=32000,
             quantization="int8",
             artifact_uri="local://models/qwen3-8b",
-            artifact_sha256="dummy_hash_for_now",
+            artifact_sha256="",
             runtime_interface="llama.cpp",
             max_concurrency=1,
             max_runtime=300,
@@ -455,9 +455,29 @@ class ModelRegistry:
             reason="Model not required"
         ))
 
+    _PLACEHOLDER_ARTIFACT_DIGESTS = frozenset({
+        "dummy_hash_for_now",
+        "UNKNOWN",
+        "UNVERIFIED",
+        "REPLACE_ME",
+    })
+
+    def _validate_artifact_provenance(self, model: ModelDefinition) -> None:
+        digest = (model.artifact_sha256 or "").strip()
+        if digest in self._PLACEHOLDER_ARTIFACT_DIGESTS:
+            raise ValueError(
+                f"Model {model.model_id} has placeholder artifact provenance"
+            )
+        if model.executor_type == "LOCAL_MODEL" and model.status == ModelState.AVAILABLE:
+            if not __import__("re").fullmatch(r"[0-9a-fA-F]{64}", digest):
+                raise ValueError(
+                    f"Available local model {model.model_id} requires a verified 64-hex artifact SHA-256"
+                )
+
     def register_model(self, model: ModelDefinition):
         if model.model_id in self._models:
             raise ValueError(f"Model {model.model_id} is already registered")
+        self._validate_artifact_provenance(model)
         self._models[model.model_id] = model
         self._performance[model.model_id] = ModelPerformanceProfile(
             model_id=model.model_id,
