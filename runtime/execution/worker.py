@@ -116,6 +116,15 @@ class WorkerManager:
         if worker.state != WorkerState.CREATED:
             raise ValueError(f"Worker {worker_id} is in state {worker.state}, cannot start")
 
+        # Worker execution identity is derived from the submitted task/context
+        # and cannot be self-escalated or retargeted between creation/start.
+        if worker.capability_id != task.capability_id or worker.capability_id != context.capability_id:
+            raise ExecutorSecurityError("Worker capability binding mismatch")
+        if worker.account_id != task.account_id or worker.project_id != task.project_id:
+            raise ExecutorSecurityError("Worker scope binding mismatch")
+        if worker.deadline != context.deadline or worker.deadline != task.deadline:
+            raise ExecutorSecurityError("Worker deadline binding mismatch")
+
         worker.state = WorkerState.STARTING
         worker.started_at = datetime.now(timezone.utc)
         worker.state = WorkerState.RUNNING
