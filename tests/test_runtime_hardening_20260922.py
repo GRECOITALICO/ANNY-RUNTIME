@@ -288,3 +288,20 @@ def test_worker_propagates_registry_model_digest_to_qwen_executor():
     with patch.dict("os.environ", {"QWEN_MODEL_PATH": "/tmp/model.gguf"}), patch("os.path.exists", return_value=True), patch("runtime.execution.qwen_executor.QwenModelExecutor", FakeExecutor):
         manager.start_worker(worker.worker_id, context, task, cap)
     assert captured["expected_sha256"] == "registry-sha256"
+
+
+def test_active_release_checksums_resolve_to_real_commits():
+    from pathlib import Path
+    import re
+    import subprocess
+    from runtime.core.version import __version__
+    root = Path(__file__).resolve().parents[1]
+    for checksum in root.glob("ANNY-RUNTIME-*.tar.gz.sha256"):
+        match = re.fullmatch(r"ANNY-RUNTIME-v([0-9]+(?:\\.[0-9]+)*)-([0-9a-f]{7,40})\\.tar\\.gz\\.sha256", checksum.name)
+        assert match, f"Invalid active release checksum name: {checksum.name}"
+        assert match.group(1) == __version__, f"Checksum version drift: {checksum.name} != v{__version__}"
+        sha = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{match.group(2)}^{{commit}}"],
+            cwd=root, capture_output=True, text=True,
+        )
+        assert sha.returncode == 0, f"Unresolvable release source identity: {match.group(2)}"
