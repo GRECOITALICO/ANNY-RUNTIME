@@ -179,3 +179,41 @@ def test_release_identity_uses_canonical_runtime_version():
     helper_text = open("scripts/physical-cert-helper.sh", encoding="utf-8").read()
     assert "v0.2.0-CANDIDATE" not in helper_text
     assert "RUNTIME_VERSION" in helper_text
+
+
+def test_bridge_requires_real_execution_context():
+    from runtime.api.bridge import BridgeRouter, BridgeAuthError
+    router = BridgeRouter({"execution_manager": object()})
+    with pytest.raises(BridgeAuthError):
+        router._get_execution_context()
+
+def test_bridge_rejects_stale_generation():
+    from runtime.api.bridge import BridgeRouter, BridgeAuthError
+    from runtime.security.execution_context import ExecutionContext
+    now = datetime.now(timezone.utc)
+    ctx = ExecutionContext(
+        "tenant", "account", "project", "anny", "runtime", "session", "actor", "op", "exec",
+        1, now, now + timedelta(minutes=1), "workspace", {"repository.read"},
+    )
+    class Gen:
+        current = 2
+    class Runtime:
+        generation = Gen()
+    router = BridgeRouter({"execution_context": ctx, "runtime_engine": Runtime()})
+    with pytest.raises(BridgeAuthError):
+        router._get_execution_context()
+
+def test_bridge_capability_resolution_uses_canonical_registry():
+    from runtime.api.bridge import BridgeRouter
+    from runtime.execution.capability import CapabilityDefinition, ExecutorType
+    class Registry:
+        def __init__(self):
+            self.enabled = CapabilityDefinition("enabled", "enabled", "", "1", "low", False, True, "disabled", "read_only", [], 1, 1, True, ExecutorType.DETERMINISTIC, None, True)
+            self.disabled = CapabilityDefinition("disabled", "disabled", "", "1", "low", False, True, "disabled", "read_only", [], 1, 1, True, ExecutorType.DETERMINISTIC, None, False)
+        def get(self, name):
+            return {"enabled": self.enabled, "disabled": self.disabled}.get(name)
+    class Manager:
+        registry = Registry()
+    assert BridgeRouter({})._resolve_capability(Manager(), "enabled").capability_id == "enabled"
+    assert BridgeRouter({})._resolve_capability(Manager(), "disabled") is None
+    assert BridgeRouter({})._resolve_capability(Manager(), "fabric.register") is None
