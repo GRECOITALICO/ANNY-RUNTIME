@@ -139,7 +139,7 @@ class RuntimeEngine:
         # 1. DRAINING
         self._state = RuntimeState.DRAINING
         
-        # 2. Stop accepting new work (stubbed logically by state change)
+        # 2. Stop accepting new work by entering DRAINING state.
         
         # 3. Handle active executions
         self._handle_active_executions()
@@ -160,15 +160,23 @@ class RuntimeEngine:
         self._persist_state(clean_shutdown=True)
 
     def health_check(self) -> Dict[str, Any]:
-        """Returns the status of each subsystem."""
+        """Report observed subsystem health without synthetic success."""
+        checks = {}
+        identity_dir = Path(self.config.data_dir) / "identity"
+        identity_file = identity_dir / "runtime_identity.json"
+        private_key = identity_dir / "private_key.pem"
+        checks["identity"] = "ok" if identity_file.is_file() and private_key.is_file() else "not_ready"
+        continuity = getattr(self, "continuity_engine", None)
+        checks["journal"] = "ok" if continuity is not None else "not_initialized"
+        execution_manager = getattr(self, "execution_manager", None)
+        checks["execution"] = "ok" if execution_manager is not None else "not_initialized"
+
+        values = set(checks.values())
+        overall = "ok" if values == {"ok"} else ("unknown" if "unknown" in values else "degraded")
         return {
-            "status": "ok",
+            "status": overall,
             "generation": self._generation.current,
-            "subsystems": {
-                "identity": "ok",
-                "journal": "ok",
-                "execution": "ok"
-            }
+            "subsystems": checks,
         }
 
     # --- Stubs for internal processes ---
@@ -207,14 +215,18 @@ class RuntimeEngine:
     def _handle_active_executions(self) -> None:
         import logging
         logger = logging.getLogger(__name__)
-        # Active execution classification
-        # In a real system, iterate over active executions and classify them.
-        executions = [] # fetch active executions
+        execution_manager = getattr(self, "execution_manager", None)
+        if execution_manager is None:
+            logger.warning("Active execution registry unavailable; shutdown drain state is UNKNOWN.")
+            return
+
+        active_states = {"QUEUED", "RUNNING"}
         classifications = {"COMPLETED": 0, "CANCELLED": 0, "FENCED": 0, "ORPHANED_REQUIRES_RECONCILIATION": 0}
-        for exec_obj in executions:
-            # Classification logic goes here
-            classifications["ORPHANED_REQUIRES_RECONCILIATION"] += 1
-            
+        for exec_obj in execution_manager.get_all_executions():
+            state = getattr(getattr(exec_obj, "status", None), "value", None)
+            if state in active_states:
+                classifications["ORPHANED_REQUIRES_RECONCILIATION"] += 1
+
         logger.info(f"Drained active executions: {classifications}")
 
     def _close_sessions(self) -> None:
