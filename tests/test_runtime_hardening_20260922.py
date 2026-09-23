@@ -9,6 +9,7 @@ from runtime.execution.models import Task, TaskExecutionContext
 from runtime.execution.qwen_executor import QwenModelExecutor
 from runtime.execution.selector import ExecutorSelection
 from runtime.execution.worker import WorkerManager
+from runtime.execution.registry import ModelRegistry
 from runtime.execution.deterministic_executor import DeterministicExecutor
 from runtime.mcp.tools import ToolImplementationError, filesystem_inspect
 from runtime.sync.models import SyncState
@@ -39,6 +40,20 @@ def test_filesystem_boundary_rejects_symlink_escape(tmp_path):
 
     with pytest.raises(ToolImplementationError, match="outside workspace"):
         filesystem_inspect({"path": str(workspace / "escape")}, {"workspace_path": str(workspace)})
+
+
+def test_model_registry_rejects_placeholder_artifact_provenance():
+    from dataclasses import replace
+
+    registry = ModelRegistry()
+    model = registry.get("qwen3-8b")
+    assert model is not None
+    assert model.status.value == "INSTALL_REQUIRED"
+    assert model.artifact_sha256 == ""
+
+    invalid = replace(model, model_id="invalid-qwen", artifact_sha256="dummy_hash_for_now")
+    with pytest.raises(ValueError, match="placeholder artifact provenance"):
+        registry.register_model(invalid)
 
 
 def test_qwen_requires_non_placeholder_digest(tmp_path):
