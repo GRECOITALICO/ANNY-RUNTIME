@@ -82,6 +82,11 @@ def require_contained_path(authorized_root: str, requested_path: str) -> PathCon
     process CWD.  The root must exist physically.  For a missing target,
     ``Path.resolve(strict=False)`` resolves the longest existing ancestor and
     all symlinks before the structural containment comparison.
+
+    This is a pre-operation authorization decision, not a kernel-enforced
+    file-descriptor walk.  A caller that exposes an attacker-controlled path
+    to concurrent filesystem mutation still has a TOCTOU limitation and must
+    not represent this check as an atomic filesystem guarantee.
     """
     if not isinstance(authorized_root, str) or not authorized_root:
         raise ContainmentError(ContainmentResult.MISSING_WORKSPACE, "authorized root is required")

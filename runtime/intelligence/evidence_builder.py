@@ -13,6 +13,7 @@ from pathlib import Path
 from runtime.intelligence.taxonomy import ALL_CAPABILITIES, CAPABILITY_FAMILIES
 from runtime.intelligence.models import CertificationStatus
 from runtime.intelligence.benchmark_store import BenchmarkStore
+from runtime.security.path_containment import require_contained_path
 
 def _compute_sha256(filepath: str) -> str:
     h = hashlib.sha256()
@@ -29,6 +30,10 @@ class EvidenceBuilder:
         self.output_dir = configured or str(Path.cwd() / "audit" / "anny-runtime-certification")
         self.store = BenchmarkStore()
         os.makedirs(self.output_dir, exist_ok=True)
+        self.output_dir = require_contained_path(self.output_dir, ".").resolved_path
+
+    def _output_path(self, name: str) -> str:
+        return require_contained_path(self.output_dir, name).resolved_path
 
     def generate_all(self) -> Dict[str, Any]:
         """Generate all evidence files and SHA256SUMS."""
@@ -40,7 +45,7 @@ class EvidenceBuilder:
         }
         
         # 1. Export taxonomy map
-        tax_path = os.path.join(self.output_dir, "taxonomy.json")
+        tax_path = self._output_path("taxonomy.json")
         with open(tax_path, "w", encoding="utf-8") as f:
             json.dump({
                 "families": CAPABILITY_FAMILIES,
@@ -59,7 +64,7 @@ class EvidenceBuilder:
                 
             manifest["capabilities_certified"] += 1
             safe_id = cap_id.replace(".", "_")
-            out_path = os.path.join(self.output_dir, f"cert_{safe_id}.json")
+            out_path = self._output_path(f"cert_{safe_id}.json")
             
             # Re-serialize for evidence
             data = {
@@ -77,7 +82,7 @@ class EvidenceBuilder:
             manifest["evidence_files"].append(out_path)
             
         # 3. Generate SHA256SUMS
-        sums_path = os.path.join(self.output_dir, "SHA256SUMS")
+        sums_path = self._output_path("SHA256SUMS")
         with open(sums_path, "w", encoding="utf-8") as f:
             for filepath in manifest["evidence_files"]:
                 filename = os.path.basename(filepath)
@@ -85,7 +90,7 @@ class EvidenceBuilder:
                 f.write(f"{h}  {filename}\n")
                 
         # 4. Write manifest
-        man_path = os.path.join(self.output_dir, "manifest.json")
+        man_path = self._output_path("manifest.json")
         with open(man_path, "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2)
             

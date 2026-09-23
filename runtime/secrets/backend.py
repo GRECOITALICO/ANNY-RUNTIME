@@ -8,6 +8,7 @@ import re
 import base64
 from cryptography.fernet import Fernet, InvalidToken
 from runtime.security.execution_context import ExecutionContext
+from runtime.security.path_containment import require_contained_path
 
 class SecretBackend(abc.ABC):
     @abc.abstractmethod
@@ -31,10 +32,16 @@ class SecretBackend(abc.ABC):
         pass
 
 class FileSecretBackend(SecretBackend):
-    """File-based encrypted secret backend."""
+    """File-based encrypted secret storage, not an authorization authority.
+
+    Callers must obtain authorization at a higher broker boundary.  This class
+    deliberately knows only encrypted storage and physical file containment;
+    a secret reference or filesystem location is never an access grant.
+    """
     def __init__(self, data_dir: str, master_key: bytes) -> None:
         self.secrets_dir = Path(data_dir) / "secrets"
         self.secrets_dir.mkdir(parents=True, exist_ok=True)
+        self.secrets_dir = Path(require_contained_path(str(self.secrets_dir), ".").resolved_path)
         
         if len(master_key) == 32:
             derived_key = master_key
@@ -47,10 +54,7 @@ class FileSecretBackend(SecretBackend):
     def _safe_reference(self, reference: str) -> Path:
         if not re.match(r'^[\w\-\.]+$', reference):
             raise ValueError("UNSAFE_REFERENCE")
-        path = (self.secrets_dir / reference).resolve()
-        if not str(path).startswith(str(self.secrets_dir.resolve())):
-            raise ValueError("UNSAFE_REFERENCE")
-        return path
+        return Path(require_contained_path(str(self.secrets_dir), reference).resolved_path)
 
     def _encrypt(self, value: bytes) -> bytes:
         return self._fernet.encrypt(value)

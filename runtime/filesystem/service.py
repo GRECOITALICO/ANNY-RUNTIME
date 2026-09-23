@@ -1,6 +1,7 @@
 from pathlib import Path
 from runtime.workspace.manager import WorkspaceManager
 from runtime.security.execution_context import ExecutionContext
+from runtime.security.path_containment import require_contained_path
 
 class FilesystemService:
     def __init__(self, workspace_manager: WorkspaceManager) -> None:
@@ -15,13 +16,7 @@ class FilesystemService:
         if not ws:
             raise ValueError("Workspace not found")
             
-        base = Path(ws.local_path).resolve()
-        requested = (base / path).resolve()
-        
-        if not str(requested).startswith(str(base)):
-            raise ValueError("OUTSIDE_WORKSPACE error")
-            
-        return requested
+        return Path(require_contained_path(ws.local_path, path).resolved_path)
 
     def read(self, context: ExecutionContext, path: str) -> str:
         """Reads a file securely within a workspace."""

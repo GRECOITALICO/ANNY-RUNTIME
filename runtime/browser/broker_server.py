@@ -34,6 +34,8 @@ import base64
 from pathlib import Path
 from socketserver import UnixStreamServer, StreamRequestHandler, ThreadingMixIn
 
+from runtime.security.path_containment import require_contained_path
+
 logger = logging.getLogger(__name__)
 
 # ── Security constants ─────────────────────────────────────────────────────────
@@ -100,13 +102,11 @@ def _validate_profile(name: str) -> Path:
         raise ValueError("profile must be a non-empty string")
     if "/" in name or "\\" in name or ".." in name:
         raise ValueError("profile must be a simple name, not a path")
-    resolved = (PROFILE_BASE / name).resolve()
-    # Strict containment check
-    try:
-        resolved.relative_to(PROFILE_BASE.resolve())
-    except ValueError:
-        raise ValueError(f"Profile {name!r} resolves outside allowed base")
-    return resolved
+    # Browser profiles are a filesystem namespace only.  They convey no
+    # session, tenant, or account authority; the broker's separate protocol
+    # authorization remains responsible for those identities.
+    PROFILE_BASE.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return Path(require_contained_path(str(PROFILE_BASE), name).resolved_path)
 
 
 def _check_not_root() -> None:

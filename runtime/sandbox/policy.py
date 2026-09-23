@@ -1,6 +1,7 @@
 import enum
 from dataclasses import dataclass, field
 from typing import List, Optional
+from pathlib import Path
 
 class IsolationLevel(enum.Enum):
     LEVEL_1 = "workspace_isolation"    # Filesystem namespace only
@@ -29,11 +30,14 @@ class SandboxPolicy:
 
     def allows_path(self, path: str) -> bool:
         """Check if a filesystem path is within the allowed scope."""
-        from pathlib import Path
+        from runtime.security.path_containment import ContainmentError, require_contained_path
         target = Path(path).resolve()
         for allowed in self.filesystem_scope:
-            if str(target).startswith(str(Path(allowed).resolve())):
+            try:
+                require_contained_path(allowed, str(target))
                 return True
+            except ContainmentError:
+                continue
         return False
 
     def allows_executable(self, executable: str) -> bool:

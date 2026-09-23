@@ -7,6 +7,8 @@ import time
 import shutil
 from pathlib import Path
 
+from runtime.security.path_containment import require_contained_path
+
 class WorkspaceState(Enum):
     CREATING = auto()
     READY = auto()
@@ -36,6 +38,10 @@ class WorkspaceManager:
         self.config = config
         self._workspaces: Dict[str, Workspace] = {}
         self.base_dir.mkdir(parents=True, exist_ok=True)
+        self.base_dir = Path(require_contained_path(str(self.base_dir), ".").resolved_path)
+
+    def _workspace_path(self, workspace_id: str) -> Path:
+        return Path(require_contained_path(str(self.base_dir), workspace_id).resolved_path)
 
     def _validate_context_ownership(self, context, workspace_id: str) -> Optional[Workspace]:
         ws = self._workspaces.get(workspace_id)
@@ -57,7 +63,7 @@ class WorkspaceManager:
             raise PermissionError("Access denied: missing WORKSPACE_CREATE")
             
         workspace_id = str(uuid.uuid4())
-        local_path = self.base_dir / workspace_id
+        local_path = self._workspace_path(workspace_id)
         
         ws = Workspace(
             workspace_id=workspace_id,
@@ -107,7 +113,11 @@ class WorkspaceManager:
             if ws.generation != context.generation:
                 raise PermissionError("Access denied: generation stale")
             ws.state = WorkspaceState.DESTROYING
-            shutil.rmtree(ws.local_path, ignore_errors=True)
+            # Re-authorize the recorded path at destruction time.  Workspace
+            # identity/scope is checked above; physical containment is a
+            # distinct guard against a changed or symlinked local path.
+            local_path = self._workspace_path(ws.local_path)
+            shutil.rmtree(local_path, ignore_errors=True)
             ws.state = WorkspaceState.DESTROYED
             del self._workspaces[workspace_id]
             return True
@@ -121,4 +131,3 @@ class WorkspaceManager:
             ws.state = WorkspaceState.READY
             return True
         return False
-

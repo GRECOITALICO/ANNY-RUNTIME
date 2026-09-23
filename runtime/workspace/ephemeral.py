@@ -1,6 +1,8 @@
 import os
 import shutil
 
+from runtime.security.path_containment import require_contained_path
+
 
 class EphemeralWorkspaceManager:
     """Manage bounded local workspaces used by Runtime executions."""
@@ -9,14 +11,24 @@ class EphemeralWorkspaceManager:
         self.base_dir = os.path.abspath(base_dir)
         os.makedirs(self.base_dir, exist_ok=True)
         os.chmod(self.base_dir, 0o700)
+        self.base_dir = require_contained_path(self.base_dir, ".").resolved_path
+
+    @staticmethod
+    def _component(value: str, field: str) -> str:
+        """Accept one namespace component, never a path or traversal token."""
+        if not isinstance(value, str) or not value or value in {".", ".."}:
+            raise ValueError(f"{field} is required")
+        if os.path.basename(value) != value or os.path.sep in value or (os.path.altsep and os.path.altsep in value):
+            raise ValueError(f"{field} must be a single path component")
+        return value
+
+    def _contained(self, workspace_path: str) -> str:
+        return require_contained_path(self.base_dir, workspace_path).resolved_path
 
     def create_workspace(self, execution_id: str, project_id: str = "default") -> str:
-        if not execution_id or not project_id:
-            raise ValueError("execution_id and project_id are required")
-        safe_project = os.path.basename(project_id)
-        workspace_path = os.path.abspath(os.path.join(self.base_dir, safe_project, execution_id))
-        if not workspace_path.startswith(self.base_dir + os.sep):
-            raise ValueError("Workspace path escapes ephemeral base")
+        safe_project = self._component(project_id, "project_id")
+        safe_execution = self._component(execution_id, "execution_id")
+        workspace_path = self._contained(os.path.join(safe_project, safe_execution))
         if os.path.exists(workspace_path):
             raise FileExistsError(f"Workspace {workspace_path} already exists")
 
@@ -26,13 +38,12 @@ class EphemeralWorkspaceManager:
         return workspace_path
 
     def destroy_workspace(self, workspace_path: str):
-        normalized = os.path.abspath(workspace_path)
-        if not normalized.startswith(self.base_dir + os.sep):
-            raise ValueError(f"Cannot destroy path outside ephemeral base: {workspace_path}")
+        normalized = self._contained(workspace_path)
         if os.path.exists(normalized):
             shutil.rmtree(normalized, ignore_errors=True)
 
     def get_workspace_size(self, workspace_path: str) -> int:
+        workspace_path = self._contained(workspace_path)
         total_size = 0
         for dirpath, _, filenames in os.walk(workspace_path):
             for filename in filenames:
@@ -43,9 +54,7 @@ class EphemeralWorkspaceManager:
 
     def get_workspace_paths(self, workspace_path: str):
         """Return canonical workspace paths for task orchestration."""
-        base = os.path.abspath(workspace_path)
-        if not base.startswith(self.base_dir + os.sep):
-            raise ValueError("Workspace path escapes ephemeral base")
+        base = self._contained(workspace_path)
         return {
             "base": base,
             "input": os.path.join(base, "input"),
