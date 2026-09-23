@@ -3,9 +3,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 from runtime.security.execution_context import ExecutionContext
-
-class SecurityViolationError(Exception):
-    pass
+from runtime.security.authority_validator import SecurityViolationError
 
 @dataclass
 class ExecutionReceipt:
