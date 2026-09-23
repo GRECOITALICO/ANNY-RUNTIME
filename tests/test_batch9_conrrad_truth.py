@@ -35,7 +35,7 @@ class _Response:
 class _ExternalConrradDouble:
     """Bounded test double; production Runtime receives an injected client."""
 
-    def __init__(self, preflight="READY", trust="VERIFIED", manifest="VERIFIED", registry=None):
+    def __init__(self, preflight="ONLINE_VERIFIED", trust="VERIFIED", manifest="VERIFIED", registry=None):
         self.preflight = preflight
         self.trust = trust
         self.manifest = manifest
@@ -127,6 +127,48 @@ def test_b9_t04_missing_dependency_registry_blocks_without_synthesis():
     github.get_authenticated_principal.assert_not_called()
 
 
+def test_online_verified_registry_with_verified_trust_can_progress_to_github():
+    registry = [
+        {"service_name": name, "online_status": "ONLINE_VERIFIED", "trust_status": "VERIFIED"}
+        for name in REQUIRED_CONRRAD_SERVICES
+    ]
+    bootstrap, identity, github = _bootstrap(_ExternalConrradDouble(registry=registry))
+    report = _resolve(bootstrap, identity)
+
+    assert report.get_gate(ReadinessGate.CONRRAD_DEPENDENCY_REGISTRY_LOADED).passed is True
+    github.get_authenticated_principal.assert_called_once()
+
+
+def test_canonical_non_success_registry_statuses_block_before_github():
+    for online_status in ("ONLINE_UNVERIFIED", "OFFLINE", "BLOCKED", "NOT_CONFIGURED", "UNKNOWN"):
+        registry = [
+            {"service_name": name, "online_status": online_status, "trust_status": "VERIFIED"}
+            for name in REQUIRED_CONRRAD_SERVICES
+        ]
+        bootstrap, identity, github = _bootstrap(_ExternalConrradDouble(registry=registry))
+        report = _resolve(bootstrap, identity)
+
+        assert report.get_gate(ReadinessGate.CONRRAD_DEPENDENCY_REGISTRY_LOADED).passed is False
+        assert report.anny_ready is False
+        github.get_authenticated_principal.assert_not_called()
+        github.list_organizations.assert_not_called()
+
+
+def test_noncanonical_registry_status_aliases_block_before_github():
+    for online_status in ("READY", "AVAILABLE", "ONLINE", "PASS"):
+        registry = [
+            {"service_name": name, "online_status": online_status, "trust_status": "VERIFIED"}
+            for name in REQUIRED_CONRRAD_SERVICES
+        ]
+        bootstrap, identity, github = _bootstrap(_ExternalConrradDouble(registry=registry))
+        report = _resolve(bootstrap, identity)
+
+        assert report.get_gate(ReadinessGate.CONRRAD_DEPENDENCY_REGISTRY_LOADED).passed is False
+        assert report.anny_ready is False
+        github.get_authenticated_principal.assert_not_called()
+        github.list_organizations.assert_not_called()
+
+
 def test_complete_unknown_dependency_registry_blocks_before_github():
     unknown_registry = [
         {"service_name": name, "online_status": "UNKNOWN", "trust_status": "UNKNOWN"}
@@ -142,6 +184,20 @@ def test_complete_unknown_dependency_registry_blocks_before_github():
     assert all(item["trust_status"] == "UNKNOWN" for item in report.conrrad_dependencies)
     github.get_authenticated_principal.assert_not_called()
     github.list_organizations.assert_not_called()
+
+
+def test_unknown_and_noncanonical_preflight_statuses_block_before_github():
+    for preflight_status in (
+        "UNKNOWN", "UNVERIFIED", "OFFLINE", "BLOCKED", "NOT_CONFIGURED",
+        "READY", "AVAILABLE", "ONLINE", "PASS",
+    ):
+        bootstrap, identity, github = _bootstrap(_ExternalConrradDouble(preflight=preflight_status))
+        report = _resolve(bootstrap, identity)
+
+        assert report.get_gate(ReadinessGate.CONRRAD_BOOTSTRAP_PREFLIGHT).passed is False
+        assert report.anny_ready is False
+        github.get_authenticated_principal.assert_not_called()
+        github.list_organizations.assert_not_called()
 
 
 def test_b9_t05_healthy_github_cannot_mask_unavailable_conrrad():

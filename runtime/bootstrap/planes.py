@@ -246,7 +246,7 @@ class ThreePlaneBootstrap:
         try:
             response = self.conrrad.bootstrap_preflight(ident.runtime_id)
             status = str(response.get("status", response.get("online_status", "UNKNOWN"))).upper() if isinstance(response, dict) else "UNKNOWN"
-            if status in {"READY", "AVAILABLE", "ONLINE", "ONLINE_VERIFIED", "PASS"}:
+            if status == "ONLINE_VERIFIED":
                 report.add_result(GateResult(ReadinessGate.CONRRAD_BOOTSTRAP_PREFLIGHT, True, "External CONRRAD preflight passed"))
                 return True
             report.conrrad_dependencies = not_configured_dependency_matrix(f"CONRRAD bootstrap preflight: {status}")

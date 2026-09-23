@@ -42,11 +42,7 @@ DEPENDENCY_FIELDS = (
 # registry record.  A contract-derived status projection is intentionally not
 # eligible for bootstrap readiness.
 AVAILABLE_ONLINE_STATUSES = frozenset({
-    "READY",
-    "AVAILABLE",
-    "ONLINE",
     "ONLINE_VERIFIED",
-    "PASS",
 })
 VERIFIED_TRUST_STATUSES = frozenset({"VERIFIED"})
 
