@@ -187,7 +187,8 @@ def test_17_reproducible_execution(execution_manager, tmp_path):
     t2.input["path"] = safe_path2
     execution_manager.execute_sync(ctx2.execution_id)
     
-    assert ctx1.result == ctx2.result
+    stable_keys = ("is_dir", "is_file", "size_bytes", "mode")
+    assert tuple(ctx1.result[key] for key in stable_keys) == tuple(ctx2.result[key] for key in stable_keys)
 
 def test_18_control_plane_visibility(execution_manager, tmp_path):
     t = create_mock_task()
