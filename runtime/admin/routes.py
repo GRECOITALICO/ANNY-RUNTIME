@@ -838,7 +838,18 @@ class AdminRouter:
         return '/doctor'
 
     def handle_admin_update_check(self, form_data) -> str:
-        self._audit("UPDATE_CHECK", "NOT_IMPLEMENTED")
+        sync_service = self.context.get('sync_service')
+        if sync_service is None:
+            result = {
+                "status": "UPDATE_SOURCE_UNAVAILABLE",
+                "sync_state": "UNKNOWN",
+                "error_classification": "SYNC_SERVICE_UNAVAILABLE",
+                "activation_performed": False,
+            }
+        else:
+            result = sync_service.update_check()
+        self.context['direct_json_response'] = result
+        self._audit("UPDATE_CHECK", result["status"], result.get("error_classification"))
         return '/'
 
     def handle_fabric_setup(self, form_data) -> str:
@@ -1083,4 +1094,3 @@ class AdminRouter:
         from runtime.admin.templates import browser_session_page
         html = browser_session_page(session_data[0], self._get_csrf())
         self._send_html(handler, html)
-

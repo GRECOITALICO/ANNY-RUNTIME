@@ -62,6 +62,13 @@ class SyncResult:
     digest: Optional[str] = None
     proof_reference: Optional[str] = None
     verifier_identity: Optional[str] = None
+    operation_id: Optional[str] = None
+    operation_type: str = "DISCOVER_VERIFY"
+    candidate_id: Optional[str] = None
+    candidate_digest: Optional[str] = None
+    target: Optional[str] = None
+    prior_state: Optional[str] = None
+    post_state: Optional[str] = None
     details: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:

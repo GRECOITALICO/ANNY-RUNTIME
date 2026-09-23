@@ -196,7 +196,7 @@ def test_update_manager_is_explicitly_quarantined():
     manager = UpdateManager({}, "v0.4.0")
     with pytest.raises(UpdateNotImplementedError, match="UPDATE_CHECK_NOT_IMPLEMENTED"):
         manager.check()
-    assert manager.state is UpdateState.FAILED
+    assert manager.state is UpdateState.NOT_IMPLEMENTED
 
 
 def test_verified_sync_never_claims_stage_or_rollback_without_receipt(tmp_path):
@@ -208,8 +208,8 @@ def test_verified_sync_never_claims_stage_or_rollback_without_receipt(tmp_path):
     service.start()
     service.wait()
     assert service.status()["sync_state"] == SyncState.VERIFIED.value
-    assert service.stage()["error"] == "STAGING_NOT_IMPLEMENTED"
-    assert service.rollback()["error"] == "ROLLBACK_NOT_IMPLEMENTED"
+    assert service.stage()["error"] == "STAGING_REQUIRES_VERIFIED_ARTIFACT"
+    assert service.rollback()["error"] == "ROLLBACK_REQUIRES_PHYSICAL_APPLY"
 
 
 def test_deterministic_executor_rejects_cross_workspace_path(tmp_path):

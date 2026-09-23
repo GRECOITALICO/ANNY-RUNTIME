@@ -16,6 +16,8 @@ class UpdateState(Enum):
     QUIESCING = auto()
     ACTIVATING = auto()
     ROLLING_BACK = auto()
+    BLOCKED = auto()
+    NOT_IMPLEMENTED = auto()
     FAILED = auto()
 
 class UpdateChannel(Enum):
@@ -65,7 +67,9 @@ class UpdateManager:
         return self._not_implemented("health_check")
 
     def _not_implemented(self, operation: str):
-        self._state = UpdateState.FAILED
+        # A missing implementation is not an attempted-and-failed physical
+        # update.  Keep that distinction visible to every caller.
+        self._state = UpdateState.NOT_IMPLEMENTED
         raise UpdateNotImplementedError(
             f"UPDATE_{operation.upper()}_NOT_IMPLEMENTED: no receipt-backed lifecycle is configured"
         )
