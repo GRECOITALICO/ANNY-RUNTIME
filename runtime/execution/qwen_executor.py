@@ -23,14 +23,18 @@ class QwenModelExecutor(ModelExecutor):
         """Phase 4: Artifact Integrity"""
         if not os.path.exists(self.artifact_path):
             raise ExecutorSecurityError("ARTIFACT_MISSING")
-        if not self.expected_sha256 or self.expected_sha256 in {
+        if not self.expected_sha256:
+            raise ExecutorSecurityError("ARTIFACT_SHA256_REQUIRED")
+        if self.expected_sha256 in {
             "UNKNOWN", "UNVERIFIED", "dummy_hash_for_now", "REPLACE_ME"
         }:
-            raise ExecutorSecurityError("ARTIFACT_PROVENANCE_UNVERIFIED")
+            raise ExecutorSecurityError("ARTIFACT_SHA256_PLACEHOLDER_REJECTED")
+        if not __import__("re").fullmatch(r"[0-9a-fA-F]{64}", self.expected_sha256):
+            raise ExecutorSecurityError("ARTIFACT_SHA256_INVALID")
         with open(self.artifact_path, "rb") as f:
             h = hashlib.sha256(f.read()).hexdigest()
         if h != self.expected_sha256:
-            raise ExecutorSecurityError("ARTIFACT_INTEGRITY_UNKNOWN")
+            raise ExecutorSecurityError("ARTIFACT_SHA256_MISMATCH")
 
     def execute(self, context_package: ContextPackage) -> ModelResult:
         # Phase 14: Telemetry (model_loaded)
@@ -169,7 +173,12 @@ class QwenModelExecutor(ModelExecutor):
                     "seed": seed,
                     "context_size": max_context
                 }
-            }
+            },
+            "provenance": {
+                "executor_identity": "QwenModelExecutor",
+                "artifact_sha256": self.expected_sha256,
+                "result_hash": result_hash,
+            },
         }
         
         if status != "SUCCEEDED":

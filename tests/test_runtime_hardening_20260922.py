@@ -1,5 +1,6 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 import pytest
 
@@ -11,6 +12,7 @@ from runtime.execution.selector import ExecutorSelection
 from runtime.execution.worker import WorkerManager
 from runtime.execution.registry import ModelRegistry
 from runtime.execution.deterministic_executor import DeterministicExecutor
+from runtime.orchestration.frontier import FrontierExecutor, FrontierExecutionReceipt
 from runtime.mcp.tools import ToolImplementationError, filesystem_inspect
 from runtime.sync.models import SyncState
 from runtime.sync.service import SyncService
@@ -59,11 +61,20 @@ def test_model_registry_rejects_placeholder_artifact_provenance():
 def test_qwen_requires_non_placeholder_digest(tmp_path):
     artifact = tmp_path / "model.gguf"
     artifact.write_bytes(b"model")
-    with pytest.raises(ExecutorSecurityError, match="ARTIFACT_PROVENANCE_UNVERIFIED"):
+    with pytest.raises(ExecutorSecurityError, match="ARTIFACT_SHA256_REQUIRED"):
         QwenModelExecutor(str(artifact))._verify_artifact()
-    with pytest.raises(ExecutorSecurityError, match="ARTIFACT_PROVENANCE_UNVERIFIED"):
+    with pytest.raises(ExecutorSecurityError, match="ARTIFACT_SHA256_PLACEHOLDER_REJECTED"):
         QwenModelExecutor(str(artifact), "dummy_hash_for_now")._verify_artifact()
     QwenModelExecutor(str(artifact), hashlib.sha256(b"model").hexdigest())._verify_artifact()
+
+
+def test_qwen_rejects_invalid_and_mismatched_artifact_sha(tmp_path):
+    artifact = tmp_path / "model.gguf"
+    artifact.write_bytes(b"model")
+    with pytest.raises(ExecutorSecurityError, match="ARTIFACT_SHA256_INVALID"):
+        QwenModelExecutor(str(artifact), "not-a-sha")._verify_artifact()
+    with pytest.raises(ExecutorSecurityError, match="ARTIFACT_SHA256_MISMATCH"):
+        QwenModelExecutor(str(artifact), "0" * 64)._verify_artifact()
 
 
 class _Workspace:
@@ -87,6 +98,87 @@ def test_remote_worker_fails_closed_without_injected_frontier_executor():
     assert context.status.value == "FAILED"
     assert context.failure_reason.value == "AUTHORIZATION_DENIED"
     assert "Authorized FrontierExecutor" in context.error_message
+
+
+def _remote_worker_fixture(frontier_executor):
+    manager = WorkerManager(_Workspace(), frontier_executor=frontier_executor)
+    deadline = datetime.now(timezone.utc) + timedelta(minutes=1)
+    task = Task("task", "remote", "account", "project", {"input": "x"}, {}, deadline, "keep", "required", "test", datetime.now(timezone.utc))
+    context = TaskExecutionContext("exec", "task", "account", "project", "remote", "/tmp", {}, [], deadline, {}, "disabled", "read_only")
+    selection = ExecutorSelection(
+        executor_type=ExecutorType.REMOTE_MODEL,
+        executor_id="physical-frontier", executor_version="1", model_id="model", model_version="1",
+        reason="test", policy_version="v1", risk_class="low",
+    )
+    worker = manager.create_worker(context, selection, task)
+    cap = CapabilityDefinition("remote", "remote", "", "1", "low", True, False, "disabled", "none", [], 1, 1, True, ExecutorType.REMOTE_MODEL, None, True)
+    return manager, worker, context, task, cap
+
+
+class _ReceiptFrontier(FrontierExecutor):
+    def identity(self):
+        return "physical-frontier"
+
+    def is_authorized(self):
+        return True
+
+    def is_available(self, model_id=None):
+        return model_id == "model"
+
+    def execute_plan(self, task, plan):
+        result_data = {"classification": "internal"}
+        return FrontierExecutionReceipt(
+            execution_id="exec",
+            task_id=task.task_id,
+            executor_id=self.identity(),
+            model_id=plan.model_id,
+            result_data=result_data,
+            result_hash=hashlib.sha256(__import__("json").dumps(result_data, sort_keys=True).encode()).hexdigest(),
+            evidence_ref="evidence://nonprod/physical-frontier/exec",
+            completed_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+
+def test_remote_worker_requires_correlated_receipt_for_success():
+    manager, worker, context, task, cap = _remote_worker_fixture(_ReceiptFrontier())
+    manager.start_worker(worker.worker_id, context, task, cap)
+    assert context.status.value == "SUCCEEDED"
+    assert context.result_hash
+    assert context.evidence_ref == "evidence://nonprod/physical-frontier/exec"
+    assert worker.state.value == "SUCCEEDED"
+
+
+def test_remote_worker_rejects_raw_synthetic_result():
+    class RawResultFrontier(_ReceiptFrontier):
+        def execute_plan(self, task, plan):
+            return {"status": "COMPLETED", "result": "synthetic"}
+
+    manager, worker, context, task, cap = _remote_worker_fixture(RawResultFrontier())
+    manager.start_worker(worker.worker_id, context, task, cap)
+    assert context.status.value == "FAILED"
+    assert context.failure_reason.value == "AUTHORIZATION_DENIED"
+    assert "FrontierExecutionReceipt" in context.error_message
+
+
+def test_remote_worker_rejects_mismatched_receipt_provenance():
+    class MismatchedReceiptFrontier(_ReceiptFrontier):
+        def execute_plan(self, task, plan):
+            receipt = super().execute_plan(task, plan)
+            return FrontierExecutionReceipt(
+                execution_id=receipt.execution_id,
+                task_id=receipt.task_id,
+                executor_id=receipt.executor_id,
+                model_id=receipt.model_id,
+                result_data=receipt.result_data,
+                result_hash="0" * 64,
+                evidence_ref=receipt.evidence_ref,
+                completed_at=receipt.completed_at,
+            )
+
+    manager, worker, context, task, cap = _remote_worker_fixture(MismatchedReceiptFrontier())
+    manager.start_worker(worker.worker_id, context, task, cap)
+    assert context.status.value == "FAILED"
+    assert "result hash mismatch" in context.error_message
 
 
 def test_update_manager_is_explicitly_quarantined():
@@ -128,8 +220,12 @@ def test_deterministic_executor_rejects_cross_workspace_path(tmp_path):
 
 def test_local_model_invalid_result_cannot_be_promoted_to_success():
     from types import SimpleNamespace
-    from unittest.mock import patch
-    manager = WorkerManager(_Workspace())
+    manager = WorkerManager(
+        _Workspace(),
+        model_registry=SimpleNamespace(
+            get=lambda _model_id: SimpleNamespace(artifact_sha256="e" * 64)
+        ),
+    )
     deadline = datetime.now(timezone.utc) + timedelta(minutes=1)
     task = Task("task", "document.classify", "account", "project", {}, {}, deadline, "keep", "required", "test", datetime.now(timezone.utc))
     context = TaskExecutionContext("exec", "task", "account", "project", "document.classify", "/tmp", {}, [], deadline, {}, "disabled", "read_only")
@@ -299,13 +395,12 @@ def test_fabric_register_is_disabled_by_default():
     assert cap.enabled is False
 
 def test_worker_propagates_registry_model_digest_to_qwen_executor():
-    from unittest.mock import patch
     from types import SimpleNamespace
     manager = WorkerManager(
         _Workspace(),
         model_registry=SimpleNamespace(
             get=lambda model_id: SimpleNamespace(
-                artifact_sha256="registry-sha256",
+                artifact_sha256="c" * 64,
             )
         ),
     )
@@ -327,7 +422,54 @@ def test_worker_propagates_registry_model_digest_to_qwen_executor():
             return SimpleNamespace(status="FAILED", result_data={}, evidence={"telemetry": {}})
     with patch.dict("os.environ", {"QWEN_MODEL_PATH": "/tmp/model.gguf"}), patch("os.path.exists", return_value=True), patch("runtime.execution.qwen_executor.QwenModelExecutor", FakeExecutor):
         manager.start_worker(worker.worker_id, context, task, cap)
-    assert captured["expected_sha256"] == "registry-sha256"
+    assert captured["expected_sha256"] == "c" * 64
+
+
+def test_worker_rejects_missing_or_invalid_registry_model_digest():
+    from types import SimpleNamespace
+    deadline = datetime.now(timezone.utc) + timedelta(minutes=1)
+    task = Task("task", "document.classify", "account", "project", {}, {}, deadline, "keep", "required", "test", datetime.now(timezone.utc))
+    cap = CapabilityDefinition("document.classify", "document.classify", "", "1", "low", True, False, "disabled", "read_only", [], 1, 1, True, ExecutorType.LOCAL_MODEL, None, True)
+    selection = ExecutorSelection(
+        executor_type=ExecutorType.LOCAL_MODEL,
+        executor_id="qwen", executor_version="1", model_id="qwen3-8b", model_version="1",
+        reason="test", policy_version="v1", risk_class="low",
+    )
+    for digest, expected in [(None, "required"), ("placeholder", "invalid")]:
+        manager = WorkerManager(
+            _Workspace(),
+            model_registry=SimpleNamespace(get=lambda model_id, d=digest: SimpleNamespace(artifact_sha256=d)),
+        )
+        context = TaskExecutionContext("exec", "task", "account", "project", "document.classify", "/tmp", {}, [], deadline, {}, "disabled", "read_only")
+        worker = manager.create_worker(context, selection, task)
+        with patch.dict("os.environ", {"QWEN_MODEL_PATH": "/tmp/model.gguf"}), patch("os.path.exists", return_value=True):
+            manager.start_worker(worker.worker_id, context, task, cap)
+        assert context.status.value == "FAILED"
+        assert context.failure_reason.value == "AUTHORIZATION_DENIED"
+        assert expected in context.error_message.lower()
+
+
+def test_worker_rejects_synthetic_local_success_without_provenance():
+    from unittest.mock import patch
+    from types import SimpleNamespace
+    digest = "d" * 64
+    manager = WorkerManager(_Workspace(), model_registry=SimpleNamespace(get=lambda _: SimpleNamespace(artifact_sha256=digest)))
+    deadline = datetime.now(timezone.utc) + timedelta(minutes=1)
+    task = Task("task", "document.classify", "account", "project", {}, {}, deadline, "keep", "required", "test", datetime.now(timezone.utc))
+    context = TaskExecutionContext("exec", "task", "account", "project", "document.classify", "/tmp", {}, [], deadline, {}, "disabled", "read_only")
+    selection = ExecutorSelection(ExecutorType.LOCAL_MODEL, "qwen", "1", "qwen3-8b", "1", "test", "v1", "low")
+    cap = CapabilityDefinition("document.classify", "document.classify", "", "1", "low", True, False, "disabled", "read_only", [], 1, 1, True, ExecutorType.LOCAL_MODEL, None, True)
+    worker = manager.create_worker(context, selection, task)
+    class SyntheticSuccess:
+        def __init__(self, **kwargs):
+            pass
+        def execute(self, _ctx):
+            return SimpleNamespace(status="SUCCEEDED", result_data={"class": "internal"}, evidence={"telemetry": {"result_hash": "0" * 64}})
+    with patch.dict("os.environ", {"QWEN_MODEL_PATH": "/tmp/model.gguf"}), patch("os.path.exists", return_value=True), patch("runtime.execution.qwen_executor.QwenModelExecutor", SyntheticSuccess):
+        manager.start_worker(worker.worker_id, context, task, cap)
+    assert context.status.value == "FAILED"
+    assert context.failure_reason.value == "AUTHORIZATION_DENIED"
+    assert "provenance" in context.error_message.lower()
 
 
 def test_distributable_runtime_has_no_host_specific_home_paths():

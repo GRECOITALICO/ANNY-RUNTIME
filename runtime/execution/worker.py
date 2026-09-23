@@ -1,6 +1,8 @@
 import uuid
 import logging
 import hashlib
+import json
+import re
 from datetime import datetime, timezone
 import os
 from typing import Dict, List, Optional, Any
@@ -13,6 +15,7 @@ from runtime.execution.selector import ExecutorSelection
 from runtime.execution.interfaces import ContextPackage, ModelExecutor
 from runtime.execution.deterministic_executor import DeterministicExecutor, ExecutorSecurityError, ExecutorLimitsExceeded
 from runtime.telemetry.telemetry import TelemetryEnvelope, TelemetryDomain
+from runtime.orchestration.frontier import FrontierExecutor, FrontierExecutionReceipt
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +108,64 @@ class WorkerManager:
     def get_worker(self, worker_id: str) -> Optional[WorkerDefinition]:
         return self.workers.get(worker_id)
 
+    @staticmethod
+    def _validate_frontier_receipt(
+        receipt: FrontierExecutionReceipt,
+        worker: WorkerDefinition,
+        context: TaskExecutionContext,
+        task: Task,
+    ) -> None:
+        """Reject uncorrelated or synthetic remote success material.
+
+        Runtime can validate the receipt's bindings and digest but cannot turn a
+        raw dictionary, locally generated digest, or missing evidence reference
+        into physical remote execution evidence.
+        """
+        if not isinstance(receipt, FrontierExecutionReceipt):
+            raise ExecutorSecurityError(
+                "Frontier executor must return a correlated FrontierExecutionReceipt"
+            )
+        if (
+            receipt.execution_id != context.execution_id
+            or receipt.task_id != task.task_id
+            or receipt.executor_id != worker.executor_id
+            or receipt.model_id != worker.model_id
+        ):
+            raise ExecutorSecurityError("Frontier receipt identity binding mismatch")
+        if not isinstance(receipt.result_data, dict) or not receipt.result_data:
+            raise ExecutorSecurityError("Frontier receipt has no physical result payload")
+        if not receipt.evidence_ref or not receipt.completed_at:
+            raise ExecutorSecurityError("Frontier receipt lacks required execution evidence")
+        if not re.fullmatch(r"[0-9a-f]{64}", receipt.result_hash or ""):
+            raise ExecutorSecurityError("Frontier receipt result hash is invalid")
+        computed_hash = hashlib.sha256(
+            json.dumps(receipt.result_data, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+        if computed_hash != receipt.result_hash:
+            raise ExecutorSecurityError("Frontier receipt result hash mismatch")
+
+    @staticmethod
+    def _validate_local_model_provenance(result, artifact_sha256: str) -> str:
+        """Require Qwen's actual artifact and result provenance before success."""
+        evidence = result.evidence if isinstance(getattr(result, "evidence", None), dict) else {}
+        telemetry = evidence.get("telemetry") if isinstance(evidence.get("telemetry"), dict) else {}
+        provenance = evidence.get("provenance") if isinstance(evidence.get("provenance"), dict) else {}
+        result_hash = telemetry.get("result_hash")
+        if provenance.get("executor_identity") != "QwenModelExecutor":
+            raise ExecutorSecurityError("Local model executor provenance is missing")
+        if provenance.get("artifact_sha256") != artifact_sha256:
+            raise ExecutorSecurityError("Local model artifact provenance mismatch")
+        if provenance.get("result_hash") != result_hash:
+            raise ExecutorSecurityError("Local model result provenance mismatch")
+        if not re.fullmatch(r"[0-9a-f]{64}", result_hash or ""):
+            raise ExecutorSecurityError("Local model result hash is invalid")
+        computed_hash = hashlib.sha256(
+            json.dumps(result.result_data, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()
+        if computed_hash != result_hash:
+            raise ExecutorSecurityError("Local model result hash mismatch")
+        return result_hash
+
     def list_workers(self) -> List[WorkerDefinition]:
         return list(self.workers.values())
 
@@ -185,6 +246,10 @@ class WorkerManager:
                 model = getattr(self, "model_registry", None)
                 definition = model.get(worker.model_id) if model and worker.model_id else None
                 artifact_sha256 = getattr(definition, "artifact_sha256", None)
+                if not artifact_sha256:
+                    raise ExecutorSecurityError("Local model registry artifact SHA-256 is required")
+                if not re.fullmatch(r"[0-9a-fA-F]{64}", artifact_sha256):
+                    raise ExecutorSecurityError("Local model registry artifact SHA-256 is invalid")
                 from runtime.execution.qwen_executor import QwenModelExecutor
                 executor = QwenModelExecutor(
                     artifact_path=real_artifact_path,
@@ -208,9 +273,12 @@ class WorkerManager:
                         },
                     )
                     return
+                result_hash = self._validate_local_model_provenance(
+                    result, artifact_sha256
+                )
                 context.status = ExecutionStatus.SUCCEEDED
                 context.result = result.result_data
-                context.result_hash = result.evidence.get("telemetry", {}).get("result_hash")
+                context.result_hash = result_hash
                 self._emit_telemetry("inference_completed", worker, result.evidence.get("telemetry", {}))
 
             elif worker.executor_type in ("REMOTE_MODEL", "FRONTIER_MODEL"):
@@ -227,21 +295,22 @@ class WorkerManager:
                     policy_version="v1.0",
                 )
                 fe = self.frontier_executor
-                if not fe:
+                if not isinstance(fe, FrontierExecutor) or not fe.is_authorized():
                     raise ExecutorSecurityError("Authorized FrontierExecutor injection is required")
+                if fe.identity() != worker.executor_id:
+                    raise ExecutorSecurityError("Frontier executor identity binding mismatch")
 
                 if fe.is_available(plan.model_id):
-                    result_data = fe.execute_plan(task, plan)
-                    if not isinstance(result_data, dict) or not result_data:
-                        raise ExecutorSecurityError("Frontier executor returned no physical result")
+                    receipt = fe.execute_plan(task, plan)
+                    self._validate_frontier_receipt(receipt, worker, context, task)
                     context.status = ExecutionStatus.SUCCEEDED
-                    context.result = result_data
-                    context.result_hash = hashlib.sha256(
-                        __import__("json").dumps(result_data, sort_keys=True, default=str).encode("utf-8")
-                    ).hexdigest()
+                    context.result = receipt.result_data
+                    context.result_hash = receipt.result_hash
+                    context.evidence_ref = receipt.evidence_ref
                     self._emit_telemetry("inference_completed", worker, {
-                        "executor": worker.executor_id,
+                        "executor": receipt.executor_id,
                         "result_hash": context.result_hash,
+                        "evidence_ref": receipt.evidence_ref,
                     })
                 else:
                     context.status = ExecutionStatus.FAILED

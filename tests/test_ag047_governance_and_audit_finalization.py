@@ -90,8 +90,8 @@ def test_10_execution_plan_secret_sanitization():
 
 def test_11_frontier_default_disabled(): assert DefaultFrontierExecutor().is_available() is False
 
-def test_12_frontier_model_allowlist():
-    f=DefaultFrontierExecutor(enabled=True,available_models=["frontier-test"]); assert f.is_available("frontier-test") and not f.is_available("frontier-other")
+def test_12_frontier_default_cannot_be_enabled_as_remote_executor():
+    f=DefaultFrontierExecutor(enabled=True,available_models=["frontier-test"]); assert f.is_available("frontier-test") is False
 
 def test_13_frontier_execution_denies_unavailable():
     f=DefaultFrontierExecutor(enabled=True,available_models=["frontier-test"])
