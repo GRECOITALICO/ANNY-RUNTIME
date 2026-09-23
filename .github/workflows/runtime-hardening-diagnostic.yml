@@ -1,0 +1,600 @@
+name: runtime hardening diagnostic
+
+on:
+  push:
+    branches:
+      - codex/anny-runtime-hardening-20260922-001
+  pull_request:
+    paths:
+      - "runtime/**"
+      - "cli/**"
+      - "scripts/**"
+      - "tests/test_worker_020.py"
+      - "tests/test_registry_019.py"
+      - "tests/test_runtime_hardening_20260922.py"
+      - ".github/workflows/runtime-hardening-diagnostic.yml"
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install regression dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest PyYAML cryptography psutil azure-identity httpx mcp websocket-client python-dateutil
+      - name: Compile hardened runtime modules
+        run: |
+          python -m py_compile runtime/execution/registry.py runtime/execution/worker.py runtime/execution/qwen_executor.py runtime/execution/deterministic_executor.py runtime/mcp/gateway.py runtime/mcp/tools.py runtime/api/bridge.py runtime/core/engine.py cli/main.py
+      - name: 1. tests/test_worker_020.py::test_01_create_worker
+        id: t1
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_01_create_worker'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t1.result"
+          exit $rc
+      - name: 2. tests/test_worker_020.py::test_02_start_worker
+        id: t2
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_02_start_worker'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t2.result"
+          exit $rc
+      - name: 3. tests/test_worker_020.py::test_03_running_worker
+        id: t3
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_03_running_worker'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t3.result"
+          exit $rc
+      - name: 4. tests/test_worker_020.py::test_04_success
+        id: t4
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_04_success'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t4.result"
+          exit $rc
+      - name: 5. tests/test_worker_020.py::test_05_failure
+        id: t5
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_05_failure'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t5.result"
+          exit $rc
+      - name: 6. tests/test_worker_020.py::test_06_timeout
+        id: t6
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_06_timeout'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t6.result"
+          exit $rc
+      - name: 7. tests/test_worker_020.py::test_07_cancellation
+        id: t7
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_07_cancellation'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t7.result"
+          exit $rc
+      - name: 8. tests/test_worker_020.py::test_08_unexpected_crash
+        id: t8
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_08_unexpected_crash'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t8.result"
+          exit $rc
+      - name: 9. tests/test_worker_020.py::test_09_cleanup
+        id: t9
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_09_cleanup'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t9.result"
+          exit $rc
+      - name: 10. tests/test_worker_020.py::test_10_resource_limits
+        id: t10
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_10_resource_limits'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t10.result"
+          exit $rc
+      - name: 11. tests/test_worker_020.py::test_11_network_disabled
+        id: t11
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_11_network_disabled'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t11.result"
+          exit $rc
+      - name: 12. tests/test_worker_020.py::test_12_filesystem_isolation
+        id: t12
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_12_filesystem_isolation'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t12.result"
+          exit $rc
+      - name: 13. tests/test_worker_020.py::test_13_capability_isolation
+        id: t13
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_13_capability_isolation'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t13.result"
+          exit $rc
+      - name: 14. tests/test_worker_020.py::test_14_worker_cannot_self_escalate
+        id: t14
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_14_worker_cannot_self_escalate'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t14.result"
+          exit $rc
+      - name: 15. tests/test_worker_020.py::test_15_worker_cannot_change_deadline
+        id: t15
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_15_worker_cannot_change_deadline'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t15.result"
+          exit $rc
+      - name: 16. tests/test_worker_020.py::test_16_worker_cannot_create_worker
+        id: t16
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_16_worker_cannot_create_worker'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t16.result"
+          exit $rc
+      - name: 17. tests/test_worker_020.py::test_17_evidence
+        id: t17
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_17_evidence'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t17.result"
+          exit $rc
+      - name: 18. tests/test_worker_020.py::test_18_telemetry
+        id: t18
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_18_telemetry'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t18.result"
+          exit $rc
+      - name: 19. tests/test_worker_020.py::test_19_reproducibility
+        id: t19
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_19_reproducibility'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t19.result"
+          exit $rc
+      - name: 20. tests/test_worker_020.py::test_20_control_plane
+        id: t20
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_20_control_plane'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t20.result"
+          exit $rc
+      - name: 21. tests/test_worker_020.py::test_21_lifecycle_termination
+        id: t21
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_21_lifecycle_termination'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t21.result"
+          exit $rc
+      - name: 22. tests/test_worker_020.py::test_22_multiple_concurrent_workers
+        id: t22
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_22_multiple_concurrent_workers'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t22.result"
+          exit $rc
+      - name: 23. tests/test_worker_020.py::test_23_unsupported_executor_fails_closed
+        id: t23
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_23_unsupported_executor_fails_closed'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t23.result"
+          exit $rc
+      - name: 24. tests/test_worker_020.py::test_24_local_model_unavailable_fails_closed
+        id: t24
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_worker_020.py::test_24_local_model_unavailable_fails_closed'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t24.result"
+          exit $rc
+      - name: 25. tests/test_registry_019.py::test_1_capability_registry
+        id: t25
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_1_capability_registry'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t25.result"
+          exit $rc
+      - name: 26. tests/test_registry_019.py::test_2_capability_lookup
+        id: t26
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_2_capability_lookup'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t26.result"
+          exit $rc
+      - name: 27. tests/test_registry_019.py::test_3_unknown_capability
+        id: t27
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_3_unknown_capability'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t27.result"
+          exit $rc
+      - name: 28. tests/test_registry_019.py::test_4_disabled_capability
+        id: t28
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_4_disabled_capability'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t28.result"
+          exit $rc
+      - name: 29. tests/test_registry_019.py::test_5_deterministic_selection
+        id: t29
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_5_deterministic_selection'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t29.result"
+          exit $rc
+      - name: 30. tests/test_registry_019.py::test_6_model_selection_abstraction
+        id: t30
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_6_model_selection_abstraction'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t30.result"
+          exit $rc
+      - name: 31. tests/test_registry_019.py::test_7_authority_isolation
+        id: t31
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_7_authority_isolation'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t31.result"
+          exit $rc
+      - name: 32. tests/test_registry_019.py::test_9_executor_integration
+        id: t32
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_9_executor_integration'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t32.result"
+          exit $rc
+      - name: 33. tests/test_registry_019.py::test_10_execution_record
+        id: t33
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_10_execution_record'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t33.result"
+          exit $rc
+      - name: 34. tests/test_registry_019.py::test_13_timeout
+        id: t34
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_13_timeout'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t34.result"
+          exit $rc
+      - name: 35. tests/test_registry_019.py::test_14_output_limit
+        id: t35
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_14_output_limit'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t35.result"
+          exit $rc
+      - name: 36. tests/test_registry_019.py::test_15_security_boundaries
+        id: t36
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_15_security_boundaries'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t36.result"
+          exit $rc
+      - name: 37. tests/test_registry_019.py::test_16_control_plane
+        id: t37
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_16_control_plane'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t37.result"
+          exit $rc
+      - name: 38. tests/test_registry_019.py::test_17_multiple_executions
+        id: t38
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_registry_019.py::test_17_multiple_executions'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t38.result"
+          exit $rc
+      - name: 39. tests/test_runtime_hardening_20260922.py::test_filesystem_boundary_rejects_sibling_prefix_and_missing_workspace
+        id: t39
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_filesystem_boundary_rejects_sibling_prefix_and_missing_workspace'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t39.result"
+          exit $rc
+      - name: 40. tests/test_runtime_hardening_20260922.py::test_filesystem_boundary_rejects_symlink_escape
+        id: t40
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_filesystem_boundary_rejects_symlink_escape'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t40.result"
+          exit $rc
+      - name: 41. tests/test_runtime_hardening_20260922.py::test_model_registry_rejects_placeholder_artifact_provenance
+        id: t41
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_model_registry_rejects_placeholder_artifact_provenance'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t41.result"
+          exit $rc
+      - name: 42. tests/test_runtime_hardening_20260922.py::test_qwen_requires_non_placeholder_digest
+        id: t42
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_qwen_requires_non_placeholder_digest'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t42.result"
+          exit $rc
+      - name: 43. tests/test_runtime_hardening_20260922.py::test_remote_worker_fails_closed_without_injected_frontier_executor
+        id: t43
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_remote_worker_fails_closed_without_injected_frontier_executor'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t43.result"
+          exit $rc
+      - name: 44. tests/test_runtime_hardening_20260922.py::test_update_manager_is_explicitly_quarantined
+        id: t44
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_update_manager_is_explicitly_quarantined'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t44.result"
+          exit $rc
+      - name: 45. tests/test_runtime_hardening_20260922.py::test_verified_sync_never_claims_stage_or_rollback_without_receipt
+        id: t45
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_verified_sync_never_claims_stage_or_rollback_without_receipt'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t45.result"
+          exit $rc
+      - name: 46. tests/test_runtime_hardening_20260922.py::test_deterministic_executor_rejects_cross_workspace_path
+        id: t46
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_deterministic_executor_rejects_cross_workspace_path'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t46.result"
+          exit $rc
+      - name: 47. tests/test_runtime_hardening_20260922.py::test_local_model_invalid_result_cannot_be_promoted_to_success
+        id: t47
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_local_model_invalid_result_cannot_be_promoted_to_success'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t47.result"
+          exit $rc
+      - name: 48. tests/test_runtime_hardening_20260922.py::test_legacy_execution_paths_are_quarantined
+        id: t48
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_legacy_execution_paths_are_quarantined'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t48.result"
+          exit $rc
+      - name: 49. tests/test_runtime_hardening_20260922.py::test_legacy_secret_broker_is_quarantined
+        id: t49
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_legacy_secret_broker_is_quarantined'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t49.result"
+          exit $rc
+      - name: 50. tests/test_runtime_hardening_20260922.py::test_release_identity_uses_canonical_runtime_version
+        id: t50
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_release_identity_uses_canonical_runtime_version'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t50.result"
+          exit $rc
+      - name: 51. tests/test_runtime_hardening_20260922.py::test_bridge_requires_real_execution_context
+        id: t51
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_bridge_requires_real_execution_context'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t51.result"
+          exit $rc
+      - name: 52. tests/test_runtime_hardening_20260922.py::test_bridge_rejects_stale_generation
+        id: t52
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_bridge_rejects_stale_generation'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t52.result"
+          exit $rc
+      - name: 53. tests/test_runtime_hardening_20260922.py::test_bridge_capability_resolution_uses_canonical_registry
+        id: t53
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_bridge_capability_resolution_uses_canonical_registry'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t53.result"
+          exit $rc
+      - name: 54. tests/test_runtime_hardening_20260922.py::test_cli_has_no_identity_fallback_and_no_shell_string_uninstall
+        id: t54
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_cli_has_no_identity_fallback_and_no_shell_string_uninstall'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t54.result"
+          exit $rc
+      - name: 55. tests/test_runtime_hardening_20260922.py::test_cli_server_default_uses_canonical_port
+        id: t55
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_cli_server_default_uses_canonical_port'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t55.result"
+          exit $rc
+      - name: 56. tests/test_runtime_hardening_20260922.py::test_engine_health_is_not_unconditionally_green
+        id: t56
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_engine_health_is_not_unconditionally_green'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t56.result"
+          exit $rc
+      - name: 57. tests/test_runtime_hardening_20260922.py::test_admin_controls_report_blocked_or_not_implemented
+        id: t57
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_admin_controls_report_blocked_or_not_implemented'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t57.result"
+          exit $rc
+      - name: 58. tests/test_runtime_hardening_20260922.py::test_runtime_server_links_canonical_execution_manager_to_engine
+        id: t58
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_runtime_server_links_canonical_execution_manager_to_engine'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t58.result"
+          exit $rc
+      - name: 59. tests/test_runtime_hardening_20260922.py::test_fabric_register_is_denied_when_canonical_capability_is_disabled
+        id: t59
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_fabric_register_is_denied_when_canonical_capability_is_disabled'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t59.result"
+          exit $rc
+      - name: 60. tests/test_runtime_hardening_20260922.py::test_fabric_register_is_disabled_by_default
+        id: t60
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_fabric_register_is_disabled_by_default'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t60.result"
+          exit $rc
+      - name: 61. tests/test_runtime_hardening_20260922.py::test_worker_propagates_registry_model_digest_to_qwen_executor
+        id: t61
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_worker_propagates_registry_model_digest_to_qwen_executor'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t61.result"
+          exit $rc
+      - name: 62. tests/test_runtime_hardening_20260922.py::test_active_release_checksums_resolve_to_real_commits
+        id: t62
+        continue-on-error: true
+        run: |
+          set +e
+          pytest -q 'tests/test_runtime_hardening_20260922.py::test_active_release_checksums_resolve_to_real_commits'
+          rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/t62.result"
+          exit $rc
+      - name: Diagnostic gate
+        run: |
+          failed=0
+          for f in "$RUNNER_TEMP"/t*.result; do
+            test -f "$f" || continue
+            if [ "$(cat "$f")" != "0" ]; then failed=1; fi
+          done
+          exit "$failed"
