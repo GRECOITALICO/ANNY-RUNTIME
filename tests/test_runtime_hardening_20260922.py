@@ -217,3 +217,30 @@ def test_bridge_capability_resolution_uses_canonical_registry():
     assert BridgeRouter({})._resolve_capability(Manager(), "enabled").capability_id == "enabled"
     assert BridgeRouter({})._resolve_capability(Manager(), "disabled") is None
     assert BridgeRouter({})._resolve_capability(Manager(), "fabric.register") is None
+
+
+def test_cli_has_no_identity_fallback_and_no_shell_string_uninstall():
+    import inspect
+    import cli.main as cli_main
+    source = inspect.getsource(cli_main.cmd_identity_bootstrap)
+    uninstall_source = inspect.getsource(cli_main.cmd_uninstall)
+    assert "Ed25519PrivateKey.generate" not in source
+    assert "os.system" not in uninstall_source
+
+def test_cli_server_default_uses_canonical_port():
+    import cli.main as cli_main
+    assert "default=get_admin_port()" in open("cli/main.py", encoding="utf-8").read()
+
+def test_engine_health_is_not_unconditionally_green():
+    from runtime.core.config import RuntimeConfig
+    from runtime.core.engine import RuntimeEngine
+    engine = RuntimeEngine(RuntimeConfig(data_dir="/tmp/anny-test-health"))
+    result = engine.health_check()
+    assert result["status"] != "ok"
+    assert result["subsystems"]["identity"] != "ok"
+
+def test_admin_controls_report_blocked_or_not_implemented():
+    from runtime.admin.routes import AdminRouter
+    router = AdminRouter({})
+    assert router.handle_admin_restart({}) == "/"
+    assert router.handle_admin_diagnostics({}) == "/doctor"
