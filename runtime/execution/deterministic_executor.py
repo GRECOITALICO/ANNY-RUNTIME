@@ -98,15 +98,16 @@ class DeterministicExecutor:
             target.relative_to(workspace)
         except (OSError, RuntimeError, ValueError) as exc:
             raise ExecutorSecurityError("Path is outside the authorized workspace scope") from exc
-        forbidden_paths = [
-            "/var/lib/anny-runtime/secrets",
-            "/home/anny/.ssh",
-            "/root",
-        ]
-        for forbidden in forbidden_paths:
-            forbidden_path = Path(forbidden).resolve(strict=False)
+        forbidden_paths = [Path.home() / ".ssh"]
+        data_dir = os.environ.get("ANNY_DATA_DIR")
+        if data_dir:
+            forbidden_paths.append(Path(data_dir).expanduser().resolve(strict=False) / "secrets")
+        for forbidden_path in forbidden_paths:
+            forbidden_path = forbidden_path.resolve(strict=False)
             if target == forbidden_path or forbidden_path in target.parents:
-                raise ExecutorSecurityError(f"Access to {forbidden} is explicitly denied")
+                raise ExecutorSecurityError(
+                    f"Access to {forbidden_path} is explicitly denied"
+                )
         return str(target)
 
     def _limit_output(self, context: TaskExecutionContext, result: Dict[str, Any]) -> None:
