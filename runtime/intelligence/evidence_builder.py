@@ -7,7 +7,8 @@ import os
 import json
 import hashlib
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from pathlib import Path
 
 from runtime.intelligence.taxonomy import ALL_CAPABILITIES, CAPABILITY_FAMILIES
 from runtime.intelligence.models import CertificationStatus
@@ -23,8 +24,9 @@ def _compute_sha256(filepath: str) -> str:
 class EvidenceBuilder:
     """Builds cryptographic evidence of capability certification."""
 
-    def __init__(self, output_dir: str = "/home/anny/anny-runtime-certification"):
-        self.output_dir = output_dir
+    def __init__(self, output_dir: Optional[str] = None):
+        configured = output_dir or os.environ.get("ANNY_EVIDENCE_DIR")
+        self.output_dir = configured or str(Path.cwd() / "audit" / "anny-runtime-certification")
         self.store = BenchmarkStore()
         os.makedirs(self.output_dir, exist_ok=True)
 
