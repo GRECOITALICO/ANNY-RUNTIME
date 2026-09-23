@@ -46,7 +46,7 @@ def test_model_registry_rejects_placeholder_artifact_provenance():
     from dataclasses import replace
 
     registry = ModelRegistry()
-    model = registry.get("qwen3-8b")
+    model = registry.get_model("qwen3-8b")
     assert model is not None
     assert model.status.value == "INSTALL_REQUIRED"
     assert model.artifact_sha256 == ""
