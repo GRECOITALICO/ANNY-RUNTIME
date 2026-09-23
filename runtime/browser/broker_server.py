@@ -423,7 +423,7 @@ class BrowserBroker:
             "pid": self.process.pid,
             "browser_state": self.browser_state,
             "profile": str(self.profile_dir),
-            "binary": CHROME_BINARY,
+            "binary": self.chrome_binary,
         }
 
     def stop_browser(self) -> dict:
