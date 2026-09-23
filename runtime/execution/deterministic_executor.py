@@ -4,7 +4,7 @@ import time
 import hashlib
 import subprocess
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Callable, Dict, Any, Optional
 from pathlib import Path
 
 from runtime.execution.models import Task, TaskExecutionContext, ExecutionStatus, FailureReason
@@ -28,8 +28,15 @@ class ExecutorSecurityError(Exception):
 class DeterministicExecutor:
     """Execute local deterministic capabilities with bounded, auditable behavior."""
 
-    def __init__(self, workspace_manager: EphemeralWorkspaceManager):
+    def __init__(
+        self,
+        workspace_manager: EphemeralWorkspaceManager,
+        admission_validator: Optional[Callable[[Task, TaskExecutionContext], bool]] = None,
+    ):
         self.workspace_manager = workspace_manager
+        # A direct executor instance has no authority to accept a task.  The
+        # WorkerManager injects its binding validator for admitted executions.
+        self._admission_validator = admission_validator
         self.runtime_version = "1.1.0"
         self.tool_version = "1.1.0"
 
@@ -38,6 +45,12 @@ class DeterministicExecutor:
             context.failure_reason = FailureReason.INVALID_TASK
             context.status = ExecutionStatus.FAILED
             context.error_message = "Execution context is not QUEUED"
+            return
+
+        if not self._is_admitted(task, context):
+            context.status = ExecutionStatus.FAILED
+            context.failure_reason = FailureReason.AUTHORIZATION_DENIED
+            context.error_message = "CANONICAL_ADMISSION_REQUIRED"
             return
 
         context.status = ExecutionStatus.RUNNING
@@ -83,6 +96,17 @@ class DeterministicExecutor:
             context.completed_at = datetime.now(timezone.utc)
             context.duration_ms = int((context.completed_at - context.started_at).total_seconds() * 1000)
             self._finalize_workspace(task, context)
+
+    def _is_admitted(self, task: Task, context: TaskExecutionContext) -> bool:
+        """Require a WorkerManager-issued Runtime admission before execution."""
+        if context.admission_state != "AUTHORIZED" or not context.admission_id:
+            return False
+        if not callable(self._admission_validator):
+            return False
+        try:
+            return bool(self._admission_validator(task, context))
+        except Exception:
+            return False
 
     def _deadline(self, context: TaskExecutionContext) -> None:
         if datetime.now(timezone.utc) > context.deadline:

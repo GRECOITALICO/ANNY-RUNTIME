@@ -220,6 +220,7 @@ def integration_env(tmp_path):
         fabric_data_dir=str(fabric_dir),
         github_client=MockGitHubClient(str(workspace)),
         fabric_client=MockFabricClient(str(fabric_dir)),
+        execution_authorizer=lambda _request: (True, "TEST_ONLY"),
     )
 
     return {

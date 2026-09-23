@@ -57,8 +57,12 @@ def _execute(tmp_path, task):
         resource_limits={"max_output_size": 1024 * 1024, "max_workspace_size": 10 * 1024 * 1024},
         network_policy="disabled",
         write_policy="workspace_only",
+        admission_id="test-admission",
+        admission_state="AUTHORIZED",
     )
-    DeterministicExecutor(manager).execute(task, context)
+    # This module exercises deterministic implementation behavior directly;
+    # canonical admission is covered by ExecutionManager/WorkerManager tests.
+    DeterministicExecutor(manager, admission_validator=lambda _task, _context: True).execute(task, context)
     return context, Path(workspace)
 
 

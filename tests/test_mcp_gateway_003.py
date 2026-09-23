@@ -117,6 +117,10 @@ def gateway(tool_registry, cap_registry, workspace, fabric_dir):
         fabric_data_dir=fabric_dir,
         github_client=mock_gh,
         fabric_client=mock_fab,
+        # Unit-test seam for the tool layer. Production wiring injects
+        # WorkerManager.authorize_tool_request; a gateway without an explicit
+        # authorizer is fail-closed (covered by Batch 3 tests).
+        execution_authorizer=lambda _request: (True, "TEST_ONLY"),
     )
 
 

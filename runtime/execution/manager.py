@@ -1,7 +1,7 @@
 from typing import List, Dict, Optional
 import uuid
 
-from runtime.execution.models import Task, TaskExecutionContext, ExecutionStatus
+from runtime.execution.models import Task, TaskExecutionContext, ExecutionStatus, FailureReason
 from runtime.workspace.ephemeral import EphemeralWorkspaceManager
 from runtime.execution.capability import CapabilityRegistry
 from runtime.execution.policy import RuntimePolicy
@@ -49,7 +49,9 @@ class ExecutionManager:
             mcp_gateway=self.mcp_gateway,
             telemetry_collector=self.telemetry_collector,
             model_registry=self.model_registry,
+            capability_registry=self.registry,
         )
+        self.mcp_gateway.set_execution_authorizer(self.worker_manager.authorize_tool_request)
 
     def submit_task(self, task: Task) -> TaskExecutionContext:
         execution_id = str(uuid.uuid4())
@@ -115,6 +117,11 @@ class ExecutionManager:
         context.policy_version = selection.policy_version
         context.generation = self.runtime_engine.generation.current if self.runtime_engine else 1
 
+        # This internal admission is the single Runtime transition from an
+        # enabled capability to an eligible executor.  It does not manufacture
+        # an external identity or replace the separate ExecutionContext layer.
+        self.worker_manager._admit_execution(context, task, cap, selection)
+
         self._tasks[execution_id] = task
         self._executions[execution_id] = context
         self.worker_manager.create_worker(context, selection, task)
@@ -177,6 +184,11 @@ class ExecutionManager:
         cap = self.registry.get(task.capability_id)
         if not cap:
             raise ValueError("Capability not found for execution")
+        if not cap.enabled:
+            context.status = ExecutionStatus.FAILED
+            context.failure_reason = FailureReason.AUTHORIZATION_DENIED
+            context.error_message = "Capability is disabled"
+            return context
         worker = next((w for w in self.worker_manager.list_workers() if w.execution_id == execution_id), None)
         if not worker:
             raise ValueError("Worker not found for execution")
@@ -303,6 +315,8 @@ class ExecutionManager:
                 execution_id=execution_id
             )
             self.continuity_engine.append_event(event)
+
+        return context
 
     def get_execution(self, execution_id: str) -> Optional[TaskExecutionContext]:
         if execution_id in self._executions:

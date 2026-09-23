@@ -204,7 +204,14 @@ def test_remote_model_worker_rejects_default_frontier_sentinel(tmp_path):
         fallback_executor=None,
         enabled=True
     )
-    
+    # Isolated WorkerManager test: inject an explicit test-only admission so
+    # the assertion reaches the Frontier sentinel rather than a direct-route
+    # denial. Runtime production wiring performs this in ExecutionManager.
+    test_registry = CapabilityRegistry()
+    test_registry.register(cap_def)
+    worker_mgr.capability_registry = test_registry
+    worker_mgr._admit_execution(context, task, cap_def, selection)
+
     worker_mgr.start_worker(worker.worker_id, context, task, cap_def)
     assert context.status == ExecutionStatus.FAILED
     assert context.failure_reason.name == "AUTHORIZATION_DENIED"

@@ -82,6 +82,15 @@ class _Workspace:
         return 0
 
 
+def _admit_worker_for_internal_test(manager, context, task, capability, selection):
+    """Explicit test-only admission for isolated WorkerManager contract tests."""
+    from runtime.execution.capability import CapabilityRegistry
+    registry = CapabilityRegistry()
+    registry.register(capability)
+    manager.capability_registry = registry
+    manager._admit_execution(context, task, capability, selection)
+
+
 def test_remote_worker_fails_closed_without_injected_frontier_executor():
     manager = WorkerManager(_Workspace())
     deadline = datetime.now(timezone.utc) + timedelta(minutes=1)
@@ -94,6 +103,7 @@ def test_remote_worker_fails_closed_without_injected_frontier_executor():
     )
     worker = manager.create_worker(context, selection, task)
     cap = CapabilityDefinition("remote", "remote", "", "1", "low", True, False, "disabled", "none", [], 1, 1, True, ExecutorType.REMOTE_MODEL, None, True)
+    _admit_worker_for_internal_test(manager, context, task, cap, selection)
     manager.start_worker(worker.worker_id, context, task, cap)
     assert context.status.value == "FAILED"
     assert context.failure_reason.value == "AUTHORIZATION_DENIED"
@@ -112,6 +122,7 @@ def _remote_worker_fixture(frontier_executor):
     )
     worker = manager.create_worker(context, selection, task)
     cap = CapabilityDefinition("remote", "remote", "", "1", "low", True, False, "disabled", "none", [], 1, 1, True, ExecutorType.REMOTE_MODEL, None, True)
+    _admit_worker_for_internal_test(manager, context, task, cap, selection)
     return manager, worker, context, task, cap
 
 
@@ -236,6 +247,7 @@ def test_local_model_invalid_result_cannot_be_promoted_to_success():
     )
     cap = CapabilityDefinition("document.classify", "document.classify", "", "1", "low", True, False, "disabled", "read_only", [], 1, 1, True, ExecutorType.LOCAL_MODEL, None, True)
     worker = manager.create_worker(context, selection, task)
+    _admit_worker_for_internal_test(manager, context, task, cap, selection)
     fake_result = SimpleNamespace(status="FAILED", result_data={"error": "invalid"}, evidence={"telemetry": {"result_hash": "deadbeef"}})
     with patch.dict("os.environ", {"QWEN_MODEL_PATH": "/tmp/model.gguf"}), patch("os.path.exists", return_value=True), patch("runtime.execution.qwen_executor.QwenModelExecutor.execute", return_value=fake_result):
         manager.start_worker(worker.worker_id, context, task, cap)
@@ -374,6 +386,7 @@ def test_fabric_register_is_denied_when_canonical_capability_is_disabled(tmp_pat
         tool_registry=ToolRegistry(),
         capability_registry=__import__("runtime.execution.capability", fromlist=["CapabilityRegistry"]).CapabilityRegistry(),
         workspace_path=str(workspace),
+        execution_authorizer=lambda _request: (True, "TEST_ONLY"),
     )
     request = ToolRequest.create(
         tool_id="fabric.register",
@@ -414,6 +427,7 @@ def test_worker_propagates_registry_model_digest_to_qwen_executor():
     )
     cap = CapabilityDefinition("document.classify", "document.classify", "", "1", "low", True, False, "disabled", "read_only", [], 1, 1, True, ExecutorType.LOCAL_MODEL, None, True)
     worker = manager.create_worker(context, selection, task)
+    _admit_worker_for_internal_test(manager, context, task, cap, selection)
     captured = {}
     class FakeExecutor:
         def __init__(self, artifact_path, expected_sha256):
@@ -442,6 +456,7 @@ def test_worker_rejects_missing_or_invalid_registry_model_digest():
         )
         context = TaskExecutionContext("exec", "task", "account", "project", "document.classify", "/tmp", {}, [], deadline, {}, "disabled", "read_only")
         worker = manager.create_worker(context, selection, task)
+        _admit_worker_for_internal_test(manager, context, task, cap, selection)
         with patch.dict("os.environ", {"QWEN_MODEL_PATH": "/tmp/model.gguf"}), patch("os.path.exists", return_value=True):
             manager.start_worker(worker.worker_id, context, task, cap)
         assert context.status.value == "FAILED"
@@ -460,6 +475,7 @@ def test_worker_rejects_synthetic_local_success_without_provenance():
     selection = ExecutorSelection(ExecutorType.LOCAL_MODEL, "qwen", "1", "qwen3-8b", "1", "test", "v1", "low")
     cap = CapabilityDefinition("document.classify", "document.classify", "", "1", "low", True, False, "disabled", "read_only", [], 1, 1, True, ExecutorType.LOCAL_MODEL, None, True)
     worker = manager.create_worker(context, selection, task)
+    _admit_worker_for_internal_test(manager, context, task, cap, selection)
     class SyntheticSuccess:
         def __init__(self, **kwargs):
             pass

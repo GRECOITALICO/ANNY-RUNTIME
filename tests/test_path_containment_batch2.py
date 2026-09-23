@@ -34,6 +34,12 @@ class _Workspace:
         return 0
 
 
+def _executor():
+    # Test-only seam: these cases prove resource/path containment after an
+    # admitted execution; Batch 3 covers absent-admission denial.
+    return DeterministicExecutor(_Workspace(), admission_validator=lambda _task, _context: True)
+
+
 def _context(root, **extra):
     values = dict(
         execution_id="exec-a",
@@ -51,6 +57,8 @@ def _context(root, **extra):
         authorized_resource_id="workspace:exec-a",
         authorized_resource_project_id="project-a",
         authorized_resource_root=str(root),
+        admission_id="test-admission",
+        admission_state="AUTHORIZED",
     )
     values.update(extra)
     return TaskExecutionContext(**values)
@@ -142,7 +150,7 @@ def test_deterministic_executor_enforces_resource_identity_scope(tmp_path, task_
     root.mkdir()
     (root / "file").write_text("ok")
     context = _context(root, **context_extra)
-    DeterministicExecutor(_Workspace()).execute(_task("file", **task_extra), context)
+    _executor().execute(_task("file", **task_extra), context)
     assert context.status == ExecutionStatus.FAILED
     assert expected in context.error_message
 
@@ -152,7 +160,7 @@ def test_deterministic_executor_allows_only_authorized_ephemeral_resource(tmp_pa
     root.mkdir()
     (root / "file").write_text("ok")
     context = _context(root)
-    DeterministicExecutor(_Workspace()).execute(_task("file", resource_id="workspace:exec-a"), context)
+    _executor().execute(_task("file", resource_id="workspace:exec-a"), context)
     assert context.status == ExecutionStatus.SUCCEEDED
 
 
@@ -165,7 +173,7 @@ def test_deterministic_executor_allows_explicit_authorized_repository_resource(t
         authorized_resource_id="repository:project-a",
         resource_kind="AUTHORIZED_REPOSITORY_RESOURCE",
     )
-    DeterministicExecutor(_Workspace()).execute(
+    _executor().execute(
         _task("README.md", resource_id="repository:project-a"), context
     )
     assert context.status == ExecutionStatus.SUCCEEDED
@@ -180,11 +188,11 @@ def test_deterministic_executor_blocks_cross_project_symlink_and_missing_resourc
     (root / "project-b").symlink_to(project_b)
 
     linked = _context(root)
-    DeterministicExecutor(_Workspace()).execute(_task("project-b/secret"), linked)
+    _executor().execute(_task("project-b/secret"), linked)
     assert linked.status == ExecutionStatus.FAILED
     assert "SYMLINK_ESCAPE" in linked.error_message
 
     missing = _context(root, authorized_resource_root="")
-    DeterministicExecutor(_Workspace()).execute(_task("file"), missing)
+    _executor().execute(_task("file"), missing)
     assert missing.status == ExecutionStatus.FAILED
     assert "MISSING_RESOURCE" in missing.error_message

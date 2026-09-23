@@ -21,15 +21,94 @@ logger = logging.getLogger(__name__)
 
 
 class WorkerManager:
-    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None, telemetry_collector=None, frontier_executor=None, model_registry=None):
+    def __init__(self, workspace_manager, audit_manager=None, mcp_gateway=None, telemetry_collector=None, frontier_executor=None, model_registry=None, capability_registry=None):
         self.workspace_manager = workspace_manager
         self.audit_manager = audit_manager
         self.mcp_gateway = mcp_gateway
         self.telemetry_collector = telemetry_collector
         self.frontier_executor = frontier_executor
         self.model_registry = model_registry
+        self.capability_registry = capability_registry
         self.workers: Dict[str, WorkerDefinition] = {}
-        self.deterministic_executor = DeterministicExecutor(workspace_manager)
+        self._admissions: Dict[str, Dict[str, Any]] = {}
+        self.deterministic_executor = DeterministicExecutor(workspace_manager, self._is_admitted)
+
+    def _admit_execution(
+        self,
+        context: TaskExecutionContext,
+        task: Task,
+        capability: CapabilityDefinition,
+        selection: ExecutorSelection,
+    ) -> None:
+        """Record a private, binding-preserving admission from ExecutionManager.
+
+        This is deliberately not an authorization API.  It is an internal
+        handoff after the canonical CapabilityRegistry decision and executor
+        selection have already succeeded.
+        """
+        canonical = getattr(self.capability_registry, "get", lambda _id: None)(task.capability_id)
+        if canonical is None or canonical is not capability or not canonical.enabled:
+            raise ExecutorSecurityError("CANONICAL_CAPABILITY_ADMISSION_REQUIRED")
+        if capability.capability_id != context.capability_id:
+            raise ExecutorSecurityError("CAPABILITY_ADMISSION_BINDING_MISMATCH")
+        if selection.executor_type != capability.preferred_executor:
+            raise ExecutorSecurityError("EXECUTOR_ELIGIBILITY_MISMATCH")
+
+        admission_id = f"adm-{uuid.uuid4().hex}"
+        context.admission_id = admission_id
+        context.admission_state = "AUTHORIZED"
+        context.admitted_capability_id = capability.capability_id
+        context.admitted_executor_type = selection.executor_type.value
+        context.admitted_executor_id = selection.executor_id
+        self._admissions[context.execution_id] = {
+            "admission_id": admission_id,
+            "task_id": task.task_id,
+            "account_id": task.account_id,
+            "project_id": task.project_id,
+            "capability_id": capability.capability_id,
+            "executor_type": selection.executor_type.value,
+            "executor_id": selection.executor_id,
+            "deadline": task.deadline,
+        }
+
+    def _is_admitted(self, task: Task, context: TaskExecutionContext, worker: Optional[WorkerDefinition] = None) -> bool:
+        """Validate the private admission against all immutable task bindings."""
+        admission = self._admissions.get(context.execution_id)
+        if not admission or context.admission_state != "AUTHORIZED":
+            return False
+        if admission["admission_id"] != context.admission_id:
+            return False
+        if (
+            admission["task_id"] != task.task_id
+            or admission["account_id"] != task.account_id
+            or admission["project_id"] != task.project_id
+            or admission["capability_id"] != task.capability_id
+            or admission["deadline"] != task.deadline
+            or context.admitted_capability_id != task.capability_id
+        ):
+            return False
+        if worker is not None and (
+            admission["executor_type"] != worker.executor_type
+            or admission["executor_id"] != worker.executor_id
+            or context.admitted_executor_type != worker.executor_type
+            or context.admitted_executor_id != worker.executor_id
+        ):
+            return False
+        return True
+
+    def authorize_tool_request(self, request) -> tuple[bool, str]:
+        """Permit MCP invocation only for an admitted, currently running worker."""
+        worker = self.workers.get(request.worker_id)
+        if worker is None:
+            return False, "CANONICAL_WORKER_NOT_FOUND"
+        if worker.state != WorkerState.RUNNING:
+            return False, "CANONICAL_WORKER_NOT_RUNNING"
+        if worker.execution_id != request.execution_id or worker.capability_id != request.capability_id:
+            return False, "CANONICAL_WORKER_BINDING_MISMATCH"
+        admission = self._admissions.get(request.execution_id)
+        if not admission or admission["capability_id"] != request.capability_id:
+            return False, "CANONICAL_ADMISSION_REQUIRED"
+        return True, "AUTHORIZED"
 
     @staticmethod
     def _routing_class(executor_type: str) -> str:
@@ -185,6 +264,14 @@ class WorkerManager:
             raise ExecutorSecurityError("Worker scope binding mismatch")
         if worker.deadline != context.deadline or worker.deadline != task.deadline:
             raise ExecutorSecurityError("Worker deadline binding mismatch")
+        if not capability.enabled:
+            raise ExecutorSecurityError("Capability is disabled")
+        if capability.capability_id != task.capability_id:
+            raise ExecutorSecurityError("Worker capability definition mismatch")
+        if worker.executor_type != capability.preferred_executor.value:
+            raise ExecutorSecurityError("Worker executor eligibility mismatch")
+        if not self._is_admitted(task, context, worker):
+            raise ExecutorSecurityError("CANONICAL_ADMISSION_REQUIRED")
 
         worker.state = WorkerState.STARTING
         worker.started_at = datetime.now(timezone.utc)

@@ -6,6 +6,7 @@ from runtime.execution.models import WorkerState, Task, TaskExecutionContext, Ex
 from runtime.workspace.ephemeral import EphemeralWorkspaceManager
 from runtime.execution.manager import ExecutionManager
 from runtime.admin.routes import AdminRouter
+from runtime.execution.deterministic_executor import ExecutorSecurityError
 
 @pytest.fixture
 def exec_mgr(tmp_path):
@@ -145,19 +146,21 @@ def test_23_unsupported_executor_fails_closed(exec_mgr):
     class Sel:
         class TypeVal: value="UNSUPPORTED_EXECUTOR"
         executor_type=TypeVal(); executor_id="frontier"; model_id="mod"
-    class Cap: required_tools=[]; network_policy="disabled"
+    class Cap: required_tools=[]; network_policy="disabled"; enabled=True; capability_id="cap"; preferred_executor=Sel.executor_type
     deadline=datetime.now(timezone.utc)+timedelta(minutes=5)
     ctx=TaskExecutionContext(execution_id="ex-unsupported",task_id="t-u",account_id="a",project_id="p",capability_id="cap",workspace_path="",environment={},allowed_tools=[],deadline=deadline,resource_limits={},network_policy="disabled",write_policy="allow")
     task=Task("t-u","cap","a","p",{}, {},deadline,"","","me",datetime.now(timezone.utc))
-    worker=exec_mgr.worker_manager.create_worker(ctx,Sel(),task); exec_mgr.worker_manager.start_worker(worker.worker_id,ctx,task,Cap())
-    assert worker.state==WorkerState.FAILED and ctx.status==ExecutionStatus.FAILED and ctx.failure_reason.name=="UNSUPPORTED_EXECUTOR"
+    worker=exec_mgr.worker_manager.create_worker(ctx,Sel(),task)
+    with pytest.raises(ExecutorSecurityError, match="CANONICAL_ADMISSION_REQUIRED"):
+        exec_mgr.worker_manager.start_worker(worker.worker_id,ctx,task,Cap())
 def test_24_local_model_unavailable_fails_closed(exec_mgr,monkeypatch):
     monkeypatch.delenv("QWEN_MODEL_PATH",raising=False)
     class TypeVal: value="LOCAL_MODEL"
     class Sel: executor_type=TypeVal(); executor_id="local"; model_id="qwen"
-    class Cap: required_tools=[]; network_policy="disabled"
+    class Cap: required_tools=[]; network_policy="disabled"; enabled=True; capability_id="cap"; preferred_executor=TypeVal()
     deadline=datetime.now(timezone.utc)+timedelta(minutes=5)
     ctx=TaskExecutionContext(execution_id="ex-local",task_id="t-l",account_id="a",project_id="p",capability_id="cap",workspace_path="",environment={},allowed_tools=[],deadline=deadline,resource_limits={},network_policy="disabled",write_policy="allow")
     task=Task("t-l","cap","a","p",{}, {},deadline,"","","me",datetime.now(timezone.utc))
-    worker=exec_mgr.worker_manager.create_worker(ctx,Sel(),task); exec_mgr.worker_manager.start_worker(worker.worker_id,ctx,task,Cap())
-    assert worker.state==WorkerState.FAILED and ctx.status==ExecutionStatus.FAILED and ctx.failure_reason.name=="EXECUTION_ERROR" and ctx.error_message=="Local model unavailable"
+    worker=exec_mgr.worker_manager.create_worker(ctx,Sel(),task)
+    with pytest.raises(ExecutorSecurityError, match="CANONICAL_ADMISSION_REQUIRED"):
+        exec_mgr.worker_manager.start_worker(worker.worker_id,ctx,task,Cap())
