@@ -109,3 +109,64 @@ def test_deterministic_executor_rejects_cross_workspace_path(tmp_path):
     DeterministicExecutor(_Workspace()).execute(task, context)
     assert context.status.value == "FAILED"
     assert context.failure_reason.value == "AUTHORIZATION_DENIED"
+
+
+def test_local_model_invalid_result_cannot_be_promoted_to_success():
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    from runtime.execution.models import ModelResult
+    manager = WorkerManager(_Workspace())
+    deadline = datetime.now(timezone.utc) + timedelta(minutes=1)
+    task = Task("task", "document.classify", "account", "project", {}, {}, deadline, "keep", "required", "test", datetime.now(timezone.utc))
+    context = TaskExecutionContext("exec", "task", "account", "project", "document.classify", "/tmp", {}, [], deadline, {}, "disabled", "read_only")
+    selection = ExecutorSelection(
+        executor_type=ExecutorType.LOCAL_MODEL,
+        executor_id="qwen", executor_version="1", model_id="qwen3-8b", model_version="1",
+        reason="test", policy_version="v1", risk_class="low",
+    )
+    cap = CapabilityDefinition("document.classify", "document.classify", "", "1", "low", True, False, "disabled", "read_only", [], 1, 1, True, ExecutorType.LOCAL_MODEL, None, True)
+    worker = manager.create_worker(context, selection, task)
+    fake_result = SimpleNamespace(status="FAILED", result_data={"error": "invalid"}, evidence={"telemetry": {"result_hash": "deadbeef"}})
+    with patch.dict("os.environ", {"QWEN_MODEL_PATH": "/tmp/model.gguf"}), patch("os.path.exists", return_value=True), patch("runtime.execution.qwen_executor.QwenModelExecutor.execute", return_value=fake_result):
+        manager.start_worker(worker.worker_id, context, task, cap)
+    assert context.status.value == "FAILED"
+    assert worker.state.value == "FAILED"
+    assert "did not succeed" in context.error_message
+
+
+def test_legacy_execution_paths_are_quarantined():
+    from runtime.security.execution_context import ExecutionContext
+    from runtime.security.pipeline import AuthorizedExecutionPipeline, SecurityViolationError
+    from runtime.security.tool_registry import SecureToolRegistry
+    from runtime.execution.executor import ExecutionOrchestrator, ToolInvocation
+    now = datetime.now(timezone.utc)
+    ctx = ExecutionContext("tenant", "account", "project", "anny", "runtime", "session", "actor", "op", "exec", 1, now, now + timedelta(minutes=1), "workspace", {"x"})
+    with pytest.raises(SecurityViolationError, match="LEGACY_AUTH_PIPELINE_QUARANTINED"):
+        AuthorizedExecutionPipeline(None, None, SecureToolRegistry()).execute(ctx, "tool", {})
+    with pytest.raises(SecurityViolationError, match="LEGACY_TOOL_REGISTRY_QUARANTINED"):
+        SecureToolRegistry().execute(ctx, "tool", {})
+    orch = ExecutionOrchestrator(None, None, None, None, None, 1)
+    with pytest.raises(RuntimeError, match="LEGACY_EXECUTION_ORCHESTRATOR_QUARANTINED"):
+        orch.execute(ToolInvocation("tool", {}, "session", "actor", "tenant", "workspace"))
+
+
+def test_legacy_secret_broker_is_quarantined():
+    from runtime.secrets.broker import SecretBroker
+    class Backend:
+        def retrieve(self, reference):
+            return b"secret"
+        def store(self, reference, value):
+            return True
+        def exists(self, reference):
+            return True
+        def delete(self, reference):
+            return True
+    broker = SecretBroker(Backend())
+    with pytest.raises(PermissionError, match="LEGACY_SECRET_BROKER_QUARANTINED"):
+        broker.use("ref", "op", "actor", "tenant")
+    with pytest.raises(PermissionError, match="LEGACY_SECRET_BROKER_QUARANTINED"):
+        broker.store("ref", b"x")
+    with pytest.raises(PermissionError, match="LEGACY_SECRET_BROKER_QUARANTINED"):
+        broker.exists("ref")
+    with pytest.raises(PermissionError, match="LEGACY_SECRET_BROKER_QUARANTINED"):
+        broker.revoke("ref")
