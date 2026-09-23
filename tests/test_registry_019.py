@@ -113,11 +113,10 @@ def test_13_timeout(execution_manager):
     execution_manager.execute_sync(ctx.execution_id)
     assert ctx.status == ExecutionStatus.TIMED_OUT
 
-def test_14_output_limit(execution_manager, tmp_path):
-    safe_path = tmp_path / "harmless.txt"
-    safe_path.write_text("hello")
-    t = create_mock_task(path=str(safe_path))
+def test_14_output_limit(execution_manager):
+    t = create_mock_task()
     ctx = execution_manager.submit_task(t)
+    _bind_fixture(ctx, t)
     ctx.resource_limits["max_output_size"] = 1
     execution_manager.execute_sync(ctx.execution_id)
     assert ctx.status == ExecutionStatus.LIMIT_EXCEEDED
