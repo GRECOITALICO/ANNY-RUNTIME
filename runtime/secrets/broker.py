@@ -28,18 +28,17 @@ class SecretBroker:
         self.backend = backend
 
     def use(self, reference: str, operation_id: str, actor_id: str, tenant_id: str) -> Optional[SecretHandle]:
-        """Provides a one-time handle to a secret and logs access without leaking value."""
-        logger.info(f"Secret '{reference}' accessed by actor '{actor_id}' for operation '{operation_id}' (tenant '{tenant_id}')")
-        value = self.backend.retrieve(reference)
+        """Quarantined legacy entry point; use SecureBroker with ExecutionContext."""
+        raise PermissionError("LEGACY_SECRET_BROKER_QUARANTINED")
         if value is None:
             return None
         return SecretHandle(reference, value)
 
     def store(self, reference: str, value: bytes) -> bool:
-        return self.backend.store(reference, value)
+        raise PermissionError("LEGACY_SECRET_BROKER_QUARANTINED")
 
     def exists(self, reference: str) -> bool:
-        return self.backend.exists(reference)
+        raise PermissionError("LEGACY_SECRET_BROKER_QUARANTINED")
 
     def revoke(self, reference: str) -> bool:
-        return self.backend.delete(reference)
+        raise PermissionError("LEGACY_SECRET_BROKER_QUARANTINED")
