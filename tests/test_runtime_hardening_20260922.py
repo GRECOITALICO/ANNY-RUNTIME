@@ -129,7 +129,6 @@ def test_deterministic_executor_rejects_cross_workspace_path(tmp_path):
 def test_local_model_invalid_result_cannot_be_promoted_to_success():
     from types import SimpleNamespace
     from unittest.mock import patch
-    from runtime.execution.models import ModelResult
     manager = WorkerManager(_Workspace())
     deadline = datetime.now(timezone.utc) + timedelta(minutes=1)
     task = Task("task", "document.classify", "account", "project", {}, {}, deadline, "keep", "required", "test", datetime.now(timezone.utc))
