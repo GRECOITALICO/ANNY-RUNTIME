@@ -49,6 +49,17 @@ jobs:
           for x in suspicious: print(x)
           print(f"NOOP_COUNT={len(noops)}")
           print(f"SUSPICIOUS_COUNT={len(suspicious)}")
+          print("=== EVIDENCE BUILDER CALLSITES ===")
+          for root in roots:
+              for p in root.rglob("*.py"):
+                  t=p.read_text(encoding="utf-8", errors="replace")
+                  if "EvidenceBuilder(" in t:
+                      print(str(p))
+          print("=== BROWSER PATH REFERENCES ===")
+          p=pathlib.Path("runtime/browser/broker_server.py")
+          for i,l in enumerate(p.read_text(encoding="utf-8").splitlines(),1):
+              if "/home/anny" in l or "CHROME_BINARY" in l:
+                  print(f"{i}: {l}")
           # Fail only for confirmed production/runtime suspicious patterns;
           # test/manual validation references are reported, not blocked.
           prod_bad=[x for x in suspicious if x[0].startswith(("runtime/","cli/")) and x[2] not in ("gh auth token",)]
