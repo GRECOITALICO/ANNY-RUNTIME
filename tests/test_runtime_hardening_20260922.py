@@ -267,6 +267,32 @@ def test_runtime_server_links_canonical_execution_manager_to_engine():
     source = inspect.getsource(start_admin_server)
     assert "engine.execution_manager = execution_manager" in source
 
+def test_fabric_register_is_denied_when_canonical_capability_is_disabled(tmp_path):
+    from runtime.mcp import ToolRequest
+    from runtime.mcp.gateway import MCPGateway
+    from runtime.mcp.registry import ToolRegistry
+    from datetime import datetime, timezone, timedelta
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    gateway = MCPGateway(
+        tool_registry=ToolRegistry(),
+        capability_registry=__import__("runtime.execution.capability", fromlist=["CapabilityRegistry"]).CapabilityRegistry(),
+        workspace_path=str(workspace),
+    )
+    request = ToolRequest.create(
+        tool_id="fabric.register",
+        capability_id="fabric.register",
+        worker_id="worker",
+        execution_id="execution",
+        input_data={"resource_id": "x", "resource_type": "test"},
+        deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
+    )
+    result = gateway.invoke(request)
+    assert result.status.value == "DENIED"
+    assert "disabled" in result.error_message.lower()
+
+
 def test_fabric_register_is_disabled_by_default():
     from runtime.execution.capability import CapabilityRegistry
     cap = CapabilityRegistry().get("fabric.register")
