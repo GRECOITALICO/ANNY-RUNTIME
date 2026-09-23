@@ -325,9 +325,9 @@ def test_isolated_install_and_health(build_artifact, repo_root, tmp_path):
         status_data = json.loads(body)
         assert status_data.get("runtime_version") == "0.4.0", f"Version mismatch in status: {status_data}"
         # This isolated install intentionally has no GitHub/Fabric binding.
-        # The Runtime must therefore remain administratively available while
-        # fail-closing in ADMIN_MODE, rather than appearing RUNNING/ready.
-        assert status_data.get("runtime_state") == "ADMIN_MODE", f"Unexpected state in status: {status_data}"
+        # The status endpoint can observe startup before bootstrap completes;
+        # it must not report a ready/running state without those bindings.
+        assert status_data.get("runtime_state") in ("STARTING", "ADMIN_MODE"), f"Unexpected state in status: {status_data}"
         assert status_data.get("anny_ready") is False
         assert status_data.get("runtime_health") == "DEGRADED"
 
