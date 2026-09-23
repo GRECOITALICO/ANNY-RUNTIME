@@ -559,3 +559,35 @@ def test_local_release_sidecars_have_resolvable_source_identity_and_matching_pay
             cwd=root, capture_output=True, text=True,
         )
         assert verify.returncode == 0, verify.stdout + verify.stderr
+
+def test_control_center_renders_authoritative_conrrad_live_truth_matrix():
+    from runtime.admin.templates_cc import control_center_page
+
+    html = control_center_page("TEST_ONLY_CSRF")
+    assert "CONRRAD Mandatory Services" in html
+    assert "CONRRAD Mandatory Services — Live Truth" in html
+    assert 'id="conrrad-deps-tbody"' in html
+    assert "ONLINE_VERIFIED" in html
+    assert "CERTIFIED_BY_LIVE_EVIDENCE" in html
+    assert "ONLINE_UNVERIFIED" in html
+    assert "UNKNOWN" in html
+
+
+def test_control_center_status_api_exposes_strict_conrrad_gate():
+    from runtime.admin.routes import AdminRouter
+
+    class Engine:
+        state = type("State", (), {"name": "ADMIN_MODE"})()
+        config = type("Config", (), {})()
+        bootstrap_report = None
+
+    router = AdminRouter({"runtime_engine": Engine()})
+    router.handle_api_status(type("Parsed", (), {"query": ""})())
+    data = router.context["direct_json_response"]
+
+    assert data["conrrad_gate_status"] == "BLOCKED"
+    assert data["conrrad_required_service_count"] == 8
+    assert data["conrrad_observed_service_count"] == 8
+    assert data["conrrad_online_verified_count"] == 0
+    assert data["conrrad_trust_verified_count"] == 0
+    assert len(data["conrrad_dependencies"]) == 8
