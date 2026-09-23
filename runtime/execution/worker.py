@@ -182,6 +182,23 @@ class WorkerManager:
                     expected_sha256=artifact_sha256,
                 )
                 result = executor.execute(context_package)
+                if result.status != "SUCCEEDED":
+                    context.status = ExecutionStatus.FAILED
+                    context.failure_reason = FailureReason.EXECUTION_ERROR
+                    context.error_message = f"Local model execution did not succeed: {result.status}"
+                    context.result = result.result_data
+                    context.result_hash = result.evidence.get("telemetry", {}).get("result_hash")
+                    worker.state = WorkerState.FAILED
+                    worker.finished_at = datetime.now(timezone.utc)
+                    self._emit_telemetry(
+                        "execution.failed",
+                        worker,
+                        {
+                            "classification": "MODEL_EXECUTION_FAILED",
+                            "model_status": result.status,
+                        },
+                    )
+                    return
                 context.status = ExecutionStatus.SUCCEEDED
                 context.result = result.result_data
                 context.result_hash = result.evidence.get("telemetry", {}).get("result_hash")
