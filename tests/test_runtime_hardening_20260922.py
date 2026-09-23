@@ -244,3 +244,47 @@ def test_admin_controls_report_blocked_or_not_implemented():
     router = AdminRouter({})
     assert router.handle_admin_restart({}) == "/"
     assert router.handle_admin_diagnostics({}) == "/doctor"
+
+
+def test_runtime_server_links_canonical_execution_manager_to_engine():
+    import inspect
+    from runtime.admin.server import start_admin_server
+    source = inspect.getsource(start_admin_server)
+    assert "engine.execution_manager = execution_manager" in source
+
+def test_fabric_register_is_disabled_by_default():
+    from runtime.execution.capability import CapabilityRegistry
+    cap = CapabilityRegistry().get("fabric.register")
+    assert cap is not None
+    assert cap.enabled is False
+
+def test_worker_propagates_registry_model_digest_to_qwen_executor():
+    from unittest.mock import patch
+    from types import SimpleNamespace
+    manager = WorkerManager(
+        _Workspace(),
+        model_registry=SimpleNamespace(
+            get=lambda model_id: SimpleNamespace(
+                artifact_sha256="registry-sha256",
+            )
+        ),
+    )
+    deadline = datetime.now(timezone.utc) + timedelta(minutes=1)
+    task = Task("task", "document.classify", "account", "project", {}, {}, deadline, "keep", "required", "test", datetime.now(timezone.utc))
+    context = TaskExecutionContext("exec", "task", "account", "project", "document.classify", "/tmp", {}, [], deadline, {}, "disabled", "read_only")
+    selection = ExecutorSelection(
+        executor_type=ExecutorType.LOCAL_MODEL,
+        executor_id="qwen", executor_version="1", model_id="qwen3-8b", model_version="1",
+        reason="test", policy_version="v1", risk_class="low",
+    )
+    cap = CapabilityDefinition("document.classify", "document.classify", "", "1", "low", True, False, "disabled", "read_only", [], 1, 1, True, ExecutorType.LOCAL_MODEL, None, True)
+    worker = manager.create_worker(context, selection, task)
+    captured = {}
+    class FakeExecutor:
+        def __init__(self, artifact_path, expected_sha256):
+            captured["expected_sha256"] = expected_sha256
+        def execute(self, _ctx):
+            return SimpleNamespace(status="FAILED", result_data={}, evidence={"telemetry": {}})
+    with patch.dict("os.environ", {"QWEN_MODEL_PATH": "/tmp/model.gguf"}), patch("os.path.exists", return_value=True), patch("runtime.execution.qwen_executor.QwenModelExecutor", FakeExecutor):
+        manager.start_worker(worker.worker_id, context, task, cap)
+    assert captured["expected_sha256"] == "registry-sha256"
