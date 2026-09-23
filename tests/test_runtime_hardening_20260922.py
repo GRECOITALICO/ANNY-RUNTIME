@@ -9,6 +9,7 @@ from runtime.execution.models import Task, TaskExecutionContext
 from runtime.execution.qwen_executor import QwenModelExecutor
 from runtime.execution.selector import ExecutorSelection
 from runtime.execution.worker import WorkerManager
+from runtime.execution.deterministic_executor import DeterministicExecutor
 from runtime.mcp.tools import ToolImplementationError, filesystem_inspect
 from runtime.sync.models import SyncState
 from runtime.sync.service import SyncService
@@ -51,7 +52,8 @@ def test_qwen_requires_non_placeholder_digest(tmp_path):
 
 
 class _Workspace:
-    pass
+    def get_workspace_size(self, path):
+        return 0
 
 
 def test_remote_worker_fails_closed_without_injected_frontier_executor():
@@ -90,3 +92,20 @@ def test_verified_sync_never_claims_stage_or_rollback_without_receipt(tmp_path):
     assert service.status()["sync_state"] == SyncState.VERIFIED.value
     assert service.stage()["error"] == "STAGING_NOT_IMPLEMENTED"
     assert service.rollback()["error"] == "ROLLBACK_NOT_IMPLEMENTED"
+
+
+def test_deterministic_executor_rejects_cross_workspace_path(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    sibling = tmp_path / "workspace-other"
+    sibling.mkdir()
+    target = sibling / "outside.txt"
+    target.write_text("no")
+    context = TaskExecutionContext(
+        "exec", "task", "account", "project", "filesystem.inspect", str(workspace), {}, [],
+        datetime.now(timezone.utc) + timedelta(minutes=1), {}, "disabled", "read_only",
+    )
+    task = Task("task", "filesystem.inspect", "account", "project", {"path": str(target)}, {}, context.deadline, "keep", "required", "test", datetime.now(timezone.utc))
+    DeterministicExecutor(_Workspace()).execute(task, context)
+    assert context.status.value == "FAILED"
+    assert context.failure_reason.value == "AUTHORIZATION_DENIED"
