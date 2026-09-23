@@ -36,6 +36,7 @@ class ExecutionOrchestrator:
         self.generation = generation
 
     def execute(self, tool_invocation: ToolInvocation) -> ToolResult:
+        raise RuntimeError("LEGACY_EXECUTION_ORCHESTRATOR_QUARANTINED")
         start_time = time.time()
         
         # 1. Validate session
