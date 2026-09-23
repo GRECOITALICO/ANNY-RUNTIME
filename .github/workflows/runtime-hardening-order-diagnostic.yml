@@ -1,0 +1,54 @@
+name: runtime hardening order diagnostic
+
+on:
+  push:
+    branches:
+      - codex/anny-runtime-hardening-20260922-001
+  pull_request:
+    paths:
+      - "runtime/**"
+      - "tests/test_runtime_hardening_20260922.py"
+      - "tests/test_worker_020.py"
+      - "tests/test_workspace_execution_018.py"
+      - "tests/test_deterministic_local_execution.py"
+      - "tests/test_sync_service.py"
+      - "tests/test_registry_019.py"
+      - "tests/test_mcp_gateway_003.py"
+      - ".github/workflows/runtime-hardening-order-diagnostic.yml"
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest PyYAML cryptography psutil azure-identity httpx mcp websocket-client python-dateutil
+      - name: Compile
+        run: |
+          python -m py_compile runtime/execution/registry.py runtime/execution/worker.py runtime/execution/qwen_executor.py runtime/execution/deterministic_executor.py runtime/mcp/gateway.py runtime/mcp/tools.py runtime/api/bridge.py runtime/core/engine.py cli/main.py
+      - name: 1 hardening + worker
+        continue-on-error: true
+        run: pytest -q tests/test_runtime_hardening_20260922.py tests/test_worker_020.py
+      - name: 2 + workspace
+        continue-on-error: true
+        run: pytest -q tests/test_runtime_hardening_20260922.py tests/test_worker_020.py tests/test_workspace_execution_018.py
+      - name: 3 + deterministic
+        continue-on-error: true
+        run: pytest -q tests/test_runtime_hardening_20260922.py tests/test_worker_020.py tests/test_workspace_execution_018.py tests/test_deterministic_local_execution.py
+      - name: 4 + sync
+        continue-on-error: true
+        run: pytest -q tests/test_runtime_hardening_20260922.py tests/test_worker_020.py tests/test_workspace_execution_018.py tests/test_deterministic_local_execution.py tests/test_sync_service.py
+      - name: 5 + registry
+        continue-on-error: true
+        run: pytest -q tests/test_runtime_hardening_20260922.py tests/test_worker_020.py tests/test_workspace_execution_018.py tests/test_deterministic_local_execution.py tests/test_sync_service.py tests/test_registry_019.py
+      - name: 6 + mcp (full suite)
+        continue-on-error: true
+        run: pytest -q tests/test_runtime_hardening_20260922.py tests/test_worker_020.py tests/test_workspace_execution_018.py tests/test_deterministic_local_execution.py tests/test_sync_service.py tests/test_registry_019.py tests/test_mcp_gateway_003.py
