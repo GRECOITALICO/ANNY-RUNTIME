@@ -110,10 +110,17 @@ trap cleanup_on_fail EXIT
 
 # 0. Extract Version
 VERSION_PY="$(dirname "$0")/../runtime/core/version.py"
-if [ -f "$VERSION_PY" ]; then
-    RUNTIME_VERSION=$(grep '__version__' "$VERSION_PY" | cut -d'"' -f2 | cut -d"'" -f2)
-else
-    RUNTIME_VERSION="unknown"
+if [ ! -f "$VERSION_PY" ]; then
+    echo "Error: canonical Runtime version source is missing: $VERSION_PY"
+    exit 1
+fi
+RUNTIME_VERSION=$(python3 -I -c 'import runpy, sys; print(runpy.run_path(sys.argv[1])["__version__"])' "$VERSION_PY") || {
+    echo "Error: canonical Runtime version could not be loaded."
+    exit 1
+}
+if [ -z "$RUNTIME_VERSION" ]; then
+    echo "Error: canonical Runtime version is empty."
+    exit 1
 fi
 
 echo "Installing ANNY Runtime v$RUNTIME_VERSION..."
@@ -198,9 +205,9 @@ fi
 # 7.5. Dependency Preflight
 echo "Running dependency preflight check..."
 if [ "$EUID" -eq 0 ] && [ "$SERVICE_USER" != "root" ]; then
-    sudo -u "$SERVICE_USER" "$STAGING_DIR/venv/bin/python3" "$STAGING_DIR/scripts/preflight_check.py"
+    sudo -u "$SERVICE_USER" "$STAGING_DIR/venv/bin/python3" -I "$STAGING_DIR/scripts/preflight_check.py"
 else
-    "$STAGING_DIR/venv/bin/python3" "$STAGING_DIR/scripts/preflight_check.py"
+    "$STAGING_DIR/venv/bin/python3" -I "$STAGING_DIR/scripts/preflight_check.py"
 fi
 
 # 8. Activation (Swap staging with final)

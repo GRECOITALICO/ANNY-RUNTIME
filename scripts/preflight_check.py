@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-import os
-import sys
-import importlib
 import ast
-import json
+import importlib
+import importlib.metadata
+import os
+import re
+import sys
 
 # The project has one requirements source of truth.  Python import names that
 # differ from distribution names live here, beside the preflight validator,
 # instead of in a second mutable inventory file.
 CANONICAL_IMPORT_TO_PACKAGE = {
     "cryptography": "cryptography",
+    "azure": "azure-identity",
     "dateutil": "python-dateutil",
+    "httpx": "httpx",
     "llama_cpp": "llama-cpp-python",
     "mcp": "mcp",
     "psutil": "psutil",
@@ -31,37 +34,100 @@ def get_stdlib_module_names():
                 elif '.' not in f: names.add(f)
         return names
 
+def normalize_package_name(name):
+    """Normalize a distribution name using the packaging-name convention."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
 def parse_requirements(base_dir):
+    """Read the single canonical dependency declaration.
+
+    requirements.txt is deliberately the only dependency source.  Historical
+    inventories are evidence inputs, never policy inputs for installation or
+    preflight.
+    """
     req_file = os.path.join(base_dir, 'requirements.txt')
-    reqs = set()
+    reqs = {}
     if os.path.exists(req_file):
         with open(req_file, 'r') as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):
-                    import re
-                    match = re.match(r'^([a-zA-Z0-9_\-]+)(?:\[[a-zA-Z0-9_\-,]+\])?(?:[=><~]+.*)?$', line)
+                    match = re.match(
+                        r'^([a-zA-Z0-9_.\-]+)(?:\[[a-zA-Z0-9_\-,]+\])?'
+                        r'((?:[=><~!]=?[^,\s]+(?:,[=><~!]=?[^,\s]+)*)?)$',
+                        line,
+                    )
                     if not match:
                         print(f"REQUIREMENT_PARSE_UNKNOWN: {line}", file=sys.stderr)
                         sys.exit(1)
                     pkg = match.group(1).strip()
-                    reqs.add(pkg.lower())
+                    reqs[normalize_package_name(pkg)] = match.group(2) or ""
     return reqs
 
-def load_inventory(base_dir):
-    """Return canonical import mapping, with legacy fixture support only.
+def _version_tuple(value):
+    """Return a conservative comparable tuple for ordinary release versions."""
+    parts = []
+    for part in re.split(r"[.+-]", value):
+        match = re.match(r"(\d+)", part)
+        if not match:
+            break
+        parts.append(int(match.group(1)))
+    return tuple(parts)
 
-    A legacy DEPENDENCY-INVENTORY.json can supplement isolated historical test
-    fixtures, but production preflight never requires it and does not create it.
+
+def _satisfies_version(installed, specifiers):
+    """Evaluate the simple PEP 440 comparisons used by this requirements file.
+
+    Unsupported or malformed constraints fail closed instead of silently
+    declaring a clean preflight.
     """
-    inv_file = os.path.join(base_dir, 'DEPENDENCY-INVENTORY.json')
-    mapping = dict(CANONICAL_IMPORT_TO_PACKAGE)
-    if os.path.exists(inv_file):
-        with open(inv_file, 'r') as f:
-            data = json.load(f)
-            for item in data:
-                mapping[item['import']] = item['python_package']
-    return mapping
+    if not specifiers:
+        return True
+    installed_tuple = _version_tuple(installed)
+    if not installed_tuple:
+        return False
+    for specifier in specifiers.split(","):
+        match = re.fullmatch(r"(===|==|!=|>=|<=|>|<|~=)([^\s]+)", specifier)
+        if not match:
+            return False
+        operator, requested = match.groups()
+        requested_tuple = _version_tuple(requested)
+        if not requested_tuple:
+            return False
+        if operator in ("==", "==="):
+            ok = installed == requested
+        elif operator == "!=":
+            ok = installed != requested
+        elif operator == ">=":
+            ok = installed_tuple >= requested_tuple
+        elif operator == "<=":
+            ok = installed_tuple <= requested_tuple
+        elif operator == ">":
+            ok = installed_tuple > requested_tuple
+        elif operator == "<":
+            ok = installed_tuple < requested_tuple
+        else:  # ~=: compatible release, sufficient for the declared policy.
+            ok = installed_tuple >= requested_tuple and installed_tuple[:1] == requested_tuple[:1]
+        if not ok:
+            return False
+    return True
+
+
+def validate_installed_requirements(requirements):
+    """Return deterministic errors for absent or incompatible distributions."""
+    errors = []
+    for package, specifiers in requirements.items():
+        try:
+            installed = importlib.metadata.version(package)
+        except importlib.metadata.PackageNotFoundError:
+            errors.append(f"DEPENDENCY_NOT_INSTALLED: {package}")
+            continue
+        if not _satisfies_version(installed, specifiers):
+            errors.append(
+                f"DEPENDENCY_VERSION_INCOMPATIBLE: {package} installed={installed} required={specifiers}"
+            )
+    return errors
 
 def find_imports_in_file(filepath):
     imports = set()
@@ -88,7 +154,7 @@ def run_preflight(base_dir):
     stdlib = get_stdlib_module_names()
     
     requirements = parse_requirements(base_dir)
-    inventory = load_inventory(base_dir)
+    import_mapping = CANONICAL_IMPORT_TO_PACKAGE
     
     errors = []
     warnings = []
@@ -111,20 +177,26 @@ def run_preflight(base_dir):
         if imp in stdlib or imp in local_packages:
             continue
         # Map import name to package name explicitly
-        if imp not in inventory:
+        if imp not in import_mapping:
             errors.append(f"DEPENDENCY_MAPPING_MISSING: Import '{imp}' has no canonical package mapping")
             continue
-        pkg_name = inventory[imp]
-        used_requirements.add(pkg_name.lower())
-        if pkg_name.lower() not in requirements:
+        pkg_name = import_mapping[imp]
+        normalized_package = normalize_package_name(pkg_name)
+        used_requirements.add(normalized_package)
+        if normalized_package not in requirements:
             errors.append(f"DEPENDENCY_PREFLIGHT_FAILED: Import '{imp}' requires package '{pkg_name}' which is NOT in requirements.txt.")
             
     # Check for unused declared dependencies (warning only)
     for req in requirements:
         if req not in used_requirements:
             warnings.append(f"DEPENDENCY_UNUSED: Requirement '{req}' in requirements.txt is not explicitly imported.")
-            
-    # 2. Runtime Import Test
+
+    # 2. The declared distributions must be present and compatible in the
+    # current interpreter.  install.sh runs this under the fresh installer
+    # venv, so host-level packages cannot be treated as installation evidence.
+    errors.extend(validate_installed_requirements(requirements))
+
+    # 3. Runtime Import Test
     for d in target_dirs:
         dir_path = os.path.join(base_dir, d)
         if not os.path.exists(dir_path):

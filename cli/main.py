@@ -10,7 +10,13 @@ import socket
 import subprocess
 from pathlib import Path
 
-from runtime.core.config import get_install_mode, get_data_dir, get_admin_port, get_runtime_dir, RuntimeConfig
+from runtime.core.config import (
+    RuntimeConfig,
+    RuntimeConfigError,
+    get_data_dir,
+    get_install_mode,
+    get_runtime_dir,
+)
 
 from runtime.core.version import __version__ as VERSION
 
@@ -30,7 +36,11 @@ def cmd_status(args):
     print(f"Install Mode:    {install_mode}")
     print(f"Data Directory:  {DATA_DIR}")
     print(f"Runtime Dir:     {get_runtime_dir()}")
-    print(f"Admin Port:      {get_admin_port()}")
+    try:
+        config = RuntimeConfig.load()
+        print(f"Admin Port:      {config.admin_port}")
+    except RuntimeConfigError as exc:
+        print(f"Admin Port:      UNVERIFIED ({exc})")
     print()
     
     # Identity
@@ -80,8 +90,16 @@ def cmd_doctor(args):
     py_ok = sys.version_info >= (3, 11)
     check("Python >= 3.11", py_ok, f"{sys.version.split()[0]}")
     
+    try:
+        config = RuntimeConfig.load()
+    except RuntimeConfigError as exc:
+        check("Runtime configuration", False, str(exc))
+        print()
+        print("  Diagnostics blocked: RUNTIME_HEALTH=UNVERIFIED")
+        return 1
+
     # Data directory
-    DATA_DIR = get_data_dir()
+    DATA_DIR = Path(config.data_dir)
     check("Data directory exists", DATA_DIR.exists(), str(DATA_DIR))
     
     # Identity
@@ -97,7 +115,7 @@ def cmd_doctor(args):
         check("Private key exists", False)
     
     # Port
-    port = get_admin_port()
+    port = config.admin_port
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -105,7 +123,7 @@ def cmd_doctor(args):
             port_ok = True
     except OSError:
         port_ok = False
-    check("Admin port available", port_ok, f"port={port}")
+    check("Admin port bindable (not runtime health)", port_ok, f"port={port}")
     
     # Forbidden port
     check("Port 3434 not used", port != 3434, "Reserved by CONRRAD")
@@ -134,7 +152,7 @@ def cmd_doctor(args):
     print()
     fails = sum(1 for _, s, _ in results if s == "FAIL")
     if fails == 0:
-        print("  All checks passed.")
+        print("  Local prerequisites passed; RUNTIME_HEALTH=UNVERIFIED.")
     else:
         print(f"  {fails} check(s) failed.")
     return 0 if fails == 0 else 1
@@ -174,9 +192,10 @@ def cmd_server(args):
     
     try:
         from runtime.admin.server import start_admin_server
-        port = getattr(args, 'port', get_admin_port())
-        start_admin_server(host='localhost', port=port)
-    except ImportError as e:
+        config = RuntimeConfig.load()
+        port = args.port if getattr(args, 'port', None) is not None else config.admin_port
+        start_admin_server(host=config.admin_host, port=port)
+    except (ImportError, RuntimeConfigError) as e:
         logger.error(f"Cannot start server: {e}")
         sys.exit(1)
 
@@ -216,11 +235,27 @@ def cmd_uninstall(args):
             return
     
     install_mode = get_install_mode()
+    expected_runtime_dir = (
+        Path("/opt/anny-runtime")
+        if install_mode == "system"
+        else Path.home() / ".local" / "share" / "anny-runtime"
+    )
+    expected_data_dir = (
+        Path("/var/lib/anny-runtime")
+        if install_mode == "system"
+        else Path.home() / ".anny-runtime"
+    )
 
-    def remove_path(path: Path, recursive: bool = False) -> None:
+    def remove_path(path: Path, expected: Path, recursive: bool = False) -> None:
         if not path.exists() and not path.is_symlink():
             return
-        if path in (Path("/"), Path.home()) or str(path) in ("", "."):
+        candidate = path.expanduser().absolute()
+        managed_target = expected.expanduser().absolute()
+        if candidate != managed_target:
+            raise RuntimeError(
+                f"Refusing uninstall target outside the managed Runtime scope: {path}"
+            )
+        if candidate in (Path("/"), Path.home()) or str(candidate) in ("", "."):
             raise RuntimeError(f"Refusing unsafe uninstall target: {path}")
         if install_mode == "system":
             args = ["sudo", "rm", "-rf" if recursive else "-f", str(path)]
@@ -242,7 +277,7 @@ def cmd_uninstall(args):
         result = subprocess.run(disable_cmd, check=False)
         if result.returncode not in (0, 1):
             raise RuntimeError("Failed to disable the Runtime systemd unit")
-        remove_path(unit)
+        remove_path(unit, unit)
         if install_mode == "system":
             subprocess.run(["sudo", "systemctl", "daemon-reload"], check=True)
         print("  Removed systemd unit.")
@@ -254,20 +289,20 @@ def cmd_uninstall(args):
         else Path.home() / ".local" / "bin" / "anny-runtime"
     )
     if cli_link.exists() or cli_link.is_symlink():
-        remove_path(cli_link)
+        remove_path(cli_link, cli_link)
         print("  Removed CLI.")
 
     # Remove software
     install_dir = get_runtime_dir()
     if install_dir.exists():
-        remove_path(install_dir, recursive=True)
+        remove_path(install_dir, expected_runtime_dir, recursive=True)
         print("  Removed software.")
     
     if getattr(args, 'purge', False):
         print()
         print("  WARNING: Purging all state (identity, journal, secrets)...")
         if DATA_DIR.exists():
-            shutil.rmtree(DATA_DIR)
+            remove_path(DATA_DIR, expected_data_dir, recursive=True)
             print("  State purged.")
     
     print()
@@ -289,7 +324,7 @@ def main():
     p_uninstall.set_defaults(func=cmd_uninstall)
     
     p_server = subparsers.add_parser("server", help="Start admin web server")
-    p_server.add_argument("--port", type=int, default=get_admin_port())
+    p_server.add_argument("--port", type=int, default=None)
     p_server.set_defaults(func=cmd_server)
     
     p_id = subparsers.add_parser("identity-bootstrap", help="Create initial identity")

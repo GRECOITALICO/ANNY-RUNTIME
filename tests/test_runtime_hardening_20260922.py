@@ -301,6 +301,8 @@ def test_release_identity_uses_canonical_runtime_version():
     helper_text = open("scripts/physical-cert-helper.sh", encoding="utf-8").read()
     assert "v0.2.0-CANDIDATE" not in helper_text
     assert "RUNTIME_VERSION" in helper_text
+    assert "grep '__version__'" not in open("scripts/build_release.sh", encoding="utf-8").read()
+    assert "grep '__version__'" not in open("scripts/install.sh", encoding="utf-8").read()
 
 
 def test_bridge_requires_real_execution_context():
@@ -348,10 +350,16 @@ def test_cli_has_no_identity_fallback_and_no_shell_string_uninstall():
     uninstall_source = inspect.getsource(cli_main.cmd_uninstall)
     assert "Ed25519PrivateKey.generate" not in source
     assert "os.system" not in uninstall_source
+    assert "remove_path(DATA_DIR, expected_data_dir, recursive=True)" in uninstall_source
+    assert "outside the managed Runtime scope" in uninstall_source
 
 def test_cli_server_default_uses_canonical_port():
     import cli.main as cli_main
-    assert "default=get_admin_port()" in open("cli/main.py", encoding="utf-8").read()
+    source = open("cli/main.py", encoding="utf-8").read()
+    assert "RuntimeConfig.load()" in source
+    assert "config.admin_port" in source
+    assert "default=None" in source
+    assert "RUNTIME_HEALTH=UNVERIFIED" in source
 
 def test_engine_health_is_not_unconditionally_green():
     from runtime.core.config import RuntimeConfig
@@ -531,14 +539,14 @@ def test_evidence_builder_default_is_not_host_specific():
             os.environ["ANNY_EVIDENCE_DIR"] = old
 
 
-def test_active_release_checksums_resolve_to_real_commits():
+def test_local_release_sidecars_have_resolvable_source_identity_and_matching_payload():
     from pathlib import Path
     import re
     import subprocess
     from runtime.core.version import __version__
     root = Path(__file__).resolve().parents[1]
     for checksum in root.glob("ANNY-RUNTIME-*.tar.gz.sha256"):
-        match = re.fullmatch(r"ANNY-RUNTIME-v([0-9]+(?:\\.[0-9]+)*)-([0-9a-f]{7,40})\\.tar\\.gz\\.sha256", checksum.name)
+        match = re.fullmatch(r"ANNY-RUNTIME-v([0-9]+(?:\.[0-9]+)*)-([0-9a-f]{7,40})\.tar\.gz\.sha256", checksum.name)
         assert match, f"Invalid active release checksum name: {checksum.name}"
         assert match.group(1) == __version__, f"Checksum version drift: {checksum.name} != v{__version__}"
         sha = subprocess.run(
@@ -546,3 +554,8 @@ def test_active_release_checksums_resolve_to_real_commits():
             cwd=root, capture_output=True, text=True,
         )
         assert sha.returncode == 0, f"Unresolvable release source identity: {match.group(2)}"
+        verify = subprocess.run(
+            ["sha256sum", "--check", checksum.name],
+            cwd=root, capture_output=True, text=True,
+        )
+        assert verify.returncode == 0, verify.stdout + verify.stderr

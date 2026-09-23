@@ -235,7 +235,7 @@ if [ "$EXPORT_MODE" -eq 1 ]; then
         echo "No evidence to export."
         exit 1
     fi
-    ARCHIVE_NAME="ANNY-RUNTIME-v0.2-${MACHINE_ID}-EVIDENCE.tar.gz"
+    ARCHIVE_NAME="ANNY-RUNTIME-v${RUNTIME_VERSION}-${MACHINE_ID}-EVIDENCE.tar.gz"
     tar -czf "$ARCHIVE_NAME" -C "$(dirname "$EVIDENCE_DIR")" "$(basename "$EVIDENCE_DIR")"
     echo "Exported to $ARCHIVE_NAME"
     exit 0

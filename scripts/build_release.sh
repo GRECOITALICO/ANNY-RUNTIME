@@ -28,7 +28,14 @@ if [ ! -f "$VERSION_FILE" ]; then
     exit 1
 fi
 
-VERSION=$(grep '__version__' "$VERSION_FILE" | cut -d'"' -f2 | cut -d"'" -f2)
+VERSION=$(python3 -I -c 'import runpy, sys; print(runpy.run_path(sys.argv[1])["__version__"])' "$VERSION_FILE") || {
+    echo "Error: canonical Runtime version could not be loaded."
+    exit 1
+}
+if [ -z "$VERSION" ]; then
+    echo "Error: canonical Runtime version is empty."
+    exit 1
+fi
 
 RELEASE_NAME="ANNY-RUNTIME-v${VERSION}-${SHORT_SHA}"
 BUILD_DIR="/tmp/${RELEASE_NAME}_build"

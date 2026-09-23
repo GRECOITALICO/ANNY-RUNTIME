@@ -8,6 +8,9 @@ A "Release Identity" is the unequivocal mapping between a semantic version, a sp
 
 ### VERSION
 The single source of truth for the ANNY Runtime version is `runtime/core/version.py`. This file must be updated before cutting a release.
+The CLI, installer, release builder, and physical-evidence helper load this
+value from that Python module; none may derive a second version with text
+parsing or a hard-coded literal.
 
 ### SOURCE COMMIT
 Every release must map to exactly one 40-character Git commit SHA. The repository working tree must be clean (no uncommitted changes). We never use a short SHA as the canonical source identity, though it may be used in artifact names for brevity.
@@ -26,6 +29,28 @@ The UTC time the artifact was produced.
 
 ### PROVENANCE
 The verifiable chain linking the `ARTIFACT` back to its `SOURCE COMMIT` through the `EMBEDDED IDENTITY` and `HASH`.
+
+### DEPENDENCY PREFLIGHT
+`requirements.txt` is the canonical dependency declaration. The explicit
+import-to-distribution mapping in `scripts/preflight_check.py` is an
+implementation detail used to check it; `DEPENDENCY-INVENTORY.json` is
+historical/derived evidence only and cannot affect installer admission.
+The installer runs the preflight through its newly created virtual environment
+in isolated Python mode. A clean preflight proves only that this environment's
+declared dependencies are installed and compatible; it does not certify a
+release or a running service.
+
+## Artifact Scope and Historical Metadata
+
+Only a release artifact accompanied by its actual checksum payload can advance
+to **IDENTIFIED**. A checksum sidecar without the matching archive is retained
+as historical metadata and is `UNVERIFIED` for byte-level integrity. Local
+ignored build outputs are likewise `LOCAL_UNPUBLISHED` until a durable release
+record and publication process exist. Neither category is an active release.
+
+`scripts/physical-cert-helper.sh` may export operator evidence. Its archive is
+an evidence bundle, not an ANNY Runtime release artifact and must not be used
+as release provenance.
 
 ## Lifecycle States
 
