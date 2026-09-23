@@ -127,11 +127,12 @@ def test_11_result_hash(execution_manager, tmp_path):
     assert os.path.exists(rep_file)
 
 def test_12_cleanup_after_success(execution_manager, tmp_path):
-    safe_path = tmp_path / "harmless.txt"
-    safe_path.write_text("hello")
-    t = create_mock_task(path=str(safe_path))
+    t = create_mock_task()
     t.workspace_policy = "destroy_on_complete"
     ctx = execution_manager.submit_task(t)
+    safe_path = os.path.join(ctx.workspace_path, "harmless.txt")
+    open(safe_path, "w", encoding="utf-8").write("hello")
+    t.input["path"] = safe_path
     ws_path = ctx.workspace_path
     execution_manager.execute_sync(ctx.execution_id)
     assert ctx.status == ExecutionStatus.SUCCEEDED
@@ -159,9 +160,6 @@ def test_15_cannot_modify_deadline(execution_manager, tmp_path):
     safe_path = os.path.join(ctx.workspace_path, "harmless.txt")
     open(safe_path, "w", encoding="utf-8").write("hello")
     t.input["path"] = safe_path
-    safe_path = os.path.join(ctx.workspace_path, "harmless.txt")
-    open(safe_path, "w", encoding="utf-8").write("hello")
-    t.input["path"] = safe_path
     original_deadline = ctx.deadline
     execution_manager.execute_sync(ctx.execution_id)
     assert ctx.deadline == original_deadline
@@ -175,14 +173,18 @@ def test_16_cannot_escalate_capability(execution_manager, tmp_path):
         execution_manager.submit_task(t)
 
 def test_17_reproducible_execution(execution_manager, tmp_path):
-    safe_path = tmp_path / "harmless.txt"
-    safe_path.write_text("hello")
-    t1 = create_mock_task(path=str(safe_path))
+    t1 = create_mock_task()
     ctx1 = execution_manager.submit_task(t1)
+    safe_path1 = os.path.join(ctx1.workspace_path, "harmless.txt")
+    open(safe_path1, "w", encoding="utf-8").write("hello")
+    t1.input["path"] = safe_path1
     execution_manager.execute_sync(ctx1.execution_id)
     
-    t2 = create_mock_task(path=str(safe_path))
+    t2 = create_mock_task()
     ctx2 = execution_manager.submit_task(t2)
+    safe_path2 = os.path.join(ctx2.workspace_path, "harmless.txt")
+    open(safe_path2, "w", encoding="utf-8").write("hello")
+    t2.input["path"] = safe_path2
     execution_manager.execute_sync(ctx2.execution_id)
     
     assert ctx1.result == ctx2.result
