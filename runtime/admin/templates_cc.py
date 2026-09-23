@@ -124,6 +124,7 @@ def control_center_page(csrf_token: str) -> str:
         <div class="kv"><span class="lbl">RUNTIME HEALTH</span><span class="val" id="st-health">--</span></div>
         <div class="kv"><span class="lbl">GITHUB STATUS</span><span class="val" id="st-github">--</span></div>
         <div class="kv"><span class="lbl">CONRRAD GATE</span><span class="val" id="st-conrrad-gate">--</span></div>
+        <div class="kv"><span class="lbl">CONRRAD COVERAGE</span><span class="val mono" id="st-conrrad-count">--</span></div>
         <div class="kv"><span class="lbl">FABRIC STATUS</span><span class="val" id="st-fabric">--</span></div>
         <div class="kv"><span class="lbl">ADMISSION STATUS</span><span class="val" id="st-admission">--</span></div>
         <div class="kv"><span class="lbl">RECONCILIATION</span><span class="val" id="st-recon">--</span></div>
@@ -340,10 +341,19 @@ function updateUI(d) {
     setInner('st-github', badge(d.github_status));
 
     var deps = Array.isArray(d.conrrad_dependencies) ? d.conrrad_dependencies : [];
-    var conrradAllVerified = deps.length === 8 && deps.every(function(dep) {
-        return dep && dep.online_status === 'ONLINE_VERIFIED' && dep.trust_status === 'VERIFIED';
-    });
-    setInner('st-conrrad-gate', badge(conrradAllVerified ? 'ONLINE_VERIFIED' : 'BLOCKED'));
+    setInner('st-conrrad-gate', badge(d.conrrad_gate_status || 'UNKNOWN'));
+    var requiredCount = Number.isFinite(Number(d.conrrad_required_service_count))
+        ? Number(d.conrrad_required_service_count) : 8;
+    var observedCount = Number.isFinite(Number(d.conrrad_observed_service_count))
+        ? Number(d.conrrad_observed_service_count) : 0;
+    var onlineVerifiedCount = Number.isFinite(Number(d.conrrad_online_verified_count))
+        ? Number(d.conrrad_online_verified_count) : 0;
+    var trustVerifiedCount = Number.isFinite(Number(d.conrrad_trust_verified_count))
+        ? Number(d.conrrad_trust_verified_count) : 0;
+    setText('st-conrrad-count',
+        onlineVerifiedCount + '/' + requiredCount + ' ONLINE • ' +
+        trustVerifiedCount + '/' + requiredCount + ' TRUST • ' +
+        observedCount + ' SEEN');
 
     setInner('st-fabric', badge(d.fabric_status));
     setInner('st-admission', badge(d.admission_status));
