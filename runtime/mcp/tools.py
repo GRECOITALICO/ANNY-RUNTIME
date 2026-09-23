@@ -7,9 +7,10 @@ These are the actual implementations backing the ToolDefinitions in the registry
 import os
 import json
 import logging
-from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
+
+from runtime.security.path_containment import ContainmentError, require_contained_path
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +28,12 @@ def _require_workspace_path(path: str, workspace: str) -> str:
     symlinks.  Both paths are resolved before using ``relative_to`` so this
     single boundary also rejects symlink escapes.
     """
-    if not workspace:
-        raise ToolImplementationError("Workspace boundary is required")
     try:
-        workspace_path = Path(workspace).resolve(strict=True)
-        resolved_path = Path(path).resolve(strict=False)
-        resolved_path.relative_to(workspace_path)
-    except (OSError, RuntimeError, ValueError) as exc:
-        raise ToolImplementationError(f"Path {path} is outside workspace boundary") from exc
-    return str(resolved_path)
+        return require_contained_path(workspace, path).resolved_path
+    except ContainmentError as exc:
+        if not workspace:
+            raise ToolImplementationError("Workspace boundary is required") from exc
+        raise ToolImplementationError(f"{exc.result.value}: Path {path} is outside workspace boundary") from exc
 
 
 def filesystem_inspect(input_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:

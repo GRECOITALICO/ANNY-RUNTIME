@@ -108,6 +108,13 @@ class TaskExecutionContext:
     capability_family: Optional[str] = None
     department_id: Optional[str] = None
     generation: Optional[int] = None
+    tenant_id: Optional[str] = None
+    authorized_resource_id: Optional[str] = None
+    authorized_resource_project_id: Optional[str] = None
+    authorized_resource_tenant_id: Optional[str] = None
+    authorized_resource_root: Optional[str] = None
+    resource_access_mode: str = "READ_ONLY"
+    resource_kind: str = "EPHEMERAL_WORKSPACE"
 
 @dataclass
 class ExecutionResult:

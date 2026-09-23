@@ -97,6 +97,15 @@ class ExecutionManager:
             department_id=task.department_id,
             capability_family=cap.family,
             routing_class=routing_class,
+            # An execution workspace is an explicit ephemeral resource.  It is
+            # not an implicit authorization for a repository or any other
+            # path.  Repository resources must be supplied by a later,
+            # authoritative resource-binding boundary.
+            authorized_resource_id=f"workspace:{execution_id}",
+            authorized_resource_project_id=task.project_id,
+            authorized_resource_root=workspace_path,
+            resource_access_mode="READ_ONLY",
+            resource_kind="EPHEMERAL_WORKSPACE",
         )
         context.executor_type = selection.executor_type.value
         context.executor_id = selection.executor_id
