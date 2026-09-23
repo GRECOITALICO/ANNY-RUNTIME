@@ -82,13 +82,50 @@ class FabricProject:
 
 @dataclass
 class FabricTrustToken:
-    """A verified trust relationship between runtime and Fabric."""
+    """Locally issued trust material; issuance is never external verification."""
     runtime_id: str
     node_id: str
     issued_at: str
     expires_at: str
     signature: str    # HMAC-SHA256 of runtime_id+node_id+issued_at
     verified: bool = False
+    verification_state: str = "UNVERIFIED"
+
+
+class GovernedWriteState(str, Enum):
+    NOT_EXECUTED = "NOT_EXECUTED"
+    BLOCKED = "BLOCKED"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+
+
+@dataclass(frozen=True)
+class GovernedWriteRequest:
+    """A request for an authoritative Fabric write, not a GitHub write command."""
+    request_id: str
+    runtime_id: str
+    tenant_id: str
+    account_id: str
+    project_id: str
+    repository_scope: str
+    generation: int
+    authorization_ref: str
+    policy_ref: str
+    evidence_ref: str
+    operation: str
+    payload_digest: str
+
+
+@dataclass(frozen=True)
+class GovernedWriteReceipt:
+    """Authoritative outcome correlated to exactly one governed request."""
+    receipt_id: str
+    request_id: str
+    state: GovernedWriteState
+    authoritative_operation_id: Optional[str] = None
+    evidence_ref: Optional[str] = None
+    reason: Optional[str] = None
 
 
 @dataclass

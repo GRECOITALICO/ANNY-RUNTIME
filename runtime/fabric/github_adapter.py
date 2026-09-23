@@ -285,7 +285,7 @@ class GitHubFabricAdapter:
 
 
     def issue_trust_token(self, runtime_id: str, private_key: bytes) -> FabricTrustToken:
-        """Issues an offline trust token using HMAC over GitHub token + Private Key."""
+        """Issue local trust material. It is always UNVERIFIED at issuance."""
         try:
             gh_token = self.gh._get_token()
         except Exception:
@@ -313,7 +313,8 @@ class GitHubFabricAdapter:
             issued_at=issued_at_str,
             expires_at=expires_at_str,
             signature=signature,
-            verified=True
+            verified=False,
+            verification_state="UNVERIFIED",
         )
 
     def read_policy(self) -> Dict[str, Any]:

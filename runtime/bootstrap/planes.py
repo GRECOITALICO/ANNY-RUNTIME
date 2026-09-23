@@ -325,10 +325,11 @@ class ThreePlaneBootstrap:
         try:
             token = self.fabric.issue_trust_token(ident.runtime_id, ident._private_key)
             report.add_result(GateResult(
-                ReadinessGate.FABRIC_TRUST_VERIFIED, True,
-                "Trust token issued", token.signature[:8] + "..."
+                ReadinessGate.FABRIC_TRUST_VERIFIED, False,
+                "Trust material issued but external verification is unavailable",
+                token.verification_state,
             ))
-            return True
+            return False
         except Exception as e:
             report.add_result(GateResult(ReadinessGate.FABRIC_TRUST_VERIFIED, False, str(e)))
             return False

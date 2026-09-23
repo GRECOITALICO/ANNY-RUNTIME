@@ -356,12 +356,18 @@ def test_browser_binary_resolution_is_environment_portable(monkeypatch):
 
 def test_evidence_builder_default_is_not_host_specific():
     import os
+    import inspect
     from runtime.intelligence.evidence_builder import EvidenceBuilder
 
     old = os.environ.pop("ANNY_EVIDENCE_DIR", None)
     try:
         builder = EvidenceBuilder()
-        assert "/home/anny" not in builder.output_dir
+        # The checkout itself may live below a user's home directory.  Assert
+        # portability of the implementation, not the incidental cwd.
+        source = inspect.getsource(EvidenceBuilder.__init__)
+        assert '"/home/anny' not in source
+        assert "ANNY_EVIDENCE_DIR" in source
+        assert builder.output_dir
     finally:
         if old is not None:
             os.environ["ANNY_EVIDENCE_DIR"] = old
