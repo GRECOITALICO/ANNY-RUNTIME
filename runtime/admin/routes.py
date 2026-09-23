@@ -666,7 +666,7 @@ class AdminRouter:
         return policies_page(policy, self._get_csrf())
 
     def handle_doctor(self, parsed) -> str:
-        diagnostics = {'checks': [{'name': 'Core', 'status': 'OK'}]}
+        diagnostics = {'checks': [{'name': 'Core', 'status': 'NOT_IMPLEMENTED'}]}
         return doctor_page(diagnostics, self._get_csrf())
 
     # --- POST Handlers (Action) ---
@@ -830,15 +830,15 @@ class AdminRouter:
 
 
     def handle_admin_restart(self, form_data) -> str:
-        self._audit("RUNTIME_RESTART", "SUCCESS")
+        self._audit("RUNTIME_RESTART", "BLOCKED")
         return '/'
 
     def handle_admin_diagnostics(self, form_data) -> str:
-        self._audit("DIAGNOSTICS_RUN", "SUCCESS")
+        self._audit("DIAGNOSTICS_RUN", "NOT_IMPLEMENTED")
         return '/doctor'
 
     def handle_admin_update_check(self, form_data) -> str:
-        self._audit("UPDATE_CHECK", "SUCCESS")
+        self._audit("UPDATE_CHECK", "NOT_IMPLEMENTED")
         return '/'
 
     def handle_fabric_setup(self, form_data) -> str:
@@ -1083,5 +1083,4 @@ class AdminRouter:
         from runtime.admin.templates import browser_session_page
         html = browser_session_page(session_data[0], self._get_csrf())
         self._send_html(handler, html)
-
 

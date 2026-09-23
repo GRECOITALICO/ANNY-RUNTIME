@@ -300,27 +300,19 @@ def test_sync_stage_activate_rollback(tmp_path: Path):
     status = service.status()
     assert status["sync_state"] == SyncState.VERIFIED.value
 
-    # 2. Stage
+    # 2. Stage cannot claim a physical state transition without an implementation.
     res = service.stage()
-    assert res["status"] == "staging"
-    service.wait()
-    status = service.status()
-    assert status["sync_state"] == SyncState.STAGED.value
-    assert status["stage"] == "STAGE"
-
-    # 3. Activate (now fails closed to BLOCKED because not implemented physically)
-    res = service.activate()
-    assert res["status"] == "activating"
-    service.wait()
+    assert res["status"] == "blocked"
+    assert res["error"] == "STAGING_NOT_IMPLEMENTED"
     status = service.status()
     assert status["sync_state"] == SyncState.BLOCKED.value
-    assert status["error_classification"] == "ACTIVATION_NOT_IMPLEMENTED"
+    assert status["error_classification"] == "STAGING_NOT_IMPLEMENTED"
     assert status["activation_performed"] is False
     assert service.local_version == "v0.4.0"
-    # 4. Rollback (blocked because activation failed)
+    # 3. Rollback does not fabricate a transition either.
     res = service.rollback()
     assert res["status"] == "blocked"
-    assert res["error"] == "Cannot rollback when not activated"
+    assert res["error"] == "ROLLBACK_NOT_IMPLEMENTED"
 def test_stage_blocked_if_not_verified(tmp_path: Path):
     service = SyncService(tmp_path)
     res = service.stage()

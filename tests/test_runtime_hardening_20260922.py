@@ -10,6 +10,9 @@ from runtime.execution.qwen_executor import QwenModelExecutor
 from runtime.execution.selector import ExecutorSelection
 from runtime.execution.worker import WorkerManager
 from runtime.mcp.tools import ToolImplementationError, filesystem_inspect
+from runtime.sync.models import SyncState
+from runtime.sync.service import SyncService
+from runtime.updater.manager import UpdateManager, UpdateNotImplementedError, UpdateState
 
 
 def test_filesystem_boundary_rejects_sibling_prefix_and_missing_workspace(tmp_path):
@@ -67,3 +70,23 @@ def test_remote_worker_fails_closed_without_injected_frontier_executor():
     assert context.status.value == "FAILED"
     assert context.failure_reason.value == "AUTHORIZATION_DENIED"
     assert "Authorized FrontierExecutor" in context.error_message
+
+
+def test_update_manager_is_explicitly_quarantined():
+    manager = UpdateManager({}, "v0.4.0")
+    with pytest.raises(UpdateNotImplementedError, match="UPDATE_CHECK_NOT_IMPLEMENTED"):
+        manager.check()
+    assert manager.state is UpdateState.FAILED
+
+
+def test_verified_sync_never_claims_stage_or_rollback_without_receipt(tmp_path):
+    service = SyncService(
+        tmp_path,
+        local_version="v0.4.0",
+        discover=lambda: {"source": "test", "candidate_version": "v0.4.0", "authorized": True},
+    )
+    service.start()
+    service.wait()
+    assert service.status()["sync_state"] == SyncState.VERIFIED.value
+    assert service.stage()["error"] == "STAGING_NOT_IMPLEMENTED"
+    assert service.rollback()["error"] == "ROLLBACK_NOT_IMPLEMENTED"

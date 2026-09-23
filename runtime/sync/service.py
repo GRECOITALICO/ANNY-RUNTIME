@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import secrets
 import threading
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -120,28 +119,12 @@ class SyncService:
                 return {"status": "blocked", "error": "Cannot stage without a VERIFIED candidate"}
 
             result = self._latest
-            result.sync_state = SyncState.STAGING
-            result.stage = "STAGE"
-            self._active = result
+            result.sync_state = SyncState.BLOCKED
+            result.stage = "REPORT"
+            result.error_classification = "STAGING_NOT_IMPLEMENTED"
+            result.details = {"reason": "No physical staging implementation or receipt is configured."}
             self._persist(result)
-
-        def _run_stage():
-            try:
-                time.sleep(0.1) # Stub implementation
-                result.sync_state = SyncState.STAGED
-            except Exception as exc:
-                result.sync_state = SyncState.FAILED
-                result.error_classification = exc.__class__.__name__
-                result.details = {"message": str(exc)[:500]}
-            finally:
-                with self._lock:
-                    self._active = None
-                    self._persist(result)
-
-        self._active_thread = threading.Thread(target=_run_stage, daemon=True)
-        self._active_thread.start()
-
-        return {"status": "staging", "sync_state": SyncState.STAGING.value, "sync_id": result.sync_id}
+            return {"status": "blocked", "error": "STAGING_NOT_IMPLEMENTED", "sync_id": result.sync_id}
 
     def activate(self) -> Dict[str, Any]:
         with self._lock:
@@ -180,35 +163,15 @@ class SyncService:
         with self._lock:
             if self._active is not None:
                 return {"status": "already_running", "sync_state": self._active.sync_state.value}
-            if self._latest is None or not self._latest.activation_performed:
-                return {"status": "blocked", "error": "Cannot rollback when not activated"}
-
+            if self._latest is None:
+                return {"status": "blocked", "error": "Cannot rollback without a sync record"}
             result = self._latest
-            result.sync_state = SyncState.ROLLING_BACK
-            result.stage = "ROLLBACK"
-            self._active = result
+            result.sync_state = SyncState.BLOCKED
+            result.stage = "REPORT"
+            result.error_classification = "ROLLBACK_NOT_IMPLEMENTED"
+            result.details = {"reason": "No physical rollback implementation or receipt is configured."}
             self._persist(result)
-
-        def _run_rollback():
-            try:
-                time.sleep(0.1) # Stub implementation
-                result.sync_state = SyncState.ROLLED_BACK
-                result.activation_performed = False
-                if result.local_version:
-                    self.local_version = result.local_version
-            except Exception as exc:
-                result.sync_state = SyncState.FAILED
-                result.error_classification = exc.__class__.__name__
-                result.details = {"message": str(exc)[:500]}
-            finally:
-                with self._lock:
-                    self._active = None
-                    self._persist(result)
-
-        self._active_thread = threading.Thread(target=_run_rollback, daemon=True)
-        self._active_thread.start()
-
-        return {"status": "rolling_back", "sync_state": SyncState.ROLLING_BACK.value, "sync_id": result.sync_id}
+            return {"status": "blocked", "error": "ROLLBACK_NOT_IMPLEMENTED", "sync_id": result.sync_id}
 
     def _discover_compare_verify(self, result: SyncResult) -> None:
         result.stage = "DISCOVER"
