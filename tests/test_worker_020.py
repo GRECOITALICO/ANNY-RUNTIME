@@ -83,7 +83,7 @@ def test_14_worker_cannot_self_escalate(exec_mgr):
     ctx=exec_mgr.submit_task(task)
     worker=exec_mgr.worker_manager.list_workers()[0]
     worker.capability_id = "fabric.register"
-    with pytest.raises(ValueError, match="cannot start"):
+    with pytest.raises(Exception, match="Worker capability binding mismatch"):
         exec_mgr.worker_manager.start_worker(worker.worker_id, ctx, task, exec_mgr.registry.get(task.capability_id))
 
 def test_15_worker_cannot_change_deadline(exec_mgr):
@@ -92,6 +92,8 @@ def test_15_worker_cannot_change_deadline(exec_mgr):
     worker=exec_mgr.worker_manager.list_workers()[0]
     original=worker.deadline
     ctx.deadline = ctx.deadline + timedelta(hours=1)
+    with pytest.raises(Exception, match="Worker deadline binding mismatch"):
+        exec_mgr.worker_manager.start_worker(worker.worker_id, ctx, task, exec_mgr.registry.get(task.capability_id))
     assert worker.deadline == original
 
 def test_16_worker_cannot_create_worker(exec_mgr):
