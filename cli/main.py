@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ANNY Runtime CLI v0.2"""
+"""ANNY Runtime CLI."""
 import sys
 import os
 import argparse
@@ -11,7 +11,7 @@ from pathlib import Path
 
 from runtime.core.config import get_install_mode, get_data_dir, get_admin_port, get_runtime_dir, RuntimeConfig
 
-VERSION = "0.2.0"
+from runtime.core.version import __version__ as VERSION
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("anny-runtime")
