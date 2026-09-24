@@ -885,3 +885,19 @@ def test_continuity_engine_recent_events_is_read_only_and_bounded(tmp_path):
     events = engine.get_recent_events(3)
     assert [e.task_id for e in events] == ["TASK-3", "TASK-4", "TASK-5"]
     assert len(engine._events) == 5
+
+
+def test_audit_evidence_index_uses_observed_durable_evidence_refs():
+    from runtime.admin.templates import audit_evidence_page
+    from runtime.admin.projections import DEFAULT_PROJECTION_REGISTRY
+
+    html = audit_evidence_page(["<EVIDENCE-1>", "evidence/2"])
+    projection = DEFAULT_PROJECTION_REGISTRY.get("evidence.index")
+
+    assert projection is not None
+    assert projection.implementation_status == "BOUND"
+    assert projection.source_authority == "CONTINUITY_ENGINE"
+    assert projection.route_or_detail == "/audit/evidence"
+    assert 'data-projection-id="evidence.index"' in html
+    assert "&lt;EVIDENCE-1&gt;" in html
+    assert "OBSERVED_REFERENCE" in html
