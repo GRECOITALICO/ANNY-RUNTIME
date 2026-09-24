@@ -410,3 +410,85 @@ def test_audit_events_navigation_is_backed_by_a_projection():
     assert item.path == "/audit/events"
     assert projection is not None
     assert projection.route_or_detail == "/audit/events"
+
+
+def test_classic_admin_shell_escapes_titles_tokens_and_rejects_executable_hrefs():
+    from runtime.admin.templates import _safe_href, base_layout, device_flow_page
+
+    assert _safe_href("javascript:alert(1)") == "#"
+    assert _safe_href("data:text/html,<svg>") == "#"
+    assert _safe_href("/browser/abc") == "/browser/abc"
+    assert _safe_href("https://github.com/login/device") == "https://github.com/login/device"
+
+    html = base_layout('<img src=x onerror=alert(1)>', '<p>content</p>', '/', '"csrf<script>', '<projection>"')
+    assert '<img src=x onerror=alert(1)>' not in html
+    assert '&lt;img' in html
+    assert 'csrf&lt;script&gt;' in html
+    assert 'projection&quot;' in html
+
+    page = device_flow_page('<XSS>', 'javascript:alert(1)', '"csrf')
+    assert '<XSS>' not in page
+    assert '&lt;XSS&gt;' in page
+    assert 'href="#"' in page
+    assert 'javascript:alert(1)' not in page
+
+
+def test_telemetry_live_renderer_has_no_dynamic_innerhtml_path():
+    from runtime.admin.templates import telemetry_live_page
+
+    html = telemetry_live_page()
+    assert 'innerHTML' not in html
+    assert 'replaceChildren()' in html
+    assert 'textContent = value' in html
+    assert 'JSON.stringify(env.metadata)' in html
+
+
+def test_browser_renderers_are_bound_safe_and_do_not_reference_missing_renderer():
+    from types import SimpleNamespace
+    from runtime.admin.templates import browser_dashboard_page, browser_session_page
+
+    policy = SimpleNamespace(
+        network_policy='<network>',
+        allowed_domains=['example.com', '<evil>'],
+        timeout_ms=1234,
+        human_assistance_allowed=False,
+    )
+    session = SimpleNamespace(
+        session_id='abc" onmouseover="x',
+        worker_id='worker',
+        task_id='task',
+        mode=SimpleNamespace(value='<MODE>'),
+        status=SimpleNamespace(value='RUNNING'),
+        current_url='javascript:alert(1)',
+        created_at=SimpleNamespace(isoformat=lambda: '<TIME>'),
+        policy=policy,
+        profile_path='<PROFILE>',
+    )
+
+    dashboard = browser_dashboard_page([(session,)])
+    detail = browser_session_page(session)
+
+    assert 'render_admin_page' not in dashboard
+    assert 'render_admin_page' not in detail
+    assert 'javascript:alert(1)' not in detail
+    assert 'href="#"' in detail
+    assert '&lt;MODE&gt;' in detail
+    assert '&lt;PROFILE&gt;' in detail
+    assert '&quot; onmouseover' not in dashboard
+    assert 'data-projection-id="browser.dashboard"' in dashboard
+    assert 'data-projection-id="browser.session_detail"' in detail
+
+
+def test_project_map_renders_registered_projects_instead_of_static_empty_state():
+    from types import SimpleNamespace
+    from runtime.admin.templates import universe_projects_page
+
+    html = universe_projects_page([
+        SimpleNamespace(project_id='<project>', name='<Project Name>', status='<READY>', repositories=['a', 'b'])
+    ])
+
+    assert 'No projects discovered' not in html
+    assert '&lt;project&gt;' in html
+    assert '&lt;Project Name&gt;' in html
+    assert '&lt;READY&gt;' in html
+    assert '>2</td>' in html
