@@ -155,10 +155,17 @@ class ProjectionRegistry:
             state: sum(i.implementation_status == state for i in items)
             for state in VALID_IMPLEMENTATION_STATES
         }
+        by_section: Dict[str, int] = {}
+        by_freshness: Dict[str, int] = {}
+        for item in items:
+            by_section[item.section] = by_section.get(item.section, 0) + 1
+            by_freshness[item.freshness] = by_freshness.get(item.freshness, 0) + 1
         return {
             "total_definitions": len(items),
             "by_priority": by_priority,
             "by_implementation_status": by_status,
+            "by_section": dict(sorted(by_section.items())),
+            "by_freshness": dict(sorted(by_freshness.items())),
             "initial_p0_viewport_target": INITIAL_P0_VIEWPORT_TARGET,
             "master_inventory_boundary": MASTER_INVENTORY_BOUNDARY,
             "inventory_limit": None,
