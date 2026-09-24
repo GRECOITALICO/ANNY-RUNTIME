@@ -147,9 +147,9 @@ def control_center_page(csrf_token: str) -> str:
     <h2>Truth & Freshness</h2>
     <div class="kv-grid">
         <div class="kv"><span class="lbl">TRUTH AS OF</span><span class="val mono" id="truth-timestamp">UNKNOWN</span></div>
-        <div class="kv"><span class="lbl">RUNTIME STATE SOURCE</span><span class="val mono" id="truth-runtime-state">UNKNOWN</span></div>
-        <div class="kv"><span class="lbl">RUNTIME HEALTH SOURCE</span><span class="val mono" id="truth-runtime-health">UNKNOWN</span></div>
-        <div class="kv"><span class="lbl">RUNTIME ID SOURCE</span><span class="val mono" id="truth-runtime-id">UNKNOWN</span></div>
+        <div class="kv" data-truth-source="truth_sources.runtime_state"><span class="lbl">RUNTIME STATE SOURCE</span><span class="val mono" id="truth-runtime-state">UNKNOWN</span></div>
+        <div class="kv" data-truth-source="truth_sources.runtime_health"><span class="lbl">RUNTIME HEALTH SOURCE</span><span class="val mono" id="truth-runtime-health">UNKNOWN</span></div>
+        <div class="kv" data-truth-source="truth_sources.runtime_id"><span class="lbl">RUNTIME ID SOURCE</span><span class="val mono" id="truth-runtime-id">UNKNOWN</span></div>
         <div class="kv"><span class="lbl">CONRRAD OBSERVATION</span><span class="val mono" id="truth-conrrad">UNKNOWN</span></div>
         <div class="kv"><span class="lbl">CONFIGURED ENDPOINT</span><span class="val mono" id="truth-endpoint">UNKNOWN</span></div>
         <div class="kv"><span class="lbl">MAIN EXECUTION VERIFIED</span><span class="val mono" id="truth-main-execution">UNKNOWN</span></div>
