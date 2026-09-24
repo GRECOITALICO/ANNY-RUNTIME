@@ -393,7 +393,7 @@ function updateUI(d) {
     // Fabric details
     if (d.fabric_details && Object.keys(d.fabric_details).length) {
         setInner('fabric-tbody', Object.entries(d.fabric_details).map(function(kv) {
-            return '<tr><td class="mono">' + kv[0] + '</td><td>' + badge(kv[1]) + '</td></tr>';
+            return '<tr><td class="mono">' + escapeHtml(kv[0]) + '</td><td>' + badge(kv[1]) + '</td></tr>';
         }).join(''));
     } else {
         setInner('fabric-tbody', '<tr><td class="mono">fabric</td><td>' + badge(d.fabric_status) + '</td></tr>');
