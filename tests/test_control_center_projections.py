@@ -368,3 +368,18 @@ def test_conrrad_default_projection_is_explicitly_not_observed():
     assert all(row["online_status"] == "NOT_CONFIGURED" for row in rows)
     assert all(row["trust_status"] == "UNKNOWN" for row in rows)
     assert all(row["evidence_ref"] == "UNKNOWN" for row in rows)
+
+
+def test_bootstrap_report_preserves_explicit_external_truth_channel():
+    from runtime.bootstrap.report import BootstrapReport
+
+    report = BootstrapReport(anny_ready=False, runtime_id="runtime-test", fabric_node="UNKNOWN")
+    assert report.bootstrap_state == "UNKNOWN"
+    assert report.conrrad_dependencies == []
+
+    report.conrrad_dependencies = [
+        {"service_name": "CONRRAD.BOOTSTRAP", "online_status": "ONLINE_VERIFIED", "trust_status": "VERIFIED"}
+    ]
+    report.finish(False)
+    assert report.bootstrap_state == "BLOCKED"
+    assert len(report.conrrad_dependencies) == 1
