@@ -14,7 +14,7 @@ from runtime.admin.templates import (
     universe_organization_page, universe_projects_page, universe_repositories_page,
     universe_resources_page, execution_missions_page, execution_tasks_page, execution_workers_page,
     intelligence_capabilities_page, infrastructure_topology_page, audit_events_page,
-    audit_provenance_page, search_page, generic_placeholder_page,
+    audit_evidence_page, audit_provenance_page, search_page, generic_placeholder_page,
     telemetry_live_page, telemetry_timeline_page
 )
 from runtime.admin.dto import (
@@ -1237,7 +1237,15 @@ class AdminRouter:
         return audit_provenance_page(prov_data, self._get_csrf())
 
     def handle_audit_evidence(self, parsed) -> str:
-        return generic_placeholder_page("Evidence", "/audit/evidence", self._get_csrf())
+        engine = self.context.get('runtime_engine')
+        continuity = getattr(engine, 'continuity_engine', None) if engine else None
+        refs = []
+        if continuity and hasattr(continuity, 'get_recent_evidence_refs'):
+            try:
+                refs = continuity.get_recent_evidence_refs(limit=200)
+            except Exception:
+                refs = []
+        return audit_evidence_page(refs, self._get_csrf())
 
     def handle_search(self, parsed) -> str:
         query_params = urllib.parse.parse_qs(parsed.query)
