@@ -493,7 +493,7 @@ def _render_navigation(active_path):
     return ''.join(rendered)
 
 
-def base_layout(title, content, active_path="/", csrf_token=""):
+def base_layout(title, content, active_path="/", csrf_token="", projection_id=None):
     """Wrap content in the full admin shell layout."""
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -522,7 +522,7 @@ def base_layout(title, content, active_path="/", csrf_token=""):
             </form>
         </div>
     </nav>
-    <main class="main-content animate-fade-in">
+    <main class="main-content animate-fade-in"{f' data-projection-id="{projection_id}"' if projection_id else ""}>
         {content}
     </main>
 </div>
@@ -880,7 +880,7 @@ def github_page(gh_status, error=None, csrf_token=""):
         <div class="btn-group">
             <form method="POST" action="/github/disconnect"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-danger" type="submit">✕ Disconnect</button></form>
         </div>
-    """, "/github", csrf_token)
+    """, "/github", csrf_token, "github.connection")
 
 
 def fabric_page(fab_status, csrf_token=""):
@@ -901,7 +901,7 @@ def fabric_page(fab_status, csrf_token=""):
             <div class="detail-row"><span class="detail-label">Last Heartbeat</span><span class="detail-value">{fab_status.get('last_heartbeat', '—')}</span></div>
             <div class="detail-row"><span class="detail-label">Last Reconciliation</span><span class="detail-value">{fab_status.get('last_reconciliation', '—')}</span></div>
         </div>
-    """, "/fabric", csrf_token)
+    """, "/fabric", csrf_token, "fabric.connection")
 
 
 def sessions_page(sessions, csrf_token=""):
@@ -932,7 +932,7 @@ def sessions_page(sessions, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/sessions", csrf_token)
+    """, "/sessions", csrf_token, "communication.sessions")
 
 
 def operations_page(operations, csrf_token=""):
@@ -962,7 +962,7 @@ def operations_page(operations, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/operations", csrf_token)
+    """, "/operations", csrf_token, "admin.operations")
 
 
 def receipts_page(receipts, csrf_token=""):
@@ -992,7 +992,7 @@ def receipts_page(receipts, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/receipts", csrf_token)
+    """, "/receipts", csrf_token, "admin.receipts")
 
 
 def doctor_page(diagnostics, csrf_token=""):
@@ -1017,7 +1017,7 @@ def doctor_page(diagnostics, csrf_token=""):
         <div class="btn-group">
             <form method="POST" action="/admin/diagnostics"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-primary" type="submit">✚ Run Diagnostics</button></form>
         </div>
-    """, "/doctor", csrf_token)
+    """, "/doctor", csrf_token, "admin.doctor")
 
 
 def executions_page(executions, csrf_token=""):
@@ -1082,7 +1082,7 @@ def capabilities_page(capabilities, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/capabilities", csrf_token)
+    """, "/capabilities", csrf_token, "intelligence.capabilities")
 
 
 def executors_page(executors, csrf_token=""):
@@ -1104,7 +1104,7 @@ def executors_page(executors, csrf_token=""):
                 </tbody>
             </table>
         </div>
-    """, "/executors", csrf_token)
+    """, "/executors", csrf_token, "intelligence.executors_view")
 
 
 def policies_page(policy, csrf_token=""):
@@ -1120,7 +1120,7 @@ def policies_page(policy, csrf_token=""):
             <div class="detail-row"><span class="detail-label">Strict Isolation Enforced</span><span class="badge {'badge-success' if isolation else 'badge-danger'}">{'YES' if isolation else 'NO'}</span></div>
             <div class="detail-row"><span class="detail-label">Active Policy Version</span><span class="detail-value">{policy.version if policy else 'UNKNOWN'}</span></div>
         </div>
-    """, "/policies", csrf_token)
+    """, "/policies", csrf_token, "admin.policies")
 
 
 def workers_page(workers, csrf_token=""):
@@ -1149,7 +1149,7 @@ def workers_page(workers, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/workers", csrf_token)
+    """, "/workers", csrf_token, "execution.workers")
 
 def worker_detail_page(w, csrf_token=""):
     state_badge = 'badge-success' if w.state.value == 'SUCCEEDED' else 'badge-danger' if w.state.value in ('FAILED', 'TIMED_OUT', 'LIMIT_EXCEEDED') else 'badge-warning'
@@ -1179,7 +1179,7 @@ def worker_detail_page(w, csrf_token=""):
             <div class="detail-row"><span class="detail-label">Filesystem Policy</span><span class="detail-value">{w.filesystem_policy}</span></div>
             <div class="detail-row"><span class="detail-label">Resource Limits</span><span class="detail-value">{w.resource_limits}</span></div>
         </div>
-    """, "/workers", csrf_token)
+    """, "/workers", csrf_token, "execution.workers")
 
 
 def models_page(models, csrf_token=""):
@@ -1207,7 +1207,7 @@ def models_page(models, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/models", csrf_token)
+    """, "/models", csrf_token, "intelligence.models")
 
 def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
     state_badge = 'badge-success' if model.state.value in ('AVAILABLE', 'REGISTERED') else 'badge-danger'
@@ -1274,7 +1274,7 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
                 <tbody>{bindings_rows}</tbody>
             </table>
         </div>
-    """, "/models", csrf_token)
+    """, "/models", csrf_token, "intelligence.models")
 
 
 # New Templates for Control Plane Universe 001
@@ -1631,7 +1631,7 @@ def telemetry_live_page(csrf_token=""):
             // Connect on load
             document.addEventListener('DOMContentLoaded', connect);
         </script>
-    """, "/telemetry/live", csrf_token)
+    """, "/telemetry/live", csrf_token, "telemetry.live")
 
 
 def telemetry_timeline_page(recent_events, csrf_token=""):
@@ -1682,7 +1682,7 @@ def telemetry_timeline_page(recent_events, csrf_token=""):
                 </tbody>
             </table>
         </div>
-    """, "/telemetry/timeline", csrf_token)
+    """, "/telemetry/timeline", csrf_token, "telemetry.timeline")
 
 def browser_dashboard_page(sessions: list, csrf_token: str = "") -> str:
     rows = ""
