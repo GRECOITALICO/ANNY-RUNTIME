@@ -304,7 +304,7 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("execution.execution_runs", "Executions", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/executions", implementation_status="BOUND", sort_order=197, tags=("execution", "runs")),
         _p("execution.workspaces", "Workspaces", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/workspaces", implementation_status="BOUND", sort_order=198, tags=("execution", "workspace")),
         _p("intelligence.executors_view", "Executors view", "Intelligence", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/executors", implementation_status="BOUND", sort_order=255, tags=("intelligence", "executors")),
-        _p("browser.session_detail", "Managed browser session detail", "Browser", priority="P2", source_authority="BROWSER_RUNTIME", implementation_status="PLANNED", tags=("browser", "detail")),
+        _p("browser.session_detail", "Managed browser session detail", "Browser", priority="P2", source_authority="BROWSER_RUNTIME", route_or_detail="/browser/{session_id}", implementation_status="BOUND", sort_order=365, tags=("browser", "detail")),
         _p("audit.search", "Audit/search discovery", "Evidence / Provenance", priority="P1", source_authority="AUDIT_STORE", route_or_detail="/search", implementation_status="PARTIAL", sort_order=182, tags=("audit", "search")),
         _p("runtime.identity.state", "ANNY runtime state", "Runtime Identity", sort_order=10, tags=("header", "state")),
         _p("control.top_level_state", "Top-Level State panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=1, tags=("panel", "shell")),
