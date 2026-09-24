@@ -300,10 +300,10 @@ def control_center_page(csrf_token: str) -> str:
         <table>
             <thead><tr>
                 <th>ID</th><th>Title</th><th>Section</th><th>Priority</th>
-                <th>Implementation</th><th>Truth</th><th>Freshness</th><th>Source</th>
+                <th>Implementation</th><th>Truth</th><th>Freshness</th><th>Source</th><th>Detail</th>
             </tr></thead>
             <tbody id="projection-registry-tbody">
-                <tr><td colspan="8" style="color:var(--text-secondary)">Loading...</td></tr>
+                <tr><td colspan="9" style="color:var(--text-secondary)">Loading...</td></tr>
             </tbody>
         </table>
     </div>
@@ -314,6 +314,16 @@ def control_center_page(csrf_token: str) -> str:
             <button type="button" class="btn btn-ghost" id="projection-next-btn">NEXT →</button>
         </div>
     </div>
+</div>
+
+<!-- Projection Detail -->
+<div class="panel full" id="projection-detail-panel" hidden>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+        <h2>Projection Detail</h2>
+        <button type="button" class="btn btn-ghost" id="projection-detail-close">CLOSE</button>
+    </div>
+    <div id="projection-detail-meta" style="font-size:.7rem;color:var(--text-secondary);margin:.35rem 0 .9rem"></div>
+    <div class="kv-grid" id="projection-detail-grid"></div>
 </div>
 
 <!-- Continuity -->
@@ -601,7 +611,7 @@ async function fetchProjectionRegistry(resetOffset = false) {
         if (!projections.length) {
             const row = document.createElement('tr');
             const cell = document.createElement('td');
-            cell.colSpan = 8;
+            cell.colSpan = 9;
             cell.textContent = 'No projections registered for this filter.';
             cell.style.color = 'var(--text-secondary)';
             row.appendChild(cell);
@@ -622,6 +632,15 @@ async function fetchProjectionRegistry(resetOffset = false) {
                         : String(value);
                     row.appendChild(cell);
                 }
+                const detailCell = document.createElement('td');
+                const detailButton = document.createElement('button');
+                detailButton.type = 'button';
+                detailButton.className = 'btn btn-ghost';
+                detailButton.textContent = 'VIEW';
+                detailButton.dataset.projectionId = item.projection_id;
+                detailButton.addEventListener('click', () => fetchProjectionDetail(item.projection_id));
+                detailCell.appendChild(detailButton);
+                row.appendChild(detailCell);
                 tbody.appendChild(row);
             }
         }
@@ -643,6 +662,68 @@ async function fetchProjectionRegistry(resetOffset = false) {
     }
 }
 
+
+async function fetchProjectionDetail(projectionId) {
+    try {
+        const params = new URLSearchParams();
+        params.set('projection_id', projectionId);
+        params.set('limit', '1');
+        const r = await fetch('/api/control-center/projections?' + params.toString());
+        if (!r.ok) return;
+        const d = await r.json();
+        const item = (d.projections || [])[0];
+        const panel = document.getElementById('projection-detail-panel');
+        const meta = document.getElementById('projection-detail-meta');
+        const grid = document.getElementById('projection-detail-grid');
+        if (!panel || !meta || !grid || !item) return;
+
+        meta.textContent = item.projection_id + ' · ' + item.title;
+        while (grid.firstChild) grid.removeChild(grid.firstChild);
+
+        const rows = [
+            ['Section', item.section],
+            ['Priority', item.priority],
+            ['Implementation', item.implementation_status],
+            ['Current status', item.current_status],
+            ['Truth class', item.truth_class],
+            ['Source authority', item.source_authority],
+            ['Freshness', item.freshness],
+            ['Evidence', item.evidence_ref],
+            ['Failure reason', item.failure_reason],
+            ['Dependencies', (item.dependencies || []).join(', ')],
+            ['Visibility', item.visibility_policy],
+            ['Route / detail', item.route_or_detail],
+            ['Renderer', item.renderer],
+            ['Sort order', item.sort_order],
+            ['Tags', (item.tags || []).join(', ')]
+        ];
+        for (const [label, value] of rows) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'kv';
+            const lbl = document.createElement('span');
+            lbl.className = 'lbl';
+            lbl.textContent = label.toUpperCase();
+            const val = document.createElement('span');
+            val.className = 'val mono';
+            val.textContent = value === null || value === undefined || value === '' ? '—' : String(value);
+            wrapper.appendChild(lbl);
+            wrapper.appendChild(val);
+            grid.appendChild(wrapper);
+        }
+        panel.hidden = false;
+        panel.scrollIntoView({behavior: 'smooth', block: 'start'});
+    } catch(e) {
+        console.error('Projection detail fetch failed:', e);
+    }
+}
+
+function closeProjectionDetail() {
+    const panel = document.getElementById('projection-detail-panel');
+    if (panel) panel.hidden = true;
+}
+
+const projectionDetailClose = document.getElementById('projection-detail-close');
+if (projectionDetailClose) projectionDetailClose.addEventListener('click', closeProjectionDetail);
 
 fetchStatus();
 fetchProcessingMatrix();
