@@ -6,6 +6,7 @@ on:
       - "runtime/admin/projections.py"
       - "runtime/admin/routes.py"
       - "runtime/admin/templates_cc.py"
+      - "runtime/bootstrap/conrrad.py"
       - "tests/test_control_center_projections.py"
       - ".github/workflows/control-center-projection-regression.yml"
   workflow_dispatch:
