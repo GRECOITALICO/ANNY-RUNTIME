@@ -781,3 +781,30 @@ def test_failure_and_ready_renderers_escape_dynamic_values():
     assert '&lt;ORG&gt;' in ready
     assert '&lt;AUTH&gt;' in ready
     assert 'data-projection-id="control.top_level_state"' in ready
+
+
+def test_legacy_ready_view_does_not_link_to_planned_routes():
+    from runtime.admin.templates import ready_page
+
+    html = ready_page({
+        "continuity": {
+            "status": "READY",
+            "runtime_status": "UNKNOWN",
+            "current_mission": "MISSION",
+            "current_task": "TASK",
+            "next_action": "NEXT",
+            "organizations": [],
+            "blocker_count": 0,
+            "repositories": [],
+            "l2_worker_summary": {"count": 0},
+        },
+        "github": {"connected": True, "auth_status": "CONNECTED"},
+        "identity": {"key_type": "LOCAL", "status": "READY"},
+    })
+    assert 'href="/infrastructure/github"' not in html
+    assert 'href="/infrastructure/fabric"' not in html
+    assert 'href="/infrastructure/mcp"' not in html
+    assert 'href="/continuity/blockers"' not in html
+    assert 'href="/github"' in html
+    assert 'href="/fabric"' in html
+    assert 'href="/models"' in html
