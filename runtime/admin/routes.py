@@ -1116,7 +1116,7 @@ class AdminRouter:
     def handle_infrastructure_topology(self, parsed) -> str:
         gh_mgr = self.context.get('github_manager')
         gh_up = gh_mgr.get_status().connected if gh_mgr else False
-        
+
         fab_up = False
         if hasattr(self, '_get_fabric_client'):
             fc = self._get_fabric_client()
@@ -1126,7 +1126,24 @@ class AdminRouter:
                     fab_up = True
                 except Exception:
                     pass
-        return infrastructure_topology_page(gh_up, fab_up, False, self._get_csrf())
+
+        engine = self.context.get('runtime_engine')
+        runtime_state = getattr(getattr(engine, 'state', None), 'name', 'UNKNOWN') if engine else 'UNKNOWN'
+        runtime_health = 'UNKNOWN'
+        if engine and callable(getattr(engine, 'health_check', None)):
+            try:
+                runtime_health = str(engine.health_check().get('status', 'UNKNOWN')).upper()
+                if runtime_health == 'OK':
+                    runtime_health = 'HEALTHY'
+            except Exception:
+                runtime_health = 'UNKNOWN'
+
+        return infrastructure_topology_page(
+            gh_up, fab_up, None,
+            runtime_state=runtime_state,
+            runtime_health=runtime_health,
+            csrf_token=self._get_csrf(),
+        )
 
     def handle_continuity_timeline(self, parsed) -> str:
         return generic_placeholder_page("Continuity Timeline", "/continuity/timeline", self._get_csrf())
