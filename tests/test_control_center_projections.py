@@ -395,6 +395,7 @@ def test_active_navigation_requires_a_registered_projection():
 
 
 def test_navigation_models_projection_uses_canonical_models_route():
+    from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS
     item = next(item for item in DEFAULT_NAVIGATION_ITEMS if item.label == "Models")
     projection = DEFAULT_PROJECTION_REGISTRY.get(item.projection_id)
     assert item.path == "/models"
@@ -403,6 +404,7 @@ def test_navigation_models_projection_uses_canonical_models_route():
 
 
 def test_audit_events_navigation_is_backed_by_a_projection():
+    from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS
     item = next(item for item in DEFAULT_NAVIGATION_ITEMS if item.label == "Events")
     projection = DEFAULT_PROJECTION_REGISTRY.get(item.projection_id)
     assert item.path == "/audit/events"
