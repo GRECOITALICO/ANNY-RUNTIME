@@ -117,7 +117,7 @@ def control_center_page(csrf_token: str) -> str:
 <main>
 
 <!-- Top-Level State -->
-<div class="panel">
+<div class="panel" data-projection-id="control.top_level_state">
     <h2>Top-Level State</h2>
     <div class="kv-grid">
         <div class="kv"><span class="lbl">ANNY STATUS</span><span class="val" id="st-anny">--</span></div>
@@ -130,7 +130,7 @@ def control_center_page(csrf_token: str) -> str:
 </div>
 
 <!-- Operational Snapshot -->
-<div class="panel">
+<div class="panel" data-projection-id="control.operational_snapshot">
     <h2>Operational Snapshot</h2>
     <div class="kv-grid">
         <div class="kv"><span class="lbl">RUNTIME ID</span><span class="val mono" id="snap-id">--</span></div>
@@ -145,7 +145,7 @@ def control_center_page(csrf_token: str) -> str:
 </div>
 
 <!-- Bootstrap Verification -->
-<div class="panel full">
+<div class="panel full" data-projection-id="control.bootstrap_verification">
     <h2>Bootstrap Verification</h2>
     <div style="overflow-x:auto">
         <table>
@@ -156,34 +156,34 @@ def control_center_page(csrf_token: str) -> str:
 </div>
 
 <!-- Runtime Health -->
-<div class="panel">
+<div class="panel" data-projection-id="control.runtime_health">
     <h2>Runtime Health</h2>
     <table><thead><tr><th>Subsystem</th><th>Status</th></tr></thead>
     <tbody id="health-tbody"></tbody></table>
 </div>
 
 <!-- Repository Fabric -->
-<div class="panel">
+<div class="panel" data-projection-id="control.repository_fabric">
     <h2>Repository Fabric</h2>
     <table><thead><tr><th>Component</th><th>Status</th></tr></thead>
     <tbody id="fabric-tbody"></tbody></table>
 </div>
 
 <!-- Access Verification -->
-<div class="panel">
+<div class="panel" data-projection-id="control.access_verification">
     <h2>Access Verification</h2>
     <table><thead><tr><th>Capability</th><th>Expected</th><th>Result</th></tr></thead>
     <tbody id="access-tbody"></tbody></table>
 </div>
 
 <!-- Current Contract -->
-<div class="panel">
+<div class="panel" data-projection-id="control.current_contract">
     <h2>Current Contract</h2>
     <div id="contract-div"></div>
 </div>
 
 <!-- Capability Inventory -->
-<div class="panel full">
+<div class="panel full" data-projection-id="control.capability_inventory">
     <h2>Capability Inventory</h2>
     <div style="overflow-x:auto">
         <table>
@@ -200,35 +200,35 @@ def control_center_page(csrf_token: str) -> str:
 </div>
 
 <!-- Tools -->
-<div class="panel">
+<div class="panel" data-projection-id="control.tools">
     <h2>Tools</h2>
     <table><thead><tr><th>Tool</th><th>Status</th></tr></thead>
     <tbody id="tools-tbody"></tbody></table>
 </div>
 
 <!-- Models -->
-<div class="panel">
+<div class="panel" data-projection-id="control.models">
     <h2>Models</h2>
     <table><thead><tr><th>Model</th><th>Status</th></tr></thead>
     <tbody id="models-tbody"></tbody></table>
 </div>
 
 <!-- Workers -->
-<div class="panel">
+<div class="panel" data-projection-id="control.workers">
     <h2>Workers</h2>
     <table><thead><tr><th>Worker Profile</th><th>Status</th></tr></thead>
     <tbody id="workers-tbody"></tbody></table>
 </div>
 
 <!-- Connectors -->
-<div class="panel">
+<div class="panel" data-projection-id="control.connectors">
     <h2>Connectors</h2>
     <table><thead><tr><th>Connector</th><th>Status</th></tr></thead>
     <tbody id="connectors-tbody"></tbody></table>
 </div>
 
 <!-- Processing Matrix -->
-<div class="panel full">
+<div class="panel full" data-projection-id="control.processing_matrix">
     <h2>Processing Matrix</h2>
     <div style="overflow-x:auto">
         <table>
@@ -284,7 +284,7 @@ def control_center_page(csrf_token: str) -> str:
 </div>
 
 <!-- Continuity -->
-<div class="panel full">
+<div class="panel full" data-projection-id="control.continuity">
     <h2>Continuity</h2>
     <div class="kv-grid">
         <div class="kv"><span class="lbl">CURRENT MISSION</span><span class="val mono" id="cont-mission">--</span></div>
