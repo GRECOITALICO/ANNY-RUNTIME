@@ -293,6 +293,18 @@ def control_center_page(csrf_token: str) -> str:
                     <option value="UNVERIFIED">UNVERIFIED</option>
                 </select>
             </label>
+            <label style="font-size:.7rem;color:var(--text-secondary)">
+                SECTION
+                <select id="projection-section-filter" style="margin-left:.35rem;background:#111827;color:#f3f4f6;border:1px solid var(--border);border-radius:5px;padding:.3rem .45rem;max-width:180px">
+                    <option value="">ALL</option>
+                </select>
+            </label>
+            <label style="font-size:.7rem;color:var(--text-secondary)">
+                FRESHNESS
+                <select id="projection-freshness-filter" style="margin-left:.35rem;background:#111827;color:#f3f4f6;border:1px solid var(--border);border-radius:5px;padding:.3rem .45rem">
+                    <option value="">ALL</option>
+                </select>
+            </label>
             <button type="button" class="btn btn-ghost" id="projection-refresh-btn">↻ REFRESH</button>
         </div>
     </div>
@@ -571,10 +583,14 @@ function projectionQuery() {
     const priority = document.getElementById('projection-priority-filter');
     const status = document.getElementById('projection-status-filter');
     const truth = document.getElementById('projection-truth-filter');
+    const section = document.getElementById('projection-section-filter');
+    const freshness = document.getElementById('projection-freshness-filter');
     if (search && search.value.trim()) params.set('q', search.value.trim());
     if (priority && priority.value) params.set('priority', priority.value);
     if (status && status.value) params.set('implementation_status', status.value);
     if (truth && truth.value) params.set('truth_class', truth.value);
+    if (section && section.value) params.set('section', section.value);
+    if (freshness && freshness.value) params.set('freshness', freshness.value);
     params.set('limit', String(PROJECTION_PAGE_SIZE));
     params.set('offset', String(projectionOffset));
     return params.toString();
@@ -591,6 +607,36 @@ async function fetchProjectionRegistry(resetOffset = false) {
         if (meta) {
             const s = d.summary || {};
             const byPriority = s.by_priority || {};
+            const bySection = s.by_section || {};
+            const byFreshness = s.by_freshness || {};
+
+            const sectionFilter = document.getElementById('projection-section-filter');
+            if (sectionFilter) {
+                const selected = sectionFilter.value;
+                while (sectionFilter.options.length > 1) sectionFilter.remove(1);
+                for (const sectionName of Object.keys(bySection).sort()) {
+                    const option = document.createElement('option');
+                    option.value = sectionName;
+                    option.textContent = sectionName + ' (' + String(bySection[sectionName]) + ')';
+                    sectionFilter.appendChild(option);
+                }
+                sectionFilter.value = selected;
+                if (sectionFilter.value !== selected) sectionFilter.value = '';
+            }
+
+            const freshnessFilter = document.getElementById('projection-freshness-filter');
+            if (freshnessFilter) {
+                const selected = freshnessFilter.value;
+                while (freshnessFilter.options.length > 1) freshnessFilter.remove(1);
+                for (const freshnessName of Object.keys(byFreshness).sort()) {
+                    const option = document.createElement('option');
+                    option.value = freshnessName;
+                    option.textContent = freshnessName + ' (' + String(byFreshness[freshnessName]) + ')';
+                    freshnessFilter.appendChild(option);
+                }
+                freshnessFilter.value = selected;
+                if (freshnessFilter.value !== selected) freshnessFilter.value = '';
+            }
             meta.textContent =
                 'MASTER=' + (d.master_inventory_boundary || 'UNKNOWN') +
                 ' · P0 VIEWPORT TARGET=' + String(d.initial_p0_viewport_target || '—') +
@@ -738,7 +784,7 @@ setInterval(function() {
     fetchProjectionRegistry();
 }, 10000);
 
-for (const id of ['projection-priority-filter','projection-status-filter','projection-truth-filter']) {
+for (const id of ['projection-priority-filter','projection-status-filter','projection-truth-filter','projection-section-filter','projection-freshness-filter']) {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => fetchProjectionRegistry(true));
 }
