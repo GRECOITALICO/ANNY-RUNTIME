@@ -162,6 +162,27 @@ class ContinuityEngine:
                 return []
             return list(self._events[-limit:])
 
+    def get_recent_evidence_refs(self, limit: int = 200) -> List[str]:
+        """Return unique evidence references observed in recent durable continuity state."""
+        with self._lock:
+            refs: List[str] = []
+            seen = set()
+            records = list(self._records.values())[-limit:] if limit > 0 else []
+            events = self._events[-limit:] if limit > 0 else []
+            for item in records:
+                for ref in getattr(item, "evidence_refs", []) or []:
+                    value = str(ref)
+                    if value and value not in seen:
+                        seen.add(value)
+                        refs.append(value)
+            for item in events:
+                for ref in getattr(item, "evidence_refs", []) or []:
+                    value = str(ref)
+                    if value and value not in seen:
+                        seen.add(value)
+                        refs.append(value)
+            return refs
+
     def reconstruct_execution(self, execution_id: str) -> Optional[Dict[str, Any]]:
         """
         Deductively reconstruct full execution context state from durable logs.
