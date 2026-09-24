@@ -4,7 +4,14 @@ Dark-mode, responsive, glassmorphism design. No external dependencies.
 All CSS is embedded. No CDN, no framework, no external JS.
 """
 
+import html
+
 from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS
+
+
+def _escape_html(value) -> str:
+    """Escape backend-fed text before insertion into HTML."""
+    return html.escape("" if value is None else str(value), quote=True)
 
 COMMON_CSS = """
 
@@ -838,9 +845,9 @@ def github_page(gh_status, error=None, csrf_token=""):
     """Render the GitHub status page."""
     badge_class = 'badge-success' if gh_status.get('connected') else 'badge-danger'
     status_text = 'CONNECTED' if gh_status.get('connected') else gh_status.get('auth_status', 'UNKNOWN')
-    scopes = ', '.join(gh_status.get('scopes', [])) or '—'
+    scopes = _escape_html(', '.join(gh_status.get('scopes', [])) or '—')
 
-    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px; border: 1px solid rgba(235,87,87,0.3);">{error}</div>' if error else ''
+    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px; border: 1px solid rgba(235,87,87,0.3);">{_escape_html(error)}</div>' if error else ''
 
     input_form_html = ""
     if not gh_status.get('connected'):
@@ -849,7 +856,7 @@ def github_page(gh_status, error=None, csrf_token=""):
             <h3 style="margin-top:0; margin-bottom:16px; font-size:14px; color:var(--text-primary);">Connect GitHub</h3>
             {error_html}
             <form method="POST" action="/github/token">
-                <input type="hidden" name="csrf_token" value="{csrf_token}">
+                <input type="hidden" name="csrf_token" value="{_escape_html(csrf_token)}">
                 <div style="margin-bottom: 16px;">
                     <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">RECOVERY TOKEN (Admin Only)</label>
                     <input type="password" name="github_token" id="github_token_input" style="width:100%; max-width:400px; padding:10px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
@@ -869,13 +876,13 @@ def github_page(gh_status, error=None, csrf_token=""):
 
         <div class="detail-panel">
             <div class="detail-row"><span class="detail-label">Status</span><span class="badge {badge_class}">{status_text}</span></div>
-            <div class="detail-row"><span class="detail-label">Principal</span><span class="detail-value">{gh_status.get('principal', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Token Status</span><span class="detail-value">{gh_status.get('token_status', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Token Expiry</span><span class="detail-value">{gh_status.get('token_expiry', '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Principal</span><span class="detail-value">{_escape_html(gh_status.get('principal', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Token Status</span><span class="detail-value">{_escape_html(gh_status.get('token_status', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Token Expiry</span><span class="detail-value">{_escape_html(gh_status.get('token_expiry', '—'))}</span></div>
             <div class="detail-row"><span class="detail-label">Scopes</span><span class="detail-value">{scopes}</span></div>
-            <div class="detail-row"><span class="detail-label">Last Validation</span><span class="detail-value">{gh_status.get('last_validation', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Last Failure</span><span class="detail-value">{gh_status.get('last_failure', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Failure Reason</span><span class="detail-value">{gh_status.get('last_failure_reason', '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Last Validation</span><span class="detail-value">{_escape_html(gh_status.get('last_validation', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Last Failure</span><span class="detail-value">{_escape_html(gh_status.get('last_failure', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Failure Reason</span><span class="detail-value">{_escape_html(gh_status.get('last_failure_reason', '—'))}</span></div>
         </div>
 
         <div class="btn-group">
@@ -896,11 +903,11 @@ def fabric_page(fab_status, csrf_token=""):
             <div class="detail-row"><span class="detail-label">Connection</span><span class="badge {badge}">{'CONNECTED' if fab_status.get('connected') else 'DISCONNECTED'}</span></div>
             <div class="detail-row"><span class="detail-label">Fabric Resources</span><span class="detail-value">{fab_status.get('resource_count', '0')}</span></div>
             <div class="detail-row"><span class="detail-label">Provenance</span><span class="badge badge-success">HEALTHY</span></div>
-            <div class="detail-row"><span class="detail-label">Tenant</span><span class="detail-value">{fab_status.get('tenant', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">ANNY Instance</span><span class="detail-value">{fab_status.get('anny_instance', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Runtime Registration</span><span class="detail-value">{fab_status.get('runtime_registration', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Last Heartbeat</span><span class="detail-value">{fab_status.get('last_heartbeat', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Last Reconciliation</span><span class="detail-value">{fab_status.get('last_reconciliation', '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Tenant</span><span class="detail-value">{_escape_html(fab_status.get('tenant', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">ANNY Instance</span><span class="detail-value">{_escape_html(fab_status.get('anny_instance', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Runtime Registration</span><span class="detail-value">{_escape_html(fab_status.get('runtime_registration', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Last Heartbeat</span><span class="detail-value">{_escape_html(fab_status.get('last_heartbeat', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Last Reconciliation</span><span class="detail-value">{_escape_html(fab_status.get('last_reconciliation', '—'))}</span></div>
         </div>
     """, "/fabric", csrf_token, "fabric.connection")
 
@@ -911,13 +918,13 @@ def sessions_page(sessions, csrf_token=""):
     for s in sessions:
         badge = 'badge-success' if s.get('status') == 'ACTIVE' else 'badge-muted'
         rows += f"""<tr>
-            <td class="mono">{s.get('session_id', '—')[:16]}...</td>
-            <td>{s.get('provider', '—')}</td>
-            <td>{s.get('principal', '—')}</td>
-            <td>{s.get('tenant', '—')}</td>
-            <td>{s.get('created_at', '—')[:19]}</td>
-            <td>{s.get('expires_at', '—')[:19]}</td>
-            <td><span class="badge {badge}">{s.get('status', '—')}</span></td>
+            <td class="mono">{_escape_html(s.get('session_id', '—')[:16])}...</td>
+            <td>{_escape_html(s.get('provider', '—'))}</td>
+            <td>{_escape_html(s.get('principal', '—'))}</td>
+            <td>{_escape_html(s.get('tenant', '—'))}</td>
+            <td>{_escape_html(s.get('created_at', '—')[:19])}</td>
+            <td>{_escape_html(s.get('expires_at', '—')[:19])}</td>
+            <td><span class="badge {badge}">{_escape_html(s.get('status', '—'))}</span></td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">No active sessions</td></tr>'
@@ -941,13 +948,13 @@ def operations_page(operations, csrf_token=""):
     rows = ""
     for op in operations:
         rows += f"""<tr>
-            <td class="mono">{op.get('operation_id', '—')}</td>
-            <td>{op.get('actor', '—')}</td>
-            <td>{op.get('tenant', '—')}</td>
-            <td class="mono">{op.get('workspace', '—')[:20]}</td>
-            <td><span class="badge badge-info">{op.get('state', '—')}</span></td>
-            <td>{op.get('started_at', '—')[:19]}</td>
-            <td>{op.get('runtime_generation', '—')}</td>
+            <td class="mono">{_escape_html(op.get('operation_id', '—'))}</td>
+            <td>{_escape_html(op.get('actor', '—'))}</td>
+            <td>{_escape_html(op.get('tenant', '—'))}</td>
+            <td class="mono">{_escape_html(op.get('workspace', '—')[:20])}</td>
+            <td><span class="badge badge-info">{_escape_html(op.get('state', '—'))}</span></td>
+            <td>{_escape_html(op.get('started_at', '—')[:19])}</td>
+            <td>{_escape_html(op.get('runtime_generation', '—'))}</td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">No operations</td></tr>'
@@ -972,12 +979,12 @@ def receipts_page(receipts, csrf_token=""):
     for r in receipts:
         badge = 'badge-success' if r.get('status') == 'SUCCESS' else 'badge-danger'
         rows += f"""<tr>
-            <td class="mono">{r.get('receipt_id', '—')[:16]}</td>
-            <td class="mono">{r.get('operation', '—')}</td>
-            <td>{r.get('tool', '—')}</td>
-            <td><span class="badge {badge}">{r.get('status', '—')}</span></td>
-            <td>{r.get('timestamp', '—')[:19]}</td>
-            <td>{r.get('duration_ms', '—')}ms</td>
+            <td class="mono">{_escape_html(r.get('receipt_id', '—')[:16])}</td>
+            <td class="mono">{_escape_html(r.get('operation', '—'))}</td>
+            <td>{_escape_html(r.get('tool', '—'))}</td>
+            <td><span class="badge {badge}">{_escape_html(r.get('status', '—'))}</span></td>
+            <td>{_escape_html(r.get('timestamp', '—')[:19])}</td>
+            <td>{_escape_html(r.get('duration_ms', '—'))}ms</td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px;">No receipts</td></tr>'
