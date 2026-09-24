@@ -44,6 +44,10 @@ Every projection definition carries at least:
 - `implementation_status`
 
 ## Truth rules
+The bootstrap report now exposes an explicit `bootstrap_state` and `conrrad_dependencies` transport channel.
+An empty dependency list means that no external CONRRAD registry observation has been attached to the report;
+the Control Center must continue to project the safe NOT_CONFIGURED/UNKNOWN state in that case.
+
 
 
 The Control Center's `/api/status` projection is a read-only observation surface, not an authority source.
