@@ -311,6 +311,8 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("control.operational_snapshot", "Operational Snapshot panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=2, tags=("panel",)),
         _p("control.bootstrap_verification", "Bootstrap Verification panel", "Control Center", priority="P0", source_authority="BOOTSTRAP_ENGINE", sort_order=3, tags=("panel", "gates")),
         _p("control.runtime_health", "Runtime Health panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=4, tags=("panel", "health")),
+        _p("control.conrrad_mandatory_services", "CONRRAD Mandatory Services live truth", "Control Center", priority="P0", source_authority="CONRRAD_EXTERNAL_REGISTRY", sort_order=4.5, tags=("panel", "conrrad", "live-truth", "mandatory-services")),
+
         _p("control.repository_fabric", "Repository Fabric panel", "Control Center", priority="P0", source_authority="FABRIC_LIVE_TRUTH", sort_order=5, tags=("panel", "fabric")),
         _p("control.access_verification", "Access Verification panel", "Control Center", priority="P0", source_authority="RUNTIME_AUTH", sort_order=6, tags=("panel", "auth")),
         _p("control.current_contract", "Current Contract panel", "Control Center", priority="P0", source_authority="RUNTIME_CONTRACT", sort_order=7, tags=("panel", "contract")),
