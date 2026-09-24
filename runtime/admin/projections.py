@@ -403,7 +403,7 @@ DEFAULT_NAVIGATION_ITEMS: Tuple[NavigationItem, ...] = (
     NavigationItem("UNIVERSE", "Resources", "◈", "/universe/resources", "universe.resources"),
     NavigationItem("UNIVERSE", "Dependencies", "⋈", "/universe/dependencies", "fabric.connection", "PLANNED"),
 
-    NavigationItem("EXECUTION", "Missions", "🎯", "/execution/missions", "project.current_mission"),
+    NavigationItem("EXECUTION", "Missions", "🎯", "/execution/missions", "execution.missions"),
     NavigationItem("EXECUTION", "Tasks", "✓", "/execution/tasks", "execution.tasks"),
     NavigationItem("EXECUTION", "Workers", "⚙", "/execution/workers", "execution.workers"),
     NavigationItem("EXECUTION", "Executions", "▶", "/execution/executions", "execution.execution_runs"),
