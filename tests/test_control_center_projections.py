@@ -165,3 +165,18 @@ def test_projection_registry_filters_by_truth_and_implementation():
     unknown = DEFAULT_PROJECTION_REGISTRY.to_api_dict(truth_class="UNKNOWN")
     assert unknown["projections"]
     assert all(item["truth_class"] == "UNKNOWN" for item in unknown["projections"])
+
+
+def test_projection_registry_exact_detail_query():
+    item = DEFAULT_PROJECTION_REGISTRY.list()[0]
+    payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(projection_id=item.projection_id, limit=1)
+
+    assert payload["page"]["total_filtered"] == 1
+    assert payload["page"]["returned"] == 1
+    assert payload["projections"][0]["projection_id"] == item.projection_id
+
+
+def test_projection_detail_filter_is_exact():
+    payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(projection_id="does.not.exist", limit=1)
+    assert payload["page"]["total_filtered"] == 0
+    assert payload["projections"] == []
