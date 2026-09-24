@@ -299,6 +299,7 @@ class AdminRouter:
         freshness = query.get('freshness', [None])[0]
         tag = query.get('tag', [None])[0]
         q = query.get('q', [None])[0]
+        projection_id = query.get('projection_id', [None])[0]
 
         def _int_query(name, default):
             raw = query.get(name, [None])[0]
@@ -322,6 +323,7 @@ class AdminRouter:
                 freshness=freshness,
                 tag=tag,
                 q=q,
+                projection_id=projection_id,
                 limit=limit,
                 offset=offset,
             )
