@@ -30,9 +30,7 @@ def test_control_center_browser_e2e():
                         wait_until="domcontentloaded",
                     )
 
-                    expect(
-                        page.locator('[data-projection-id="distribution.sync"]')
-                    ).to_be_visible()
+                    expect(page.locator("#anny-sync-panel")).to_be_visible()
                     expect(
                         page.locator('[data-projection-id="control.truth_freshness"]')
                     ).to_be_visible()
