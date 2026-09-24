@@ -164,7 +164,7 @@ def control_center_page(csrf_token: str) -> str:
 <div class="panel full" data-projection-id="control.conrrad_mandatory_services">
     <h2>CONRRAD Mandatory Services — Live Truth</h2>
     <div id="conrrad-summary" style="font-size:.72rem;color:var(--text-secondary);margin-bottom:.8rem">
-        REQUIRED=8 · OBSERVED=0 · ONLINE_VERIFIED=0 · TRUST_VERIFIED=0 · GATE=BLOCKED
+        REQUIRED=8 · OBSERVED=0 · ONLINE_VERIFIED=0 · TRUST_VERIFIED=0 · GATE=BLOCKED · CERTIFICATION=UNKNOWN · VALID_CERTIFICATION=CERTIFIED_BY_LIVE_EVIDENCE
     </div>
     <div style="overflow-x:auto">
         <table>
