@@ -364,9 +364,9 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("telemetry.timeline", "Telemetry timeline", "Telemetry", priority="P1", source_authority="TELEMETRY_STORE", route_or_detail="/telemetry/timeline", sort_order=350, tags=("timeline",)),
         _p("browser.dashboard", "Managed browser dashboard", "Browser", priority="P1", source_authority="BROWSER_RUNTIME", route_or_detail="/browser", sort_order=360, tags=("browser",)),
         _p("distribution.sync", "Governed SYNC state", "Distribution / Updates", priority="P0", source_authority="SYNC_SERVICE", implementation_status="BOUND", sort_order=370, tags=("sync", "updates")),
-        _p("distribution.sync_stage", "SYNC stage capability", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", implementation_status="BLOCKED", failure_reason="Stage currently uses a stub lifecycle and must not be presented as physical staging.", sort_order=380, tags=("sync", "stage")),
+        _p("distribution.sync_stage", "SYNC stage capability", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", implementation_status="BLOCKED", failure_reason="Physical staging is not implemented; the backend now fails closed without mutating the verified candidate.", sort_order=380, tags=("sync", "stage")),
         _p("distribution.activation", "Activation capability", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", implementation_status="BLOCKED", failure_reason="Activation is intentionally fail-closed and not physically implemented.", sort_order=390, tags=("activation", "safe-fail-closed")),
-        _p("distribution.rollback", "Rollback capability", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", implementation_status="BLOCKED", failure_reason="Rollback currently contains a stub lifecycle and must not be presented as physical rollback.", sort_order=400, tags=("rollback", "safe-fail-closed")),
+        _p("distribution.rollback", "Rollback capability", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", implementation_status="BLOCKED", failure_reason="Physical rollback is not implemented; the backend now fails closed without mutating Runtime state.", sort_order=400, tags=("rollback", "safe-fail-closed")),
     ]
     return ProjectionRegistry(items)
 
