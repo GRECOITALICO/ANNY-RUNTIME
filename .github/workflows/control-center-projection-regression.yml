@@ -9,8 +9,12 @@ on:
       - "runtime/admin/templates_cc.py"
       - "runtime/bootstrap/report.py"
       - "runtime/bootstrap/conrrad.py"
+      - "runtime/admin/sync_ui.py"
+      - "runtime/sync/service.py"
+      - "runtime/continuity/engine.py"
       - "tests/test_control_center_projections.py"
       - "tests/test_batch9_conrrad_truth.py"
+      - "tests/test_sync_service.py"
       - ".github/workflows/control-center-projection-regression.yml"
   workflow_dispatch:
 
