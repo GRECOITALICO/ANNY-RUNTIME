@@ -50,7 +50,9 @@ def test_control_center_browser_e2e():
 
                     sync_row = page.locator(
                         "#projection-registry-tbody tr"
-                    ).filter(has_text="distribution.sync")
+                    ).filter(
+                        has=page.get_by_text("distribution.sync", exact=True)
+                    )
                     expect(sync_row).to_have_count(1)
                     sync_row.get_by_role("button", name="VIEW").click()
 
