@@ -44,6 +44,10 @@ Every projection definition carries at least:
 - `implementation_status`
 
 ## Truth rules
+The bootstrap boundary now enforces the same CONRRAD-first sequence that the Control Center exposes:
+`CONRRAD_BOOTSTRAP_PREFLIGHT` -> `CONRRAD_MANIFEST_AND_TRUST_VERIFIED` -> `CONRRAD_DEPENDENCY_REGISTRY_LOADED` -> GitHub.
+These gates require an injected external CONRRAD client. A missing client fails closed; GitHub is not contacted through this bootstrap path.
+Successful dependency completion requires every mandatory service to report `ONLINE_VERIFIED` and `VERIFIED` trust.
 The bootstrap report now exposes an explicit `bootstrap_state` and `conrrad_dependencies` transport channel.
 An empty dependency list means that no external CONRRAD registry observation has been attached to the report;
 the Control Center must continue to project the safe NOT_CONFIGURED/UNKNOWN state in that case.
