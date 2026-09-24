@@ -431,7 +431,7 @@ class AdminRouter:
 
         def _report_status(attribute: str, allowed: set[str]) -> str:
             value = getattr(report, attribute, None) if report else None
-            if isinstance(value, str) and value in allowed:
+            if isinstance(value, str) and value in allowed and value != 'UNKNOWN':
                 return value
             return 'BLOCKED' if bootstrap_state == 'BLOCKED' else 'UNKNOWN'
 
