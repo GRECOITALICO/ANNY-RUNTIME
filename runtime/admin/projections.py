@@ -340,6 +340,7 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("continuity.status", "Continuity timeline", "Continuity", source_authority="CONTINUITY_ENGINE", implementation_status="BOUND", route_or_detail="/continuity/timeline", sort_order=150, tags=("continuity", "timeline")),
         _p("continuity.recovery", "Continuity recovery", "Continuity", priority="P1", source_authority="CANONICAL_STATE", implementation_status="PLANNED", route_or_detail="/continuity/recovery", sort_order=160, tags=("recovery",)),
         _p("evidence.freshness", "Evidence freshness", "Evidence / Provenance", priority="P0", source_authority="EVIDENCE_REGISTRY", implementation_status="PLANNED", sort_order=170, tags=("evidence", "freshness")),
+        _p("evidence.index", "Evidence index", "Evidence / Provenance", priority="P1", source_authority="CONTINUITY_ENGINE", route_or_detail="/audit/evidence", implementation_status="BOUND", sort_order=171, tags=("evidence", "index")),
         _p("audit.events", "Audit events", "Evidence / Provenance", priority="P1", source_authority="AUDIT_STORE", route_or_detail="/audit/events", implementation_status="BOUND", sort_order=181, tags=("audit", "events")),
         
         _p("evidence.provenance", "Evidence provenance", "Evidence / Provenance", priority="P1", source_authority="EVIDENCE_REGISTRY", implementation_status="PARTIAL", route_or_detail="/audit/provenance", sort_order=180, tags=("provenance",)),
@@ -436,7 +437,7 @@ DEFAULT_NAVIGATION_ITEMS: Tuple[NavigationItem, ...] = (
 
     NavigationItem("AUDIT", "Events", "📋", "/audit/events", "audit.events"),
     NavigationItem("AUDIT", "Provenance", "🔍", "/audit/provenance", "evidence.provenance"),
-    NavigationItem("AUDIT", "Evidence", "🛡", "/audit/evidence", "evidence.freshness", "PLANNED"),
+    NavigationItem("AUDIT", "Evidence", "🛡", "/audit/evidence", "evidence.index"),
     NavigationItem("AUDIT", "Changes", "📝", "/audit/changes", "evidence.provenance", "PLANNED"),
 )
 
