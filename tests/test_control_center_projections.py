@@ -193,3 +193,32 @@ def test_active_navigation_items_resolve_to_real_get_routes():
         if item.availability == "PLANNED":
             continue
         assert item.path in get_routes, item.path
+
+
+def test_projection_freshness_default_reflects_implementation_state():
+    from runtime.admin.projections import ProjectionDefinition
+
+    bound = ProjectionDefinition(
+        projection_id="test.bound.freshness",
+        title="Bound",
+        section="Test",
+        priority="P0",
+        current_status="UNKNOWN",
+        truth_class="UNKNOWN",
+        source_authority="TEST",
+        freshness="LIVE_ON_READ",
+    )
+    planned = ProjectionDefinition(
+        projection_id="test.planned.freshness",
+        title="Planned",
+        section="Test",
+        priority="P1",
+        current_status="UNKNOWN",
+        truth_class="UNKNOWN",
+        source_authority="TEST",
+        freshness="NOT_BOUND",
+        implementation_status="PLANNED",
+    )
+
+    assert bound.freshness == "LIVE_ON_READ"
+    assert planned.freshness == "NOT_BOUND"
