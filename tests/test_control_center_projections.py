@@ -87,3 +87,28 @@ def test_canonical_navigation_keeps_all_visible_destinations_and_marks_unavailab
         if item.availability == "PLANNED":
             assert f'>{item.label}</span></span>' in html or f'>{item.label}</span>' in html
             assert f'href="{item.path}"' not in html
+
+
+def test_control_center_existing_panels_have_stable_projection_ids():
+    from runtime.admin.templates_cc import control_center_page
+    from runtime.admin.projections import DEFAULT_PROJECTION_REGISTRY
+
+    html = control_center_page("")
+    panel_ids = {
+        "control.top_level_state",
+        "control.operational_snapshot",
+        "control.bootstrap_verification",
+        "control.runtime_health",
+        "control.repository_fabric",
+        "control.access_verification",
+        "control.current_contract",
+        "control.capability_inventory",
+        "control.tools",
+        "control.models",
+        "control.workers",
+        "control.connectors",
+        "control.processing_matrix",
+        "control.continuity",
+    }
+    assert all(f'data-projection-id="{projection_id}"' in html for projection_id in panel_ids)
+    assert all(DEFAULT_PROJECTION_REGISTRY.get(projection_id) is not None for projection_id in panel_ids)
