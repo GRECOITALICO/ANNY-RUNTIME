@@ -532,7 +532,14 @@ class AdminRouter:
         if isinstance(result, ThreePlaneReport):
             # Three-plane bootstrap result
             status_val = "READY" if result.anny_ready else "BLOCKED"
-            recon_status = "COHERENT" if result.anny_ready else "INCOHERENT"
+            reported_reconciliation = getattr(result, "reconciliation_status", "UNKNOWN")
+            recon_status = (
+                reported_reconciliation
+                if reported_reconciliation in {"COHERENT", "INCOHERENT", "BLOCKED"}
+                else "BLOCKED"
+                if getattr(result, "bootstrap_state", None) == "BLOCKED"
+                else "UNKNOWN"
+            )
             fabric_node = result.fabric_node
 
             engine = self.context.get('runtime_engine')
