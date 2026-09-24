@@ -105,7 +105,10 @@ def inject_sync_controls(page: str, csrf_token: str) -> str:
     if 'id="anny-sync-btn"' not in page:
         page = page.replace('</div>\n</header>', f'</div>{injected_header}\n</header>', 1)
     if 'id="anny-sync-panel"' not in page:
-        page = page.replace('<main>\n', '<main>\n' + panel + '\n', 1)
+        if '<main>\n' in page:
+            page = page.replace('<main>\n', '<main>\n' + panel + '\n', 1)
+        elif '<main>' in page:
+            page = page.replace('<main>', '<main>\n' + panel + '\n', 1)
     if 'id="anny-sync-ui-css"' not in page:
         page = page.replace('</head>', css + '\n</head>', 1)
     if 'id="anny-sync-ui-js"' not in page:
