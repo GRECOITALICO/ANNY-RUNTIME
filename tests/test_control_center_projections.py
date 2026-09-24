@@ -580,34 +580,8 @@ def test_every_active_or_alias_navigation_item_resolves_to_a_get_route():
     expected_paths = {item.path for item in active}
 
     router_probe = __import__("runtime.admin.routes", fromlist=["AdminRouter"])
-    assert expected_paths <= {
-        "/",
-        "/github",
-        "/fabric",
-        "/sessions",
-        "/operations",
-        "/receipts",
-        "/executions",
-        "/workers",
-        "/capabilities",
-        "/models",
-        "/doctor",
-        "/universe/accounts",
-        "/universe/organization",
-        "/universe/projects",
-        "/universe/repositories",
-        "/universe/resources",
-        "/execution/missions",
-        "/execution/tasks",
-        "/execution/workers",
-        "/execution/executions",
-        "/intelligence/capabilities",
-        "/telemetry/live",
-        "/telemetry/timeline",
-        "/audit/events",
-        "/audit/provenance",
-        "/browser",
-    }
+    router = router_probe.AdminRouter({})
+    assert expected_paths <= set(router._get_routes)
 
-    # Route table must remain directly inspectable on the concrete AdminRouter.
-    assert hasattr(router_probe.AdminRouter, "__init__")
+    # Planned items are intentionally allowed to exist as compatibility routes,
+    # but must not be promoted to active navigation without projection support.
