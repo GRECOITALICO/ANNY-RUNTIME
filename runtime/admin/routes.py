@@ -26,6 +26,7 @@ from runtime.admin.dto import (
 from runtime.github.client import GitHubClient
 from runtime.github.discovery import OrganizationDiscoveryService
 from runtime.core.version import __version__
+from runtime.admin.projections import DEFAULT_PROJECTION_REGISTRY, VALID_PRIORITIES
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ class AdminRouter:
             '/audit/evidence': self.handle_audit_evidence,
             '/search': self.handle_search,
             '/api/status': self.handle_api_status,
+            '/api/control-center/projections': self.handle_control_center_projections,
             '/api/v1/continuity/bootstrap': self.handle_bootstrap_api,
             '/telemetry/live': self.handle_telemetry_live,
             '/telemetry/timeline': self.handle_telemetry_timeline,
@@ -286,6 +288,29 @@ class AdminRouter:
         events = aggregator.get_events(filters, limit=limit)
         self.context['direct_json_response'] = events
         return '/'
+
+    def handle_control_center_projections(self, parsed) -> str:
+        """Return the canonical, read-only Control Center projection registry."""
+        query = urllib.parse.parse_qs(parsed.query)
+        priority = query.get('priority', [None])[0]
+        section = query.get('section', [None])[0]
+        implementation_status = query.get('implementation_status', [None])[0]
+
+        if priority and priority not in VALID_PRIORITIES:
+            self.context['direct_json_response'] = {
+                "error": "INVALID_PRIORITY",
+                "status": "BLOCKED",
+            }
+            return '/'
+
+        payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(
+            priority=priority,
+            section=section,
+            implementation_status=implementation_status,
+        )
+        self.context['direct_json_response'] = payload
+        return '/'
+
 
     def handle_api_status(self, parsed) -> str:
         """Returns the live status of the runtime and bootstrap sequence."""
