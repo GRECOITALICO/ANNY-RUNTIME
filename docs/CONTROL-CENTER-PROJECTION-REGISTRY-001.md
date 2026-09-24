@@ -140,6 +140,11 @@ The projection registry is read-only. It does not authorize or mutate Runtime st
 
 In particular, SYNC `stage`, `activate`, and `rollback` must remain visibly blocked or
 not implemented while the underlying backend capabilities are stubs or fail-closed.
+The first-level Control Center shell exposes `SYNC NOW` and reads `/api/sync/status` as a
+separate governed surface. SYNC is not equivalent to VERIFY, STAGE, ACTIVATE or ROLLBACK.
+`STAGE`, `ACTIVATE` and `ROLLBACK` remain disabled in the GUI while their physical lifecycle
+implementations are stubs or fail-closed. A `VERIFIED` sync candidate therefore never causes
+those controls to become enabled by itself.
 
 No Control Center projection may bypass CONRRAD-first ordering, Runtime authorization,
 or evidence requirements.
