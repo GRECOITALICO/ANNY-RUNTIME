@@ -307,10 +307,11 @@ def test_sync_stage_activate_rollback(tmp_path: Path):
     assert res["error_classification"] == "STAGE_NOT_IMPLEMENTED"
     assert service.status()["sync_state"] == SyncState.VERIFIED.value
 
-    # 3. Activate remains blocked because no STAGED state is created.
+    # 3. Activate is always fail-closed, including stale persisted STAGED candidates.
     res = service.activate()
     assert res["status"] == "blocked"
-    assert res["error"] == "Cannot activate without a STAGED candidate"
+    assert res["sync_state"] == SyncState.BLOCKED.value
+    assert res["error_classification"] == "ACTIVATION_NOT_IMPLEMENTED"
     assert service.local_version == "v0.4.0"
 
     # 4. Rollback is also fail-closed and non-mutating.
@@ -324,10 +325,13 @@ def test_stage_blocked_if_not_verified(tmp_path: Path):
     res = service.stage()
     assert res["status"] == "blocked"
 
-def test_activate_blocked_if_not_staged(tmp_path: Path):
+
+def test_activate_always_fails_closed_even_without_a_staged_candidate(tmp_path: Path):
     service = SyncService(tmp_path)
     res = service.activate()
     assert res["status"] == "blocked"
+    assert res["sync_state"] == SyncState.BLOCKED.value
+    assert res["error_classification"] == "ACTIVATION_NOT_IMPLEMENTED"
 
 def test_rollback_blocked_if_not_activated(tmp_path: Path):
     service = SyncService(tmp_path)
