@@ -1052,6 +1052,41 @@ def doctor_page(diagnostics, csrf_token=""):
     """, "/doctor", csrf_token, "admin.doctor")
 
 
+def execution_missions_page(continuity, csrf_token=""):
+    """Render the canonical current mission/task/next-action projection."""
+    mission = _escape_html(getattr(continuity, "current_mission", None) or "UNKNOWN")
+    task = _escape_html(getattr(continuity, "current_task", None) or "UNKNOWN")
+    next_action = _escape_html(getattr(continuity, "next_action", None) or "UNKNOWN")
+    status = _escape_html(getattr(continuity, "status", None) or "UNKNOWN")
+    recon = _escape_html(getattr(continuity, "reconciliation_status", None) or "UNKNOWN")
+    blocker_count = getattr(continuity, "blocker_count", 0) or 0
+    try:
+        blocker_count = int(blocker_count)
+    except (TypeError, ValueError):
+        blocker_count = 0
+
+    return base_layout("Missions", f"""
+        <div class="page-header">
+            <h2>Current Mission</h2>
+            <p>Canonical mission projection from the current Runtime continuity boundary.</p>
+        </div>
+        <div class="kv-grid" style="margin-bottom:24px;">
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">MISSION</span><span class="detail-value mono">{mission}</span></div></div>
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">TASK</span><span class="detail-value mono">{task}</span></div></div>
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">NEXT ACTION</span><span class="detail-value mono">{next_action}</span></div></div>
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">BLOCKERS</span><span class="detail-value mono">{_escape_html(blocker_count)}</span></div></div>
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">CONTINUITY STATUS</span><span class="badge badge-info">{status}</span></div></div>
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">RECONCILIATION</span><span class="badge badge-info">{recon}</span></div></div>
+        </div>
+        <div class="detail-panel">
+            <h3 style="margin-top:0;">Truth Boundary</h3>
+            <p style="color:var(--text-secondary);margin-bottom:0;">
+                Values are presented only when the current continuity projection observes them; missing values remain UNKNOWN.
+            </p>
+        </div>
+    """, "/execution/missions", csrf_token, "execution.missions")
+
+
 def executions_page(executions, csrf_token=""):
     """Render the executions control plane page."""
     rows = ""
