@@ -241,3 +241,9 @@ def test_projection_registry_exposes_section_and_freshness_dimensions():
     assert freshness_payload["page"]["total_filtered"] == payload["summary"]["by_freshness"][freshness]
     assert freshness_payload["projections"]
     assert all(item["freshness"] == freshness for item in freshness_payload["projections"])
+
+
+def test_admin_shell_has_no_external_font_dependency():
+    from runtime.admin.templates import COMMON_CSS
+
+    assert "fonts.googleapis.com" not in COMMON_CSS
