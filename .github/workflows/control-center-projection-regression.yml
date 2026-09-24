@@ -5,6 +5,7 @@ on:
     paths:
       - "runtime/admin/projections.py"
       - "runtime/admin/routes.py"
+      - "runtime/admin/templates.py"
       - "runtime/admin/templates_cc.py"
       - "runtime/bootstrap/report.py"
       - "runtime/bootstrap/conrrad.py"
