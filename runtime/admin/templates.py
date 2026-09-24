@@ -1621,6 +1621,27 @@ def audit_events_page(events, csrf_token=""):
     """
     return base_layout("Audit Events", content, "/audit/events", csrf_token)
 
+def audit_evidence_page(evidence_refs, csrf_token=""):
+    rows = ""
+    for ref in evidence_refs:
+        safe_ref = _escape_html(ref)
+        rows += f'<tr><td class="mono">{safe_ref}</td><td><span class="badge badge-info">OBSERVED_REFERENCE</span></td></tr>'
+    if not rows:
+        rows = '<tr><td colspan="2" style="text-align:center;color:var(--text-muted);padding:32px;">No evidence references observed in durable continuity state.</td></tr>'
+    return base_layout("Evidence", f"""
+        <div class="page-header">
+            <h2>Evidence Index</h2>
+            <p>Evidence references observed in durable Runtime continuity state and events.</p>
+        </div>
+        <div class="detail-panel" style="padding:0;overflow-x:auto;">
+            <table class="data-table">
+                <thead><tr><th>Reference</th><th>Observation</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    """, "/audit/evidence", csrf_token, "evidence.index")
+
+
 def audit_provenance_page(prov_data, csrf_token=""):
     content = f"""
         <div class="page-header"><h2>Provenance & Evidence</h2><p>Cryptographic traces</p></div>
