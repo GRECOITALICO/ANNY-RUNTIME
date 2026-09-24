@@ -734,6 +734,8 @@ def reconnect_page(csrf_token=""):
 
 
 def failure_page(reason, csrf_token=""):
+    safe_reason = _escape_html(reason)
+    safe_csrf = _escape_html(csrf_token)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -749,9 +751,9 @@ def failure_page(reason, csrf_token=""):
     <div class="login-card animate-fade-in" style="text-align:center;">
         <h1>ANNY</h1>
         <p style="color:var(--text-primary);font-weight:600;margin-bottom:16px;">GitHub connection failed.</p>
-        <p style="color:var(--text-secondary);margin-bottom:32px;">Reason:<br>{reason}</p>
+        <p style="color:var(--text-secondary);margin-bottom:32px;">Reason:<br>{safe_reason}</p>
         <form method="POST" action="/github/token">
-            <input type="hidden" name="csrf_token" value="{csrf_token}">
+            <input type="hidden" name="csrf_token" value="{safe_csrf}">
             <div style="margin-bottom: 24px; text-align: left;">
                 <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">RECOVERY TOKEN (Admin Only)</label>
                 <input type="password" name="github_token" id="github_token_input" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
@@ -772,13 +774,13 @@ def ready_page(status, csrf_token=""):
     continuity_status = cont.get('status', 'UNKNOWN')
     badge_class = 'badge-success' if continuity_status in ('CONSISTENT', 'READY') else ('badge-warning' if continuity_status == 'DEGRADED' else 'badge-danger')
     
-    mission = cont.get('current_mission', '—')
-    task = cont.get('current_task', '—')
-    next_action = cont.get('next_action', '—')
+    mission = _escape_html(cont.get('current_mission', '—'))
+    task = _escape_html(cont.get('current_task', '—'))
+    next_action = _escape_html(cont.get('next_action', '—'))
     blocker_count = cont.get('blocker_count', 0)
     
     orgs = cont.get('organizations', [])
-    org_name = orgs[0].get('login') if orgs and isinstance(orgs[0], dict) else gh.get('principal', '—')
+    org_name = _escape_html(orgs[0].get('login')) if orgs and isinstance(orgs[0], dict) else _escape_html(gh.get('principal', '—'))
     
     repos = cont.get('repositories', [])
     repo_count = len(repos)
@@ -787,7 +789,7 @@ def ready_page(status, csrf_token=""):
     l2_count = l2_info.get('count', 0) if isinstance(l2_info, dict) else 0
 
     identity = status.get('identity', {}) if isinstance(status, dict) else {}
-    id_str = f"{identity.get('key_type', 'UNKNOWN')} / {identity.get('status', 'UNKNOWN')}"
+    id_str = _escape_html(f"{identity.get('key_type', 'UNKNOWN')} / {identity.get('status', 'UNKNOWN')}")
 
     return base_layout("Dashboard", f"""
         <div class="page-header">
@@ -799,11 +801,11 @@ def ready_page(status, csrf_token=""):
             <!-- INFRASTRUCTURE -->
             <a href="/infrastructure/runtime" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Runtime</div>
-                <div style="font-size:22px; font-weight:700;"><span class="badge badge-success">{_escape_html(cont.get('runtime_status', 'CONNECTED'))}</span></div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge badge-success">{_escape_html(cont.get('runtime_status', 'UNKNOWN'))}</span></div>
             </a>
             <a href="/infrastructure/github" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">GitHub</div>
-                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if gh.get('connected') else 'badge-danger' }">{_escape_html(gh.get('auth_status', 'ERROR'))}</span></div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if gh.get('connected') else 'badge-danger' }">{_escape_html(gh.get('auth_status', 'UNKNOWN'))}</span></div>
             </a>
             <a href="/infrastructure/fabric" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Fabric</div>
@@ -860,7 +862,7 @@ def ready_page(status, csrf_token=""):
             <div class="detail-row"><span class="detail-label">Organizations</span><span class="detail-value">{_escape_html(org_name)}</span></div>
             <div class="detail-row"><span class="detail-label">Current Mission</span><span class="detail-value" style="font-weight:600; color:var(--accent-emerald);">{_escape_html(mission)}</span></div>
         </div>
-    """, "/", csrf_token)
+    """, "/", csrf_token, "control.top_level_state")
 
 
 
@@ -1231,10 +1233,10 @@ def worker_detail_page(w, csrf_token=""):
         </div>
         <div class="detail-panel">
             <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{_escape_html(w.state.value)}</span></div>
-            <div class="detail-row"><span class="detail-label">Execution ID</span><span class="mono">{w.execution_id}</span></div>
+            <div class="detail-row"><span class="detail-label">Execution ID</span><span class="mono">{_escape_html(w.execution_id)}</span></div>
             <div class="detail-row"><span class="detail-label">Task ID</span><span class="mono">{_escape_html(w.task_id)}</span></div>
-            <div class="detail-row"><span class="detail-label">Capability</span><span class="mono">{w.capability_id}</span></div>
-            <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{w.executor_type}</span></div>
+            <div class="detail-row"><span class="detail-label">Capability</span><span class="mono">{_escape_html(w.capability_id)}</span></div>
+            <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{_escape_html(w.executor_type)}</span></div>
             <div class="detail-row"><span class="detail-label">Executor ID</span><span class="detail-value">{_escape_html(w.executor_id)}</span></div>
             <div class="detail-row"><span class="detail-label">Model ID</span><span class="detail-value">{_escape_html(w.model_id or '—')}</span></div>
             <div class="detail-row"><span class="detail-label">Created At</span><span class="detail-value">{_escape_html(w.created_at.isoformat())}</span></div>
@@ -1246,7 +1248,7 @@ def worker_detail_page(w, csrf_token=""):
             <div class="detail-row"><span class="detail-label">Filesystem Policy</span><span class="detail-value">{_escape_html(w.filesystem_policy)}</span></div>
             <div class="detail-row"><span class="detail-label">Resource Limits</span><span class="detail-value">{_escape_html(w.resource_limits)}</span></div>
         </div>
-    """, "/workers", csrf_token, "execution.workers")
+    """, "/workers", csrf_token, "execution.worker_detail")
 
 
 def models_page(models, csrf_token=""):
@@ -1315,7 +1317,7 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
         </div>
         <div class="detail-panel">
             <h3 style="font-size:14px; margin-bottom:12px; color:var(--text-primary);">Definition</h3>
-            <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{model.state.value}</span></div>
+            <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{_escape_html(model.state.value)}</span></div>
             <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">{_escape_html(model.model_name)}</span></div>
             <div class="detail-row"><span class="detail-label">Provider</span><span class="detail-value">{_escape_html(model.provider)}</span></div>
             <div class="detail-row"><span class="detail-label">Version</span><span class="detail-value">{_escape_html(model.version)}</span></div>
@@ -1341,7 +1343,7 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
                 <tbody>{bindings_rows}</tbody>
             </table>
         </div>
-    """, "/models", csrf_token, "intelligence.models")
+    """, "/models", csrf_token, "intelligence.model_detail")
 
 
 # New Templates for Control Plane Universe 001
