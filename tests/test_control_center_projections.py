@@ -585,3 +585,19 @@ def test_every_active_or_alias_navigation_item_resolves_to_a_get_route():
 
     # Planned items are intentionally allowed to exist as compatibility routes,
     # but must not be promoted to active navigation without projection support.
+
+
+def test_control_center_truth_projection_is_registered_and_uses_server_status_metadata():
+    from runtime.admin.projections import DEFAULT_PROJECTION_REGISTRY
+    from runtime.admin.templates_cc import control_center_page
+
+    projection = DEFAULT_PROJECTION_REGISTRY.get("control.truth_freshness")
+    assert projection is not None
+    assert projection.priority == "P0"
+    assert projection.source_authority == "RUNTIME_OBSERVATION"
+
+    html = control_center_page("csrf")
+    assert 'data-projection-id="control.truth_freshness"' in html
+    assert "truth_sources.runtime_state" in html
+    assert "truth_sources.conrrad" in html
+    assert "main_execution_verified === true" in html
