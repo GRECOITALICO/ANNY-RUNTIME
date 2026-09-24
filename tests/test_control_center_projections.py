@@ -67,3 +67,23 @@ def test_control_center_projection_api_rejects_invalid_priority():
         "error": "INVALID_PRIORITY",
         "status": "BLOCKED",
     }
+
+
+def test_canonical_navigation_keeps_all_visible_destinations_and_marks_unavailable_items():
+    from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS
+    from runtime.admin.templates import _render_navigation
+
+    assert len(DEFAULT_NAVIGATION_ITEMS) == 33
+    paths = [item.path for item in DEFAULT_NAVIGATION_ITEMS]
+    assert len(paths) == len(set(paths))
+    assert any(item.path == "/models" and item.availability == "ALIAS" for item in DEFAULT_NAVIGATION_ITEMS)
+    assert not any(item.path == "/intelligence/models" for item in DEFAULT_NAVIGATION_ITEMS)
+
+    html = _render_navigation("/")
+    assert 'href="/models"' in html
+    assert 'href="/intelligence/models"' not in html
+
+    for item in DEFAULT_NAVIGATION_ITEMS:
+        if item.availability == "PLANNED":
+            assert f'>{item.label}</span></span>' in html or f'>{item.label}</span>' in html
+            assert f'href="{item.path}"' not in html
