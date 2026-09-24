@@ -300,36 +300,38 @@ def test_sync_stage_activate_rollback(tmp_path: Path):
     status = service.status()
     assert status["sync_state"] == SyncState.VERIFIED.value
 
-    # 2. Stage
+    # 2. Stage is fail-closed; it must never synthesize STAGED from the stub.
     res = service.stage()
-    assert res["status"] == "staging"
-    service.wait()
-    status = service.status()
-    assert status["sync_state"] == SyncState.STAGED.value
-    assert status["stage"] == "STAGE"
+    assert res["status"] == "blocked"
+    assert res["sync_state"] == SyncState.BLOCKED.value
+    assert res["error_classification"] == "STAGE_NOT_IMPLEMENTED"
+    assert service.status()["sync_state"] == SyncState.VERIFIED.value
 
-    # 3. Activate (now fails closed to BLOCKED because not implemented physically)
+    # 3. Activate is always fail-closed, including stale persisted STAGED candidates.
     res = service.activate()
-    assert res["status"] == "activating"
-    service.wait()
-    status = service.status()
-    assert status["sync_state"] == SyncState.BLOCKED.value
-    assert status["error_classification"] == "ACTIVATION_NOT_IMPLEMENTED"
-    assert status["activation_performed"] is False
+    assert res["status"] == "blocked"
+    assert res["sync_state"] == SyncState.BLOCKED.value
+    assert res["error_classification"] == "ACTIVATION_NOT_IMPLEMENTED"
     assert service.local_version == "v0.4.0"
-    # 4. Rollback (blocked because activation failed)
+
+    # 4. Rollback is also fail-closed and non-mutating.
     res = service.rollback()
     assert res["status"] == "blocked"
-    assert res["error"] == "Cannot rollback when not activated"
+    assert res["sync_state"] == SyncState.BLOCKED.value
+    assert res["error_classification"] == "ROLLBACK_NOT_IMPLEMENTED"
+    assert service.status()["sync_state"] == SyncState.VERIFIED.value
 def test_stage_blocked_if_not_verified(tmp_path: Path):
     service = SyncService(tmp_path)
     res = service.stage()
     assert res["status"] == "blocked"
 
-def test_activate_blocked_if_not_staged(tmp_path: Path):
+
+def test_activate_always_fails_closed_even_without_a_staged_candidate(tmp_path: Path):
     service = SyncService(tmp_path)
     res = service.activate()
     assert res["status"] == "blocked"
+    assert res["sync_state"] == SyncState.BLOCKED.value
+    assert res["error_classification"] == "ACTIVATION_NOT_IMPLEMENTED"
 
 def test_rollback_blocked_if_not_activated(tmp_path: Path):
     service = SyncService(tmp_path)
@@ -388,3 +390,51 @@ def test_concurrent_start_is_atomic(tmp_path: Path):
     # It should have SYNCING -> VERIFIED from the thread that won
     syncing_records = [r for r in records if r["sync_state"] == "SYNCING"]
     assert len(syncing_records) == 1
+
+
+def test_stage_and_rollback_do_not_mutate_verified_sync_state(tmp_path: Path):
+    service = SyncService(
+        tmp_path,
+        local_version="v0.4.0",
+        discover=lambda: {
+            "source": "test-authority",
+            "candidate_version": "v0.4.0",
+            "authorized": True,
+        },
+    )
+    service.start()
+    service.wait()
+    before = service.status()
+    assert before["sync_state"] == SyncState.VERIFIED.value
+
+    stage = service.stage()
+    rollback = service.rollback()
+
+    assert stage["sync_state"] == SyncState.BLOCKED.value
+    assert rollback["sync_state"] == SyncState.BLOCKED.value
+    assert service.status()["sync_state"] == SyncState.VERIFIED.value
+
+
+def test_activate_rejects_stale_persisted_staged_record(tmp_path: Path):
+    record_dir = tmp_path / "sync"
+    record_dir.mkdir()
+    stale = {
+        "sync_id": "sync-old",
+        "trace_id": "trace-old",
+        "requested_at": "2026-09-23T00:00:00+00:00",
+        "sync_state": "STAGED",
+        "stage": "STAGE",
+        "source": "legacy-test",
+        "local_version": "v0.4.0",
+        "candidate_version": "v0.5.0",
+        "activation_performed": False,
+        "details": {},
+    }
+    (record_dir / "sync_records.jsonl").write_text(json.dumps(stale) + "\n", encoding="utf-8")
+
+    service = SyncService(tmp_path, local_version="v0.4.0")
+    result = service.activate()
+
+    assert result["status"] == "blocked"
+    assert result["error_classification"] == "ACTIVATION_NOT_IMPLEMENTED"
+    assert service.local_version == "v0.4.0"
