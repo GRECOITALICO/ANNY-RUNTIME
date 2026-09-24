@@ -509,3 +509,25 @@ def test_control_center_truth_as_of_uses_server_timestamp_not_client_clock():
     assert "setText('last-verified', 'TRUTH AS OF: ' + (d.timestamp || 'UNKNOWN'))" in html
     assert "LAST POLLED" not in html
     assert "new Date().toISOString()" not in html
+
+
+def test_missions_route_renders_canonical_continuity_projection_and_execution_alias_is_not_placeholder():
+    from types import SimpleNamespace
+    from runtime.admin.templates import execution_missions_page
+
+    continuity = SimpleNamespace(
+        current_mission="MISSION-059",
+        current_task="CONTROL-CENTER",
+        next_action="CONTINUE_GUI",
+        blocker_count=2,
+        status="BLOCKED",
+        reconciliation_status="BLOCKED",
+    )
+    html = execution_missions_page(continuity)
+    assert "Current Mission" in html
+    assert "MISSION-059" in html
+    assert "CONTROL-CENTER" in html
+    assert "CONTINUE_GUI" in html
+    assert ">2</span>" in html
+    assert 'data-projection-id="execution.missions"' in html
+    assert "generic_placeholder_page" not in html
