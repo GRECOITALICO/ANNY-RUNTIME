@@ -1700,7 +1700,7 @@ def browser_dashboard_page(sessions: list, csrf_token: str = "") -> str:
         worker_id = _escape_html(s.worker_id[:8])
         mode = _escape_html(s.mode.value)
         state = _escape_html(s.status.value)
-        current_url = _escape_html(s.current_url or "N/A")
+        current_url_text = _escape_html(s.current_url or "N/A")
         created_at = _escape_html(s.created_at.isoformat() if s.created_at else "N/A")
         status_color = "var(--accent-green)" if s.status.value == "RUNNING" else "var(--text-muted)"
         if s.status.value == "FAILED":
@@ -1713,7 +1713,7 @@ def browser_dashboard_page(sessions: list, csrf_token: str = "") -> str:
             <td><code>{worker_id}</code></td>
             <td>{mode}</td>
             <td><span style="color:{status_color}">{state}</span></td>
-            <td>{current_url}</td>
+            <td>{current_url_text}</td>
             <td>{created_at}</td>
         </tr>
         """
@@ -1778,93 +1778,3 @@ def browser_session_page(session, csrf_token: str = "") -> str:
             </div>
         </div>
     """, "/browser", csrf_token, "browser.session_detail")
-
-
-def browser_dashboard_page(sessions: list, csrf_token: str = "") -> str:
-    rows = ""
-    for s_tuple in sessions:
-        s = s_tuple[0]  # BrowserSession
-        status_color = "var(--accent-green)" if s.status.value == "RUNNING" else "var(--text-muted)"
-        if s.status.value == "FAILED":
-            status_color = "var(--accent-rose)"
-        elif s.status.value == "PAUSED_FOR_HUMAN":
-            status_color = "var(--accent-yellow)"
-            
-        rows += f"""
-        <tr>
-            <td><a href="/browser/{s.session_id}" style="color: var(--accent-blue)">{s.session_id[:8]}...</a></td>
-            <td><code>{s.worker_id[:8]}</code></td>
-            <td>{s.mode.value}</td>
-            <td><span style="color: {status_color}">{s.status.value}</span></td>
-            <td>{s.current_url or 'N/A'}</td>
-            <td>{s.created_at.isoformat() if s.created_at else 'N/A'}</td>
-        </tr>
-        """
-    if not rows:
-        rows = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted)">No active browser sessions</td></tr>'
-
-    return render_admin_page("Browser Integration", f"""
-        <div class="page-header">
-            <h2>Browser Integration</h2>
-            <p>Active and recent Playwright-driven ephemeral browser sessions.</p>
-        </div>
-        
-        <div class="card" style="padding: 0; overflow-x: auto;">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Session ID</th>
-                        <th>Worker ID</th>
-                        <th>Mode</th>
-                        <th>Status</th>
-                        <th>Current URL</th>
-                        <th>Started At</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows}
-                </tbody>
-            </table>
-        </div>
-    """, "/browser", csrf_token)
-
-
-def browser_session_page(session, csrf_token: str = "") -> str:
-    import base64
-    
-    status_color = "var(--accent-green)" if session.status.value == "RUNNING" else "var(--text-muted)"
-    if session.status.value == "FAILED":
-        status_color = "var(--accent-rose)"
-    elif session.status.value == "PAUSED_FOR_HUMAN":
-        status_color = "var(--accent-yellow)"
-        
-    return render_admin_page(f"Browser Session {session.session_id[:8]}", f"""
-        <div class="page-header">
-            <h2>Session {session.session_id[:8]}</h2>
-            <p><a href="/browser" style="color: var(--accent-blue)">&larr; Back to Browser Dashboard</a></p>
-        </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
-            <div class="card">
-                <h3>Session Status</h3>
-                <table class="data-table">
-                    <tr><td style="color: var(--text-muted); width: 30%">Mode</td><td>{session.mode.value}</td></tr>
-                    <tr><td style="color: var(--text-muted)">State</td><td><span style="color: {status_color}">{session.status.value}</span></td></tr>
-                    <tr><td style="color: var(--text-muted)">Current URL</td><td><a href="{session.current_url}" target="_blank" style="color: var(--accent-blue)">{session.current_url or 'N/A'}</a></td></tr>
-                    <tr><td style="color: var(--text-muted)">Worker ID</td><td><code>{session.worker_id}</code></td></tr>
-                    <tr><td style="color: var(--text-muted)">Task ID</td><td><code>{session.task_id}</code></td></tr>
-                </table>
-            </div>
-            
-            <div class="card">
-                <h3>Policy & Constraints</h3>
-                <table class="data-table">
-                    <tr><td style="color: var(--text-muted); width: 30%">Network Policy</td><td>{session.policy.network_policy}</td></tr>
-                    <tr><td style="color: var(--text-muted)">Allowed Domains</td><td>{', '.join(session.policy.allowed_domains) or 'None'}</td></tr>
-                    <tr><td style="color: var(--text-muted)">Timeout</td><td>{session.policy.timeout_ms} ms</td></tr>
-                    <tr><td style="color: var(--text-muted)">Human Assist</td><td>{'Yes' if session.policy.human_assistance_allowed else 'No'}</td></tr>
-                    <tr><td style="color: var(--text-muted)">Profile Path</td><td><code>{session.profile_path or 'N/A'}</code></td></tr>
-                </table>
-            </div>
-        </div>
-    """, "/browser", csrf_token)
