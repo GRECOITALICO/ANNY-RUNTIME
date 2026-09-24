@@ -704,3 +704,80 @@ def test_generic_placeholder_escapes_user_controlled_title_and_rejects_executabl
     assert '<img src=x onerror=alert(1)>' not in html
     assert '&lt;img src=x onerror=alert(1)&gt;' in html
     assert 'javascript:alert(1)' not in html
+
+
+def test_detail_renderers_have_distinct_registered_projection_ids_and_escape_dynamic_values():
+    from runtime.admin.projections import DEFAULT_PROJECTION_REGISTRY
+    from runtime.admin.templates import worker_detail_page, model_detail_page
+    from types import SimpleNamespace
+    from datetime import datetime
+
+    worker = SimpleNamespace(
+        worker_id='<worker>',
+        execution_id='<exec>',
+        task_id='<task>',
+        capability_id='<cap>',
+        executor_type='<executor>',
+        executor_id='<executor-id>',
+        model_id='<model>',
+        state=SimpleNamespace(value='RUNNING'),
+        created_at=datetime(2026, 1, 1),
+        started_at=None,
+        finished_at=None,
+        workspace_id='<workspace>',
+        network_policy='<network>',
+        filesystem_policy='<filesystem>',
+        resource_limits='<limits>',
+    )
+    model = SimpleNamespace(
+        model_id='<model>',
+        model_name='<name>',
+        provider='<provider>',
+        version='<version>',
+        state=SimpleNamespace(value='<STATE>'),
+        location_type='<location>',
+        path_or_uri='<uri>',
+        executor_type='<executor>',
+    )
+
+    worker_html = worker_detail_page(worker)
+    model_html = model_detail_page(model, [], None, None)
+
+    assert DEFAULT_PROJECTION_REGISTRY.get("execution.worker_detail") is not None
+    assert DEFAULT_PROJECTION_REGISTRY.get("intelligence.model_detail") is not None
+    assert 'data-projection-id="execution.worker_detail"' in worker_html
+    assert 'data-projection-id="intelligence.model_detail"' in model_html
+    assert '&lt;exec&gt;' in worker_html
+    assert '&lt;executor&gt;' in worker_html
+    assert '&lt;STATE&gt;' in model_html
+
+
+def test_failure_and_ready_renderers_escape_dynamic_values():
+    from runtime.admin.templates import failure_page, ready_page
+
+    failure = failure_page('<FAIL>', '"csrf<script>')
+    assert '<FAIL>' not in failure
+    assert '&lt;FAIL&gt;' in failure
+    assert 'value="&quot;csrf&lt;script&gt;"' in failure
+
+    ready = ready_page({
+        "continuity": {
+            "status": "READY",
+            "runtime_status": '<RUNTIME>',
+            "current_mission": '<MISSION>',
+            "current_task": '<TASK>',
+            "next_action": '<NEXT>',
+            "organizations": [{"login": '<ORG>'}],
+            "blocker_count": 1,
+            "repositories": [],
+            "l2_worker_summary": {"count": 0},
+        },
+        "github": {"connected": True, "auth_status": '<AUTH>'},
+        "identity": {"key_type": '<KEY>', "status": '<STATUS>'},
+    })
+    assert '<RUNTIME>' not in ready
+    assert '&lt;RUNTIME&gt;' in ready
+    assert '&lt;MISSION&gt;' in ready
+    assert '&lt;ORG&gt;' in ready
+    assert '&lt;AUTH&gt;' in ready
+    assert 'data-projection-id="control.top_level_state"' in ready
