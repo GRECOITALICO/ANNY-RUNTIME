@@ -298,7 +298,7 @@ def test_control_center_conrrad_projection_is_strict_and_non_synthetic():
                 }
                 for name in __import__("runtime.bootstrap.conrrad", fromlist=["REQUIRED_CONRRAD_SERVICES"]).REQUIRED_CONRRAD_SERVICES
             ],
-            health_check=lambda: {"status": "ok"},
+            health_check=lambda self: {"status": "ok"},
         )
 
     router = AdminRouter({"runtime_engine": Engine()})
