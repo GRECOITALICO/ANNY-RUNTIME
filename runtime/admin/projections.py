@@ -41,8 +41,8 @@ class ProjectionDefinition:
     truth_class: str
     source_authority: str
     freshness: str
-    evidence_ref: Optional[str]
-    failure_reason: Optional[str]
+    evidence_ref: Optional[str] = None
+    failure_reason: Optional[str] = None
     dependencies: Tuple[str, ...] = field(default_factory=tuple)
     visibility_policy: str = "VISIBLE"
     route_or_detail: Optional[str] = None
