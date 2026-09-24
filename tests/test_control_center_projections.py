@@ -336,3 +336,35 @@ def test_control_center_has_no_external_font_dependency():
     source = __import__("inspect").getsource(router._set_security_headers)
     assert "fonts.googleapis.com" not in source
     assert "fonts.gstatic.com" not in source
+
+
+def test_conrrad_registry_completion_requires_canonical_live_status_and_trust():
+    from runtime.bootstrap.conrrad import REQUIRED_CONRRAD_SERVICES, registry_is_complete
+
+    records = [
+        {"service_name": name, "online_status": "ONLINE", "trust_status": "VERIFIED"}
+        for name in REQUIRED_CONRRAD_SERVICES
+    ]
+    assert registry_is_complete(records) is False
+
+    records[-1]["online_status"] = "ONLINE_VERIFIED"
+    assert registry_is_complete(records) is False
+
+    records = [
+        {"service_name": name, "online_status": "ONLINE_VERIFIED", "trust_status": "VERIFIED"}
+        for name in REQUIRED_CONRRAD_SERVICES
+    ]
+    assert registry_is_complete(records) is True
+
+
+def test_conrrad_default_projection_is_explicitly_not_observed():
+    from runtime.bootstrap.conrrad import (
+        REQUIRED_CONRRAD_SERVICES,
+        project_dependency_matrix,
+    )
+
+    rows = project_dependency_matrix(None)
+    assert [row["service_name"] for row in rows] == list(REQUIRED_CONRRAD_SERVICES)
+    assert all(row["online_status"] == "NOT_CONFIGURED" for row in rows)
+    assert all(row["trust_status"] == "UNKNOWN" for row in rows)
+    assert all(row["evidence_ref"] == "UNKNOWN" for row in rows)
