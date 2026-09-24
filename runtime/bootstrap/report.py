@@ -34,6 +34,9 @@ class BootstrapReport:
     admission_status: str = "UNKNOWN"
     reconciliation_status: str = "UNKNOWN"
     limits_verified: bool = False
+    # Local observations of external CONRRAD authority; empty means not observed.
+    bootstrap_state: str = "UNKNOWN"
+    conrrad_dependencies: List[Dict[str, Any]] = field(default_factory=list)
     
     # Inventories
     capabilities: ComponentInventory = field(default_factory=ComponentInventory)
@@ -47,6 +50,7 @@ class BootstrapReport:
 
     def finish(self, ready: bool) -> None:
         self.anny_ready = ready
+        self.bootstrap_state = "READY" if ready else "BLOCKED"
         self.completed_at = datetime.now(timezone.utc).isoformat()
 
     def get_gate(self, gate: ReadinessGate) -> GateResult:
@@ -132,5 +136,7 @@ class ChatGPTBootstrapFormatter:
             f"FABRIC_TENANT: {tenant_id}",
             f"POLICY_REVISION: {report.policy_revision}",
             f"LIMITS_VERIFIED: {report.limits_verified}",
+            f"BOOTSTRAP_STATE: {report.bootstrap_state}",
+            f"CONRRAD_DEPENDENCIES_OBSERVED: {len(report.conrrad_dependencies)}",
         ])
         return "\n".join(lines)
