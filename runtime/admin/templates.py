@@ -1557,6 +1557,45 @@ def infrastructure_topology_page(gh_status, fabric_status, mcp_status, runtime_s
     """
     return base_layout("Infrastructure Topology", content, "/infrastructure/runtime", csrf_token, "infrastructure.runtime")
 
+def continuity_timeline_page(events, csrf_token=""):
+    rows = ""
+    for event in events:
+        timestamp = getattr(event, "timestamp", "")
+        sequence = getattr(event, "sequence", 0)
+        mission_id = getattr(event, "mission_id", "UNKNOWN")
+        task_id = getattr(event, "task_id", "UNKNOWN")
+        event_type = getattr(getattr(event, "event_type", None), "value", getattr(event, "event_type", "UNKNOWN"))
+        status = getattr(event, "status", "UNKNOWN")
+        result = getattr(event, "result", "UNKNOWN")
+        evidence_count = len(getattr(event, "evidence_refs", []) or [])
+        rows += f"""
+        <tr>
+            <td class="mono">{_escape_html(sequence)}</td>
+            <td class="mono">{_escape_html(timestamp)}</td>
+            <td class="mono">{_escape_html(mission_id)}</td>
+            <td class="mono">{_escape_html(task_id)}</td>
+            <td>{_escape_html(event_type)}</td>
+            <td><span class="badge badge-info">{_escape_html(status)}</span></td>
+            <td>{_escape_html(result)}</td>
+            <td>{_escape_html(evidence_count)}</td>
+        </tr>
+        """
+    if not rows:
+        rows = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px;">No durable continuity events observed.</td></tr>'
+    return base_layout("Continuity Timeline", f"""
+        <div class="page-header">
+            <h2>Continuity Timeline</h2>
+            <p>Recent durable events reconstructed from the append-only Continuity Engine.</p>
+        </div>
+        <div class="detail-panel" style="padding:0;overflow-x:auto;">
+            <table class="data-table">
+                <thead><tr><th>Seq</th><th>Timestamp</th><th>Mission</th><th>Task</th><th>Event</th><th>Status</th><th>Result</th><th>Evidence</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    """, "/continuity/timeline", csrf_token, "continuity.status")
+
+
 def audit_events_page(events, csrf_token=""):
     rows = ""
     for ev in events:
