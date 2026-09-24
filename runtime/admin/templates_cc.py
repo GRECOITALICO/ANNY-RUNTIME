@@ -250,6 +250,39 @@ def control_center_page(csrf_token: str) -> str:
     </div>
 </div>
 
+<!-- Projection Registry -->
+<div class="panel full">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap">
+        <div>
+            <h2 style="margin-bottom:.35rem">Projection Registry</h2>
+            <div id="projection-registry-meta" style="font-size:.7rem;color:var(--text-secondary)">
+                Loading registry...
+            </div>
+        </div>
+        <label style="font-size:.7rem;color:var(--text-secondary)">
+            PRIORITY
+            <select id="projection-priority-filter" style="margin-left:.35rem;background:#111827;color:#f3f4f6;border:1px solid var(--border);border-radius:5px;padding:.3rem .45rem">
+                <option value="">ALL</option>
+                <option value="P0">P0</option>
+                <option value="P1">P1</option>
+                <option value="P2">P2</option>
+                <option value="P3">P3</option>
+            </select>
+        </label>
+    </div>
+    <div style="overflow-x:auto;margin-top:.9rem">
+        <table>
+            <thead><tr>
+                <th>ID</th><th>Title</th><th>Section</th><th>Priority</th>
+                <th>Implementation</th><th>Truth</th><th>Freshness</th><th>Source</th>
+            </tr></thead>
+            <tbody id="projection-registry-tbody">
+                <tr><td colspan="8" style="color:var(--text-secondary)">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <!-- Continuity -->
 <div class="panel full">
     <h2>Continuity</h2>
@@ -477,12 +510,83 @@ async function triggerVerify() {
     finally { btn.disabled = false; btn.textContent = '⟳ VERIFY NOW'; }
 }
 
+async function fetchProjectionRegistry() {
+    try {
+        const filter = document.getElementById('projection-priority-filter');
+        const priority = filter ? filter.value : '';
+        const url = priority
+            ? '/api/control-center/projections?priority=' + encodeURIComponent(priority)
+            : '/api/control-center/projections';
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const d = await r.json();
+
+        const meta = document.getElementById('projection-registry-meta');
+        if (meta) {
+            const s = d.summary || {};
+            const byPriority = s.by_priority || {};
+            meta.textContent =
+                'MASTER=' + (d.master_inventory_boundary || 'UNKNOWN') +
+                ' · P0 VIEWPORT TARGET=' + String(d.initial_p0_viewport_target || '—') +
+                ' · REGISTERED=' + String(s.total_definitions || 0) +
+                ' · P0=' + String(byPriority.P0 || 0) +
+                ' · P1=' + String(byPriority.P1 || 0) +
+                ' · P2=' + String(byPriority.P2 || 0) +
+                ' · P3=' + String(byPriority.P3 || 0) +
+                ' · INVENTORY LIMIT=' + String(d.inventory_limit);
+        }
+
+        const tbody = document.getElementById('projection-registry-tbody');
+        if (!tbody) return;
+        while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+        const projections = Array.isArray(d.projections) ? d.projections : [];
+        if (!projections.length) {
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 8;
+            cell.textContent = 'No projections registered for this filter.';
+            cell.style.color = 'var(--text-secondary)';
+            row.appendChild(cell);
+            tbody.appendChild(row);
+            return;
+        }
+
+        for (const item of projections) {
+            const row = document.createElement('tr');
+            const cells = [
+                item.projection_id, item.title, item.section, item.priority,
+                item.implementation_status, item.truth_class, item.freshness,
+                item.source_authority
+            ];
+            for (const value of cells) {
+                const cell = document.createElement('td');
+                cell.className = 'mono';
+                cell.textContent = value === null || value === undefined || value === ''
+                    ? '—'
+                    : String(value);
+                row.appendChild(cell);
+            }
+            tbody.appendChild(row);
+        }
+    } catch(e) {
+        console.error('Projection registry fetch failed:', e);
+    }
+}
+
 fetchStatus();
 fetchProcessingMatrix();
+fetchProjectionRegistry();
 setInterval(function() {
     fetchStatus();
     fetchProcessingMatrix();
+    fetchProjectionRegistry();
 }, 2000);
+
+const projectionFilter = document.getElementById('projection-priority-filter');
+if (projectionFilter) {
+    projectionFilter.addEventListener('change', fetchProjectionRegistry);
+}
 </script>
 </body>
 </html>"""
