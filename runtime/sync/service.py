@@ -140,6 +140,20 @@ class SyncService:
                 "error_classification": "ACTIVATION_NOT_IMPLEMENTED",
             }
 
+    def rollback(self) -> Dict[str, Any]:
+        """Fail closed: physical rollback is not implemented."""
+        with self._lock:
+            trace_id = self._latest.trace_id if self._latest is not None else f"trace-{secrets.token_hex(12)}"
+            sync_id = self._latest.sync_id if self._latest is not None else None
+            return {
+                "status": "blocked",
+                "sync_state": SyncState.BLOCKED.value,
+                "sync_id": sync_id,
+                "trace_id": trace_id,
+                "error": "Physical rollback is not implemented",
+                "error_classification": "ROLLBACK_NOT_IMPLEMENTED",
+            }
+
     def _discover_compare_verify(self, result: SyncResult) -> None:
         result.stage = "DISCOVER"
         if self.discover is None:
