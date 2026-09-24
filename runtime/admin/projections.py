@@ -231,7 +231,7 @@ def _p(
     route_or_detail: Optional[str] = None,
     implementation_status: str = "BOUND",
     truth_class: str = "UNKNOWN",
-    freshness: str = "LIVE_ON_READ",
+    freshness: Optional[str] = None,
     evidence_ref: Optional[str] = None,
     failure_reason: Optional[str] = None,
     dependencies: Sequence[str] = (),
@@ -240,6 +240,9 @@ def _p(
     sort_order: int = 0,
     tags: Sequence[str] = (),
 ) -> ProjectionDefinition:
+    resolved_freshness = freshness or (
+        "LIVE_ON_READ" if implementation_status == "BOUND" else "NOT_BOUND"
+    )
     return ProjectionDefinition(
         projection_id=projection_id,
         title=title,
@@ -248,7 +251,7 @@ def _p(
         current_status="UNKNOWN",
         truth_class=truth_class,
         source_authority=source_authority,
-        freshness=freshness,
+        freshness=resolved_freshness,
         evidence_ref=evidence_ref,
         failure_reason=failure_reason,
         dependencies=tuple(dependencies),
