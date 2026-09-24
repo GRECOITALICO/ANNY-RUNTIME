@@ -621,7 +621,10 @@ def test_sync_control_is_first_class_but_unimplemented_lifecycle_remains_blocked
 
     html = inject_sync_controls("<html><head></head><body><header><div>ANNY</div></header><main></main></body></html>", "csrf")
     assert 'data-projection-id="distribution.sync"' in html
-    assert 'id="anny-sync-btn"' in html
+    # Panel SYNC button must use the panel-specific distinct ID
+    assert 'id="anny-sync-panel-btn"' in html    # panel control (distinct ID, always injected)
+    # The old colliding ID must not exist anywhere in the output
+    assert 'id="anny-sync-btn"' not in html      # old colliding ID must not exist
     assert 'SYNC NOW' in html
     assert 'id="anny-sync-stage-btn"' in html
     assert 'id="anny-sync-activate-btn"' in html
