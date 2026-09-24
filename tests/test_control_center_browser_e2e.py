@@ -46,7 +46,7 @@ def test_control_center_browser_e2e():
                     expect(page.locator("#anny-sync-rollback-btn")).to_be_disabled()
 
                     registry_meta = page.locator("#projection-registry-meta")
-                    expect(registry_meta).to_contain_text("REGISTERED=85")
+                    expect(registry_meta).to_contain_text("REGISTERED=95")
 
                     sync_row = page.locator(
                         "#projection-registry-tbody tr"

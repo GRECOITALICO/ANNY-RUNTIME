@@ -368,6 +368,18 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("distribution.sync_stage", "SYNC stage capability", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", implementation_status="BLOCKED", failure_reason="Physical staging is not implemented; the backend now fails closed without mutating the verified candidate.", sort_order=380, tags=("sync", "stage")),
         _p("distribution.activation", "Activation capability", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", implementation_status="BLOCKED", failure_reason="Activation is intentionally fail-closed and not physically implemented.", sort_order=390, tags=("activation", "safe-fail-closed")),
         _p("distribution.rollback", "Rollback capability", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", implementation_status="BLOCKED", failure_reason="Physical rollback is not implemented; the backend now fails closed without mutating Runtime state.", sort_order=400, tags=("rollback", "safe-fail-closed")),
+        
+        # Batch 002: Master Inventory Expansion based on grounded reality
+        _p("universe.project_detail", "Project detail", "Universe", priority="P2", source_authority="PROJECT_REGISTRY", route_or_detail="/universe/projects/{project_id}", implementation_status="PLANNED", sort_order=26, tags=("universe", "projects", "detail")),
+        _p("execution.task_detail", "Execution task detail", "Execution", priority="P2", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/tasks/{task_id}", implementation_status="PLANNED", sort_order=201, tags=("tasks", "detail")),
+        _p("execution.context_detail", "Execution context detail", "Execution", priority="P2", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/contexts/{execution_id}", implementation_status="PLANNED", sort_order=202, tags=("contexts", "detail")),
+        _p("intelligence.model_bindings", "Model capability bindings", "Intelligence", priority="P1", source_authority="RUNTIME_MODEL_REGISTRY", route_or_detail="/models/bindings", implementation_status="PLANNED", sort_order=242, tags=("models", "bindings")),
+        _p("intelligence.evaluations", "Model evaluation records", "Intelligence", priority="P1", source_authority="RUNTIME_MODEL_REGISTRY", route_or_detail="/intelligence/evaluations", implementation_status="PLANNED", sort_order=243, tags=("evaluations",)),
+        _p("infrastructure.hardware_profiles", "Hardware profiles", "Infrastructure", priority="P2", source_authority="RUNTIME_EXECUTION", route_or_detail="/infrastructure/hardware", implementation_status="PLANNED", sort_order=275, tags=("hardware", "profiles")),
+        _p("mcp.tools", "MCP Tool definitions", "Infrastructure", priority="P1", source_authority="RUNTIME_MCP", route_or_detail="/mcp/tools", implementation_status="PLANNED", sort_order=301, tags=("mcp", "tools")),
+        _p("mcp.tool_policies", "MCP Tool policies", "Infrastructure", priority="P1", source_authority="RUNTIME_MCP", route_or_detail="/mcp/policies", implementation_status="PLANNED", sort_order=302, tags=("mcp", "policies")),
+        _p("security.tool_manifests", "Secure tool manifests", "Security / Trust", priority="P1", source_authority="RUNTIME_SECURITY", route_or_detail="/security/tools/manifests", implementation_status="PLANNED", sort_order=321, tags=("security", "tools", "manifests")),
+        _p("tools.manifests", "Runtime tool manifests", "Execution", priority="P1", source_authority="RUNTIME_TOOL_REGISTRY", route_or_detail="/tools/manifests", implementation_status="PLANNED", sort_order=203, tags=("tools", "manifests")),
     ]
     return ProjectionRegistry(items)
 
