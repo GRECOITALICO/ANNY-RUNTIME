@@ -32,7 +32,7 @@ def test_control_center_browser_e2e():
 
                     expect(page.locator("#anny-sync-panel")).to_be_visible()
                     expect(
-                        page.locator('[data-projection-id="control.truth_freshness"]')
+                        page.locator('.panel[data-projection-id="control.truth_freshness"]')
                     ).to_be_visible()
                     expect(
                         page.locator(
