@@ -25,7 +25,7 @@ def inject_sync_controls(page: str, csrf_token: str) -> str:
 </style>
 """
     panel = """
-<div id="anny-sync-panel">
+<div id="anny-sync-panel" data-projection-id="distribution.sync">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap">
     <div>
       <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;color:#c4b5fd;font-weight:700">Governed SYNC</div>
@@ -43,9 +43,9 @@ def inject_sync_controls(page: str, csrf_token: str) -> str:
   </div>
   <div class="anny-sync-actions">
     <button id="anny-sync-refresh" onclick="annySyncPoll()">REFRESH SYNC STATUS</button>
-    <button id="anny-sync-stage-btn" onclick="annySyncStage()" disabled>STAGE</button>
-    <button id="anny-sync-activate-btn" onclick="annySyncActivate()" disabled>ACTIVATE</button>
-    <button id="anny-sync-rollback-btn" onclick="annySyncRollback()" disabled>ROLLBACK</button>
+    <button id="anny-sync-stage-btn" onclick="annySyncStage()" disabled title="Blocked until physical staging is implemented and verified">STAGE</button>
+    <button id="anny-sync-activate-btn" onclick="annySyncActivate()" disabled title="Blocked until activation is physically implemented and authorized">ACTIVATE</button>
+    <button id="anny-sync-rollback-btn" onclick="annySyncRollback()" disabled title="Blocked until physical activation/rollback is implemented and verified">ROLLBACK</button>
   </div>
   <div id="anny-sync-message">SYNC status has not been read yet.</div>
 </div>
@@ -66,12 +66,14 @@ def inject_sync_controls(page: str, csrf_token: str) -> str:
     text('anny-sync-activation', d.activation_performed ? 'TRUE' : 'FALSE');
     const stateEl=document.getElementById('anny-sync-state');if(stateEl)stateEl.style.color=stateColors[state]||'#9ca3af';
     const btn=document.getElementById('anny-sync-btn');if(btn)btn.disabled=(state==='SYNCING' || state==='STAGING' || state==='ACTIVATING' || state==='ROLLING_BACK');
+    // The backend lifecycle is not physically implemented. Keep all mutating
+    // lifecycle controls blocked even when a candidate reaches VERIFIED/STAGED.
     const stageBtn = document.getElementById('anny-sync-stage-btn');
-    if(stageBtn) stageBtn.disabled = (state !== 'VERIFIED');
+    if(stageBtn) stageBtn.disabled = true;
     const activateBtn = document.getElementById('anny-sync-activate-btn');
-    if(activateBtn) activateBtn.disabled = (state !== 'STAGED');
+    if(activateBtn) activateBtn.disabled = true;
     const rollbackBtn = document.getElementById('anny-sync-rollback-btn');
-    if(rollbackBtn) rollbackBtn.disabled = (!d.activation_performed || state==='ROLLING_BACK');
+    if(rollbackBtn) rollbackBtn.disabled = true;
     const msg=document.getElementById('anny-sync-message');
     if(msg){{
       const err=d.error_classification?(' — '+d.error_classification):'';
