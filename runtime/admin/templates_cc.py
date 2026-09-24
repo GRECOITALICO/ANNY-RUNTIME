@@ -142,6 +142,20 @@ def control_center_page(csrf_token: str) -> str:
     </div>
 </div>
 
+<!-- Truth & Freshness -->
+<div class="panel" data-projection-id="control.truth_freshness">
+    <h2>Truth & Freshness</h2>
+    <div class="kv-grid">
+        <div class="kv"><span class="lbl">TRUTH AS OF</span><span class="val mono" id="truth-timestamp">UNKNOWN</span></div>
+        <div class="kv"><span class="lbl">RUNTIME STATE SOURCE</span><span class="val mono" id="truth-runtime-state">UNKNOWN</span></div>
+        <div class="kv"><span class="lbl">RUNTIME HEALTH SOURCE</span><span class="val mono" id="truth-runtime-health">UNKNOWN</span></div>
+        <div class="kv"><span class="lbl">RUNTIME ID SOURCE</span><span class="val mono" id="truth-runtime-id">UNKNOWN</span></div>
+        <div class="kv"><span class="lbl">CONRRAD OBSERVATION</span><span class="val mono" id="truth-conrrad">UNKNOWN</span></div>
+        <div class="kv"><span class="lbl">CONFIGURED ENDPOINT</span><span class="val mono" id="truth-endpoint">UNKNOWN</span></div>
+        <div class="kv"><span class="lbl">MAIN EXECUTION VERIFIED</span><span class="val mono" id="truth-main-execution">UNKNOWN</span></div>
+    </div>
+</div>
+
 <!-- Bootstrap Verification -->
 <div class="panel full" data-projection-id="control.bootstrap_verification">
     <h2>Bootstrap Verification</h2>
@@ -433,6 +447,14 @@ function updateUI(d) {
 
     // Server-observed truth timestamp. Never replace it with client clock time.
     setText('last-verified', 'TRUTH AS OF: ' + (d.timestamp || 'UNKNOWN'));
+    setText('truth-timestamp', d.timestamp);
+    const truthSources = d.truth_sources || {};
+    setText('truth-runtime-state', truthSources.runtime_state);
+    setText('truth-runtime-health', truthSources.runtime_health);
+    setText('truth-runtime-id', truthSources.runtime_id);
+    setText('truth-conrrad', truthSources.conrrad);
+    setText('truth-endpoint', d.configured_endpoint);
+    setText('truth-main-execution', d.main_execution_verified === true ? 'VERIFIED' : 'UNVERIFIED');
 
     // Snapshot
     setText('snap-id', d.runtime_id);
