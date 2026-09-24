@@ -7,6 +7,9 @@ on:
       - "runtime/admin/routes.py"
       - "runtime/admin/templates.py"
       - "runtime/admin/templates_cc.py"
+      - "runtime/admin/server.py"
+      - "runtime/admin/middleware.py"
+      - "runtime/admin/csrf.py"
       - "runtime/bootstrap/report.py"
       - "runtime/bootstrap/conrrad.py"
       - "runtime/admin/sync_ui.py"
@@ -16,6 +19,7 @@ on:
       - "tests/test_batch9_conrrad_truth.py"
       - "tests/test_sync_service.py"
       - "tests/test_control_center_http_surface.py"
+      - "tests/test_control_center_browser_e2e.py"
       - ".github/workflows/control-center-projection-regression.yml"
   workflow_dispatch:
 
@@ -36,6 +40,6 @@ jobs:
           python -m pip install pytest PyYAML cryptography psutil azure-identity httpx mcp websocket-client python-dateutil
       - name: Compile Control Center projection modules
         run: |
-          python -m py_compile runtime/admin/projections.py runtime/admin/routes.py runtime/admin/templates.py runtime/admin/templates_cc.py runtime/admin/sync_ui.py runtime/bootstrap/conrrad.py runtime/bootstrap/gates.py runtime/bootstrap/planes.py runtime/bootstrap/report.py runtime/sync/service.py runtime/continuity/engine.py tests/test_control_center_projections.py tests/test_batch9_conrrad_truth.py tests/test_sync_service.py tests/test_control_center_http_surface.py
+          python -m py_compile runtime/admin/projections.py runtime/admin/routes.py runtime/admin/templates.py runtime/admin/templates_cc.py runtime/admin/sync_ui.py runtime/admin/server.py runtime/admin/middleware.py runtime/admin/csrf.py runtime/bootstrap/conrrad.py runtime/bootstrap/gates.py runtime/bootstrap/planes.py runtime/bootstrap/report.py runtime/sync/service.py runtime/continuity/engine.py tests/test_control_center_projections.py tests/test_batch9_conrrad_truth.py tests/test_sync_service.py tests/test_control_center_http_surface.py
       - name: Run projection contract tests
         run: pytest -q tests/test_control_center_projections.py tests/test_batch9_conrrad_truth.py tests/test_sync_service.py tests/test_control_center_http_surface.py
