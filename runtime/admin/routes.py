@@ -295,19 +295,43 @@ class AdminRouter:
         priority = query.get('priority', [None])[0]
         section = query.get('section', [None])[0]
         implementation_status = query.get('implementation_status', [None])[0]
+        truth_class = query.get('truth_class', [None])[0]
+        freshness = query.get('freshness', [None])[0]
+        tag = query.get('tag', [None])[0]
+        q = query.get('q', [None])[0]
 
-        if priority and priority not in VALID_PRIORITIES:
+        def _int_query(name, default):
+            raw = query.get(name, [None])[0]
+            if raw in (None, ''):
+                return default
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                raise ValueError(f"{name} must be an integer")
+
+        try:
+            limit = _int_query('limit', 100)
+            offset = _int_query('offset', 0)
+            if priority and priority not in VALID_PRIORITIES:
+                raise ValueError("invalid priority")
+            payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(
+                priority=priority,
+                section=section,
+                implementation_status=implementation_status,
+                truth_class=truth_class,
+                freshness=freshness,
+                tag=tag,
+                q=q,
+                limit=limit,
+                offset=offset,
+            )
+        except ValueError as exc:
             self.context['direct_json_response'] = {
-                "error": "INVALID_PRIORITY",
+                "error": "INVALID_PROJECTION_QUERY",
                 "status": "BLOCKED",
+                "detail": str(exc),
             }
             return '/'
-
-        payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(
-            priority=priority,
-            section=section,
-            implementation_status=implementation_status,
-        )
         self.context['direct_json_response'] = payload
         return '/'
 
