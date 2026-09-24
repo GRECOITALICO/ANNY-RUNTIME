@@ -112,6 +112,40 @@ def test_control_center_http_exposes_sync_and_truth_surfaces():
             server.stop()
 
 
+def test_control_center_http_request_context_is_isolated_under_concurrency():
+    with tempfile.TemporaryDirectory() as raw:
+        server, sync, port = _start_server(Path(raw))
+        try:
+            status, _, set_cookie = _request(port, "GET", "/")
+            assert status == 200
+            cookie = set_cookie.split(";", 1)[0]
+
+            paths = [
+                "/api/status",
+                "/api/processing/matrix",
+                "/api/control-center/projections?limit=100",
+            ] * 4
+
+            def call(path):
+                return path, _request(port, "GET", path, cookie=cookie)
+
+            with ThreadPoolExecutor(max_workers=6) as executor:
+                results = list(executor.map(call, paths))
+
+            for path, (http_status, payload, _) in results:
+                assert http_status == 200
+                assert payload.startswith("{")
+                if path == "/api/status":
+                    assert '"runtime_state"' in payload
+                elif path.startswith("/api/processing/matrix"):
+                    assert '"error": "Aggregator unavailable"' in payload
+                else:
+                    assert '"projections"' in payload
+        finally:
+            sync.wait(timeout=1)
+            server.stop()
+
+
 def test_control_center_http_rejects_sync_mutation_without_csrf():
     with tempfile.TemporaryDirectory() as raw:
         server, sync, port = _start_server(Path(raw))
