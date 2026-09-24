@@ -859,10 +859,10 @@ def ready_page(status, csrf_token=""):
 
         <div class="detail-panel" style="margin-bottom: 24px;">
             <h3 style="font-size:15px; margin-bottom:16px; color:var(--accent-indigo);">Canonical State Overview</h3>
-            <div class="detail-row"><span class="detail-label">Runtime Identity</span><span class="detail-value">{_escape_html(id_str)}</span></div>
+            <div class="detail-row"><span class="detail-label">Runtime Identity</span><span class="detail-value">{id_str}</span></div>
             <div class="detail-row"><span class="detail-label">GitHub Principal</span><span class="detail-value">{_escape_html(gh.get('principal', '—'))}</span></div>
-            <div class="detail-row"><span class="detail-label">Organizations</span><span class="detail-value">{_escape_html(org_name)}</span></div>
-            <div class="detail-row"><span class="detail-label">Current Mission</span><span class="detail-value" style="font-weight:600; color:var(--accent-emerald);">{_escape_html(mission)}</span></div>
+            <div class="detail-row"><span class="detail-label">Organizations</span><span class="detail-value">{org_name}</span></div>
+            <div class="detail-row"><span class="detail-label">Current Mission</span><span class="detail-value" style="font-weight:600; color:var(--accent-emerald);">{mission}</span></div>
         </div>
     """, "/", csrf_token, "control.top_level_state")
 
@@ -1662,7 +1662,7 @@ def generic_placeholder_page(title, path, csrf_token=""):
     return base_layout(
         safe_title,
         f'<div class="page-header"><h2>{safe_title}</h2></div>{_render_empty_state("No instances found.")}',
-        path=safe_path,
+        active_path=safe_path,
         csrf_token=csrf_token,
     )
 
