@@ -383,3 +383,28 @@ def test_bootstrap_report_preserves_explicit_external_truth_channel():
     report.finish(False)
     assert report.bootstrap_state == "BLOCKED"
     assert len(report.conrrad_dependencies) == 1
+
+
+def test_active_navigation_requires_a_registered_projection():
+    from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS, DEFAULT_PROJECTION_REGISTRY
+
+    active = [item for item in DEFAULT_NAVIGATION_ITEMS if item.availability in {"ACTIVE", "ALIAS"}]
+    assert active
+    assert all(item.projection_id for item in active)
+    assert all(DEFAULT_PROJECTION_REGISTRY.get(item.projection_id) is not None for item in active)
+
+
+def test_navigation_models_projection_uses_canonical_models_route():
+    item = next(item for item in DEFAULT_NAVIGATION_ITEMS if item.label == "Models")
+    projection = DEFAULT_PROJECTION_REGISTRY.get(item.projection_id)
+    assert item.path == "/models"
+    assert projection is not None
+    assert projection.route_or_detail == "/models"
+
+
+def test_audit_events_navigation_is_backed_by_a_projection():
+    item = next(item for item in DEFAULT_NAVIGATION_ITEMS if item.label == "Events")
+    projection = DEFAULT_PROJECTION_REGISTRY.get(item.projection_id)
+    assert item.path == "/audit/events"
+    assert projection is not None
+    assert projection.route_or_detail == "/audit/events"
