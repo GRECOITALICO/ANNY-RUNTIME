@@ -6,9 +6,6 @@ def control_center_page(csrf_token: str) -> str:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ANNY CONTROL CENTER</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg-color: #0b0f19;
@@ -28,7 +25,7 @@ def control_center_page(csrf_token: str) -> str:
             margin: 0; padding: 0;
             background-color: var(--bg-color);
             color: var(--text-primary);
-            font-family: 'Inter', sans-serif;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             display: flex; flex-direction: column; min-height: 100vh;
         }
         header {
@@ -78,7 +75,7 @@ def control_center_page(csrf_token: str) -> str:
         }
         .kv { display: flex; flex-direction: column; }
         .kv .lbl { font-size: .65rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: .2rem; }
-        .kv .val { font-family: 'JetBrains Mono', monospace; font-size: .85rem; font-weight: 600; }
+        .kv .val { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace; font-size: .85rem; font-weight: 600; }
         .badge {
             display: inline-block; padding: .15rem .45rem; border-radius: 4px;
             font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
@@ -126,6 +123,7 @@ def control_center_page(csrf_token: str) -> str:
         <div class="kv"><span class="lbl">FABRIC STATUS</span><span class="val" id="st-fabric">--</span></div>
         <div class="kv"><span class="lbl">ADMISSION STATUS</span><span class="val" id="st-admission">--</span></div>
         <div class="kv"><span class="lbl">RECONCILIATION</span><span class="val" id="st-recon">--</span></div>
+        <div class="kv"><span class="lbl">CONRRAD GATE</span><span class="val" id="st-conrrad">--</span></div>
     </div>
 </div>
 
@@ -160,6 +158,25 @@ def control_center_page(csrf_token: str) -> str:
     <h2>Runtime Health</h2>
     <table><thead><tr><th>Subsystem</th><th>Status</th></tr></thead>
     <tbody id="health-tbody"></tbody></table>
+</div>
+
+<!-- CONRRAD Mandatory Services — Live Truth -->
+<div class="panel full" data-projection-id="control.conrrad_mandatory_services">
+    <h2>CONRRAD Mandatory Services — Live Truth</h2>
+    <div id="conrrad-summary" style="font-size:.72rem;color:var(--text-secondary);margin-bottom:.8rem">
+        REQUIRED=8 · OBSERVED=0 · ONLINE_VERIFIED=0 · TRUST_VERIFIED=0 · GATE=BLOCKED
+    </div>
+    <div style="overflow-x:auto">
+        <table>
+            <thead><tr>
+                <th>Service</th><th>Online</th><th>Trust</th><th>Certification</th>
+                <th>Last Live Check</th><th>Evidence</th><th>Failure / Reason</th>
+            </tr></thead>
+            <tbody id="conrrad-deps-tbody">
+                <tr><td colspan="7" style="color:var(--text-secondary)">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-- Repository Fabric -->
@@ -491,6 +508,54 @@ function updateUI(d) {
     populateTable('models-tbody', d.models, 2);
     populateTable('workers-tbody', d.workers, 2);
     populateTable('connectors-tbody', d.connectors, 2);
+
+    // CONRRAD Mandatory Services — live truth projection.
+    // Required service names never imply that external services are observed or trusted.
+    const conrradRows = Array.isArray(d.conrrad_dependencies) ? d.conrrad_dependencies : [];
+    const conrradBody = document.getElementById('conrrad-deps-tbody');
+    const conrradSummary = document.getElementById('conrrad-summary');
+    const conrradGate = d.conrrad_gate_status || 'BLOCKED';
+    const requiredCount = Number(d.conrrad_required_service_count || 0);
+    const observedCount = Number(d.conrrad_observed_service_count || 0);
+    const onlineCount = Number(d.conrrad_online_verified_count || 0);
+    const trustCount = Number(d.conrrad_trust_verified_count || 0);
+    setText('st-conrrad', conrradGate);
+    if (conrradSummary) {
+        conrradSummary.textContent =
+            'REQUIRED=' + requiredCount +
+            ' · OBSERVED=' + observedCount +
+            ' · ONLINE_VERIFIED=' + onlineCount +
+            ' · TRUST_VERIFIED=' + trustCount +
+            ' · GATE=' + conrradGate;
+    }
+    if (conrradBody) {
+        while (conrradBody.firstChild) conrradBody.removeChild(conrradBody.firstChild);
+        if (!conrradRows.length) {
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 7;
+            cell.textContent = 'NO CONRRAD SERVICE OBSERVATION';
+            cell.style.color = 'var(--text-secondary)';
+            row.appendChild(cell);
+            conrradBody.appendChild(row);
+        } else {
+            for (const service of conrradRows) {
+                const row = document.createElement('tr');
+                const values = [
+                    service.service_name, service.online_status, service.trust_status,
+                    service.certification_state, service.last_live_check,
+                    service.evidence_ref, service.failure_reason
+                ];
+                for (const value of values) {
+                    const cell = document.createElement('td');
+                    cell.className = 'mono';
+                    cell.textContent = value === null || value === undefined || value === '' ? '—' : String(value);
+                    row.appendChild(cell);
+                }
+                conrradBody.appendChild(row);
+            }
+        }
+    }
 
     // Continuity
     if (d.continuity) {
