@@ -15,6 +15,7 @@ on:
       - "tests/test_control_center_projections.py"
       - "tests/test_batch9_conrrad_truth.py"
       - "tests/test_sync_service.py"
+      - "tests/test_control_center_http_surface.py"
       - ".github/workflows/control-center-projection-regression.yml"
   workflow_dispatch:
 
@@ -37,4 +38,4 @@ jobs:
         run: |
           python -m py_compile runtime/admin/projections.py runtime/admin/routes.py runtime/admin/templates.py runtime/admin/templates_cc.py runtime/admin/sync_ui.py runtime/bootstrap/conrrad.py runtime/bootstrap/gates.py runtime/bootstrap/planes.py runtime/bootstrap/report.py runtime/sync/service.py runtime/continuity/engine.py tests/test_control_center_projections.py tests/test_batch9_conrrad_truth.py tests/test_sync_service.py
       - name: Run projection contract tests
-        run: pytest -q tests/test_control_center_projections.py tests/test_batch9_conrrad_truth.py tests/test_sync_service.py
+        run: pytest -q tests/test_control_center_projections.py tests/test_batch9_conrrad_truth.py tests/test_sync_service.py tests/test_control_center_http_surface.py
