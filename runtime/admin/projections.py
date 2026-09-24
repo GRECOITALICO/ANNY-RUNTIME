@@ -97,6 +97,10 @@ class ProjectionRegistry:
         priority: Optional[str] = None,
         section: Optional[str] = None,
         implementation_status: Optional[str] = None,
+        truth_class: Optional[str] = None,
+        freshness: Optional[str] = None,
+        tag: Optional[str] = None,
+        q: Optional[str] = None,
     ) -> List[ProjectionDefinition]:
         items = list(self._items.values())
         if priority:
@@ -109,6 +113,27 @@ class ProjectionRegistry:
                 for item in items
                 if item.implementation_status == implementation_status
             ]
+        if truth_class:
+            items = [item for item in items if item.truth_class == truth_class]
+        if freshness:
+            items = [item for item in items if item.freshness == freshness]
+        if tag:
+            normalized_tag = tag.strip().lower()
+            items = [
+                item for item in items
+                if normalized_tag in {value.lower() for value in item.tags}
+            ]
+        if q:
+            needle = q.strip().lower()
+            if needle:
+                items = [
+                    item for item in items
+                    if needle in item.projection_id.lower()
+                    or needle in item.title.lower()
+                    or needle in item.section.lower()
+                    or needle in item.source_authority.lower()
+                    or any(needle in value.lower() for value in item.tags)
+                ]
         return sorted(items, key=lambda item: (item.sort_order, item.projection_id))
 
     def validate(self) -> None:
@@ -142,19 +167,51 @@ class ProjectionRegistry:
         priority: Optional[str] = None,
         section: Optional[str] = None,
         implementation_status: Optional[str] = None,
+        truth_class: Optional[str] = None,
+        freshness: Optional[str] = None,
+        tag: Optional[str] = None,
+        q: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> Dict[str, object]:
+        if limit < 1 or limit > 200:
+            raise ValueError("limit must be between 1 and 200")
+        if offset < 0:
+            raise ValueError("offset must be >= 0")
         items = self.list(
             priority=priority,
             section=section,
             implementation_status=implementation_status,
+            truth_class=truth_class,
+            freshness=freshness,
+            tag=tag,
+            q=q,
         )
+        total_filtered = len(items)
+        page = items[offset:offset + limit]
         return {
             "contract_version": REGISTRY_CONTRACT_VERSION,
             "master_inventory_boundary": MASTER_INVENTORY_BOUNDARY,
             "inventory_limit": None,
             "initial_p0_viewport_target": INITIAL_P0_VIEWPORT_TARGET,
             "summary": self.summary(),
-            "projections": [item.to_dict() for item in items],
+            "page": {
+                "limit": limit,
+                "offset": offset,
+                "returned": len(page),
+                "total_filtered": total_filtered,
+                "has_more": offset + len(page) < total_filtered,
+            },
+            "filters": {
+                "priority": priority,
+                "section": section,
+                "implementation_status": implementation_status,
+                "truth_class": truth_class,
+                "freshness": freshness,
+                "tag": tag,
+                "q": q,
+            },
+            "projections": [item.to_dict() for item in page],
         }
 
 
