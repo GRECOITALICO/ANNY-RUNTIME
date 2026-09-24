@@ -793,66 +793,66 @@ def ready_page(status, csrf_token=""):
             <!-- INFRASTRUCTURE -->
             <a href="/infrastructure/runtime" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Runtime</div>
-                <div style="font-size:22px; font-weight:700;"><span class="badge badge-success">{cont.get('runtime_status', 'CONNECTED')}</span></div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge badge-success">{_escape_html(cont.get('runtime_status', 'CONNECTED'))}</span></div>
             </a>
             <a href="/infrastructure/github" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">GitHub</div>
-                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if gh.get('connected') else 'badge-danger' }">{gh.get('auth_status', 'ERROR')}</span></div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if gh.get('connected') else 'badge-danger' }">{_escape_html(gh.get('auth_status', 'ERROR'))}</span></div>
             </a>
             <a href="/infrastructure/fabric" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Fabric</div>
-                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if status.get('fabric_connected') else 'badge-danger' }">{ 'CONNECTED' if status.get('fabric_connected') else 'ERROR' }</span></div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if status.get('fabric_connected') else 'badge-danger' }">{_escape_html('CONNECTED' if status.get('fabric_connected') else 'ERROR')}</span></div>
             </a>
             <a href="/infrastructure/mcp" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">MCP Nodes</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('mcp_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('mcp_count', 0))}</div>
             </a>
 
             <!-- UNIVERSE -->
             <a href="/universe/projects" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Projects</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('project_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('project_count', 0))}</div>
             </a>
             <a href="/universe/repositories" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Repositories</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{repo_count}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(repo_count)}</div>
             </a>
             <a href="/universe/resources" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Fabric Resources</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-emerald);">{status.get('resource_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-emerald);">{_escape_html(status.get('resource_count', 0))}</div>
             </a>
 
             <!-- INTELLIGENCE -->
             <a href="/intelligence/models" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Models</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('model_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('model_count', 0))}</div>
             </a>
             <a href="/intelligence/capabilities" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Capabilities</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('capability_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('capability_count', 0))}</div>
             </a>
 
             <!-- EXECUTION -->
             <a href="/execution/workers" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Workers</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('worker_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('worker_count', 0))}</div>
             </a>
             <a href="/execution/tasks" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Pending Tasks</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('task_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('task_count', 0))}</div>
             </a>
             <a href="/continuity/blockers" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Blockers</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-amber);">{blocker_count}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-amber);">{_escape_html(blocker_count)}</div>
             </a>
         </div>
 
         <div class="detail-panel" style="margin-bottom: 24px;">
             <h3 style="font-size:15px; margin-bottom:16px; color:var(--accent-indigo);">Canonical State Overview</h3>
-            <div class="detail-row"><span class="detail-label">Runtime Identity</span><span class="detail-value">{id_str}</span></div>
-            <div class="detail-row"><span class="detail-label">GitHub Principal</span><span class="detail-value">{gh.get('principal', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Organizations</span><span class="detail-value">{org_name}</span></div>
-            <div class="detail-row"><span class="detail-label">Current Mission</span><span class="detail-value" style="font-weight:600; color:var(--accent-emerald);">{mission}</span></div>
+            <div class="detail-row"><span class="detail-label">Runtime Identity</span><span class="detail-value">{_escape_html(id_str)}</span></div>
+            <div class="detail-row"><span class="detail-label">GitHub Principal</span><span class="detail-value">{_escape_html(gh.get('principal', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Organizations</span><span class="detail-value">{_escape_html(org_name)}</span></div>
+            <div class="detail-row"><span class="detail-label">Current Mission</span><span class="detail-value" style="font-weight:600; color:var(--accent-emerald);">{_escape_html(mission)}</span></div>
         </div>
     """, "/", csrf_token)
 
@@ -860,8 +860,9 @@ def ready_page(status, csrf_token=""):
 
 def github_page(gh_status, error=None, csrf_token=""):
     """Render the GitHub status page."""
+    safe_csrf = _escape_html(csrf_token)
     badge_class = 'badge-success' if gh_status.get('connected') else 'badge-danger'
-    status_text = 'CONNECTED' if gh_status.get('connected') else gh_status.get('auth_status', 'UNKNOWN')
+    status_text = _escape_html('CONNECTED' if gh_status.get('connected') else gh_status.get('auth_status', 'UNKNOWN'))
     scopes = _escape_html(', '.join(gh_status.get('scopes', [])) or '—')
 
     error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px; border: 1px solid rgba(235,87,87,0.3);">{_escape_html(error)}</div>' if error else ''
@@ -903,7 +904,7 @@ def github_page(gh_status, error=None, csrf_token=""):
         </div>
 
         <div class="btn-group">
-            <form method="POST" action="/github/disconnect"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-danger" type="submit">✕ Disconnect</button></form>
+            <form method="POST" action="/github/disconnect"><input type="hidden" name="csrf_token" value="{safe_csrf}"><button class="btn btn-danger" type="submit">✕ Disconnect</button></form>
         </div>
     """, "/github", csrf_token, "github.connection")
 
@@ -1027,8 +1028,8 @@ def doctor_page(diagnostics, csrf_token=""):
         badge = 'badge-success' if check.get('status') == 'OK' else 'badge-danger'
         checks_html += f"""
         <div class="detail-row">
-            <span class="detail-label">{check.get('name', '—')}</span>
-            <span class="badge {badge}">{check.get('status', '—')}</span>
+            <span class="detail-label">{_escape_html(check.get('name', '—'))}</span>
+            <span class="badge {badge}">{_escape_html(check.get('status', '—'))}</span>
         </div>"""
     if not checks_html:
         checks_html = '<div class="detail-row"><span class="detail-label">No diagnostics available</span><span class="badge badge-muted">—</span></div>'
@@ -1055,13 +1056,13 @@ def executions_page(executions, csrf_token=""):
         elif e.status.value == 'RUNNING': badge_cls = 'badge-info'
         
         rows += f"""<tr>
-            <td class="mono">{e.execution_id[:16]}...</td>
-            <td class="mono">{e.task_id[:16]}...</td>
-            <td>{e.capability_id}</td>
-            <td><span class="badge {badge_cls}">{e.status.value}</span></td>
-            <td>{e.started_at.isoformat()[:19] if e.started_at else '—'}</td>
-            <td>{e.completed_at.isoformat()[:19] if e.completed_at else '—'}</td>
-            <td>{e.duration_ms if e.duration_ms is not None else '—'}</td>
+            <td class="mono">{_escape_html(e.execution_id[:16])}...</td>
+            <td class="mono">{_escape_html(e.task_id[:16])}...</td>
+            <td>{_escape_html(e.capability_id)}</td>
+            <td><span class="badge {badge_cls}">{_escape_html(e.status.value)}</span></td>
+            <td>{_escape_html(e.started_at.isoformat()[:19] if e.started_at else '—')}</td>
+            <td>{_escape_html(e.completed_at.isoformat()[:19] if e.completed_at else '—')}</td>
+            <td>{_escape_html(e.duration_ms if e.duration_ms is not None else '—')}</td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">No executions</td></tr>'
@@ -1086,12 +1087,12 @@ def capabilities_page(capabilities, csrf_token=""):
         badge_cls = 'badge-success' if c.enabled else 'badge-danger'
         inf_badge = 'badge-warning' if c.inference_required else 'badge-muted'
         rows += f"""<tr>
-            <td class="mono">{c.capability_id}</td>
-            <td>{c.name}</td>
+            <td class="mono">{_escape_html(c.capability_id)}</td>
+            <td>{_escape_html(c.name)}</td>
             <td><span class="badge {inf_badge}">{"Yes" if c.inference_required else "No"}</span></td>
-            <td>{c.preferred_executor.value if c.preferred_executor else '—'}</td>
+            <td>{_escape_html(c.preferred_executor.value if c.preferred_executor else '—')}</td>
             <td><span class="badge {badge_cls}">{"ENABLED" if c.enabled else "DISABLED"}</span></td>
-            <td>{c.risk_level}</td>
+            <td>{_escape_html(c.risk_level)}</td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px;">No capabilities registered</td></tr>'
@@ -1143,7 +1144,7 @@ def policies_page(policy, csrf_token=""):
         <div class="detail-panel">
             <div class="detail-row"><span class="detail-label">LLM Executors Allowed</span><span class="badge {'badge-success' if allow_llm else 'badge-danger'}">{'YES' if allow_llm else 'NO'}</span></div>
             <div class="detail-row"><span class="detail-label">Strict Isolation Enforced</span><span class="badge {'badge-success' if isolation else 'badge-danger'}">{'YES' if isolation else 'NO'}</span></div>
-            <div class="detail-row"><span class="detail-label">Active Policy Version</span><span class="detail-value">{policy.version if policy else 'UNKNOWN'}</span></div>
+            <div class="detail-row"><span class="detail-label">Active Policy Version</span><span class="detail-value">{_escape_html(policy.version if policy else 'UNKNOWN')}</span></div>
         </div>
     """, "/policies", csrf_token, "admin.policies")
 
@@ -1153,12 +1154,12 @@ def workers_page(workers, csrf_token=""):
     for w in workers:
         state_badge = 'badge-success' if w.state.value == 'SUCCEEDED' else 'badge-danger' if w.state.value in ('FAILED', 'TIMED_OUT', 'LIMIT_EXCEEDED') else 'badge-warning'
         rows += f"""<tr>
-            <td class="mono"><a href="/workers/{w.worker_id}">{w.worker_id}</a></td>
-            <td class="mono">{w.execution_id}</td>
-            <td class="mono">{w.capability_id}</td>
-            <td>{w.executor_type}</td>
-            <td><span class="badge {state_badge}">{w.state.value}</span></td>
-            <td>{w.created_at.isoformat()}</td>
+            <td class="mono"><a href="/workers/{w.worker_id}">{_escape_html(w.worker_id)}</a></td>
+            <td class="mono">{_escape_html(w.execution_id)}</td>
+            <td class="mono">{_escape_html(w.capability_id)}</td>
+            <td>{_escape_html(w.executor_type)}</td>
+            <td><span class="badge {state_badge}">{_escape_html(w.state.value)}</span></td>
+            <td>{_escape_html(w.created_at.isoformat())}</td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px;">No active workers</td></tr>'
@@ -1185,24 +1186,24 @@ def worker_detail_page(w, csrf_token=""):
 
     return base_layout(f"Worker {w.worker_id}", f"""
         <div class="page-header">
-            <h2>Worker Detail: <span class="mono">{w.worker_id}</span></h2>
+            <h2>Worker Detail: <span class="mono">{_escape_html(w.worker_id)}</span></h2>
         </div>
         <div class="detail-panel">
-            <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{w.state.value}</span></div>
+            <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{_escape_html(w.state.value)}</span></div>
             <div class="detail-row"><span class="detail-label">Execution ID</span><span class="mono">{w.execution_id}</span></div>
-            <div class="detail-row"><span class="detail-label">Task ID</span><span class="mono">{w.task_id}</span></div>
+            <div class="detail-row"><span class="detail-label">Task ID</span><span class="mono">{_escape_html(w.task_id)}</span></div>
             <div class="detail-row"><span class="detail-label">Capability</span><span class="mono">{w.capability_id}</span></div>
             <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{w.executor_type}</span></div>
-            <div class="detail-row"><span class="detail-label">Executor ID</span><span class="detail-value">{w.executor_id}</span></div>
-            <div class="detail-row"><span class="detail-label">Model ID</span><span class="detail-value">{w.model_id or '—'}</span></div>
-            <div class="detail-row"><span class="detail-label">Created At</span><span class="detail-value">{w.created_at.isoformat()}</span></div>
-            <div class="detail-row"><span class="detail-label">Started At</span><span class="detail-value">{w.started_at.isoformat() if w.started_at else '—'}</span></div>
-            <div class="detail-row"><span class="detail-label">Finished At</span><span class="detail-value">{w.finished_at.isoformat() if w.finished_at else '—'}</span></div>
-            <div class="detail-row"><span class="detail-label">Duration</span><span class="detail-value">{duration}</span></div>
-            <div class="detail-row"><span class="detail-label">Workspace ID</span><span class="mono">{w.workspace_id}</span></div>
-            <div class="detail-row"><span class="detail-label">Network Policy</span><span class="detail-value">{w.network_policy}</span></div>
-            <div class="detail-row"><span class="detail-label">Filesystem Policy</span><span class="detail-value">{w.filesystem_policy}</span></div>
-            <div class="detail-row"><span class="detail-label">Resource Limits</span><span class="detail-value">{w.resource_limits}</span></div>
+            <div class="detail-row"><span class="detail-label">Executor ID</span><span class="detail-value">{_escape_html(w.executor_id)}</span></div>
+            <div class="detail-row"><span class="detail-label">Model ID</span><span class="detail-value">{_escape_html(w.model_id or '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Created At</span><span class="detail-value">{_escape_html(w.created_at.isoformat())}</span></div>
+            <div class="detail-row"><span class="detail-label">Started At</span><span class="detail-value">{_escape_html(w.started_at.isoformat() if w.started_at else '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Finished At</span><span class="detail-value">{_escape_html(w.finished_at.isoformat() if w.finished_at else '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Duration</span><span class="detail-value">{_escape_html(duration)}</span></div>
+            <div class="detail-row"><span class="detail-label">Workspace ID</span><span class="mono">{_escape_html(w.workspace_id)}</span></div>
+            <div class="detail-row"><span class="detail-label">Network Policy</span><span class="detail-value">{_escape_html(w.network_policy)}</span></div>
+            <div class="detail-row"><span class="detail-label">Filesystem Policy</span><span class="detail-value">{_escape_html(w.filesystem_policy)}</span></div>
+            <div class="detail-row"><span class="detail-label">Resource Limits</span><span class="detail-value">{_escape_html(w.resource_limits)}</span></div>
         </div>
     """, "/workers", csrf_token, "execution.workers")
 
@@ -1212,11 +1213,11 @@ def models_page(models, csrf_token=""):
     for m in models:
         badge_cls = 'badge-success' if m.state.value in ('AVAILABLE', 'REGISTERED') else 'badge-danger'
         rows += f"""<tr>
-            <td class="mono"><a href="/models/{m.model_id}">{m.model_id}</a></td>
-            <td>{m.model_name}</td>
-            <td>{m.provider}</td>
-            <td>{m.version}</td>
-            <td><span class="badge {badge_cls}">{m.state.value}</span></td>
+            <td class="mono"><a href="/models/{m.model_id}">{_escape_html(m.model_id)}</a></td>
+            <td>{_escape_html(m.model_name)}</td>
+            <td>{_escape_html(m.provider)}</td>
+            <td>{_escape_html(m.version)}</td>
+            <td><span class="badge {badge_cls}">{_escape_html(m.state.value)}</span></td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:32px;">No models registered</td></tr>'
@@ -1241,9 +1242,9 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
     for b in bindings:
         pref = 'badge-info' if b.preferred else 'badge-muted'
         bindings_rows += f"""<tr>
-            <td class="mono">{b.capability_id}</td>
+            <td class="mono">{_escape_html(b.capability_id)}</td>
             <td><span class="badge {pref}">{"Yes" if b.preferred else "No"}</span></td>
-            <td>{b.authorization}</td>
+            <td>{_escape_html(b.authorization)}</td>
         </tr>"""
     if not bindings_rows:
         bindings_rows = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:16px;">No capabilities bound</td></tr>'
@@ -1251,35 +1252,35 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
     hw_info = ""
     if hw_profile:
         hw_info = f"""
-            <div class="detail-row"><span class="detail-label">Hardware Type</span><span class="detail-value">{hw_profile.hardware_type}</span></div>
-            <div class="detail-row"><span class="detail-label">VRAM MB</span><span class="detail-value">{hw_profile.vram_mb}</span></div>
-            <div class="detail-row"><span class="detail-label">RAM MB</span><span class="detail-value">{hw_profile.ram_mb}</span></div>
-            <div class="detail-row"><span class="detail-label">Compute Class</span><span class="detail-value">{hw_profile.compute_class}</span></div>
+            <div class="detail-row"><span class="detail-label">Hardware Type</span><span class="detail-value">{_escape_html(hw_profile.hardware_type)}</span></div>
+            <div class="detail-row"><span class="detail-label">VRAM MB</span><span class="detail-value">{_escape_html(hw_profile.vram_mb)}</span></div>
+            <div class="detail-row"><span class="detail-label">RAM MB</span><span class="detail-value">{_escape_html(hw_profile.ram_mb)}</span></div>
+            <div class="detail-row"><span class="detail-label">Compute Class</span><span class="detail-value">{_escape_html(hw_profile.compute_class)}</span></div>
         """
         
     perf_info = ""
     if perf_profile:
         perf_info = f"""
-            <div class="detail-row"><span class="detail-label">Context Window Size</span><span class="detail-value">{perf_profile.context_window_size}</span></div>
-            <div class="detail-row"><span class="detail-label">Max Output Tokens</span><span class="detail-value">{perf_profile.max_output_tokens}</span></div>
-            <div class="detail-row"><span class="detail-label">Avg Tokens/s</span><span class="detail-value">{perf_profile.avg_tokens_per_second}</span></div>
-            <div class="detail-row"><span class="detail-label">Cold Start Time (ms)</span><span class="detail-value">{perf_profile.cold_start_time_ms}</span></div>
-            <div class="detail-row"><span class="detail-label">Cost per 1k</span><span class="detail-value">{perf_profile.cost_per_1k}</span></div>
+            <div class="detail-row"><span class="detail-label">Context Window Size</span><span class="detail-value">{_escape_html(perf_profile.context_window_size)}</span></div>
+            <div class="detail-row"><span class="detail-label">Max Output Tokens</span><span class="detail-value">{_escape_html(perf_profile.max_output_tokens)}</span></div>
+            <div class="detail-row"><span class="detail-label">Avg Tokens/s</span><span class="detail-value">{_escape_html(perf_profile.avg_tokens_per_second)}</span></div>
+            <div class="detail-row"><span class="detail-label">Cold Start Time (ms)</span><span class="detail-value">{_escape_html(perf_profile.cold_start_time_ms)}</span></div>
+            <div class="detail-row"><span class="detail-label">Cost per 1k</span><span class="detail-value">{_escape_html(perf_profile.cost_per_1k)}</span></div>
         """
 
     return base_layout(f"Model {model.model_id}", f"""
         <div class="page-header">
-            <h2>Model Detail: <span class="mono">{model.model_id}</span></h2>
+            <h2>Model Detail: <span class="mono">{_escape_html(model.model_id)}</span></h2>
         </div>
         <div class="detail-panel">
             <h3 style="font-size:14px; margin-bottom:12px; color:var(--text-primary);">Definition</h3>
             <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{model.state.value}</span></div>
-            <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">{model.model_name}</span></div>
-            <div class="detail-row"><span class="detail-label">Provider</span><span class="detail-value">{model.provider}</span></div>
-            <div class="detail-row"><span class="detail-label">Version</span><span class="detail-value">{model.version}</span></div>
-            <div class="detail-row"><span class="detail-label">Location Type</span><span class="detail-value">{model.location_type}</span></div>
-            <div class="detail-row"><span class="detail-label">Path/URI</span><span class="mono">{model.path_or_uri}</span></div>
-            <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{model.executor_type}</span></div>
+            <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">{_escape_html(model.model_name)}</span></div>
+            <div class="detail-row"><span class="detail-label">Provider</span><span class="detail-value">{_escape_html(model.provider)}</span></div>
+            <div class="detail-row"><span class="detail-label">Version</span><span class="detail-value">{_escape_html(model.version)}</span></div>
+            <div class="detail-row"><span class="detail-label">Location Type</span><span class="detail-value">{_escape_html(model.location_type)}</span></div>
+            <div class="detail-row"><span class="detail-label">Path/URI</span><span class="mono">{_escape_html(model.path_or_uri)}</span></div>
+            <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{_escape_html(model.executor_type)}</span></div>
         </div>
         
         <div class="detail-panel">
@@ -1310,7 +1311,7 @@ def _render_empty_state(message="No data available."):
 def universe_accounts_page(accounts, csrf_token=""):
     rows = ""
     for acct in accounts:
-        rows += f'<tr><td><a href="/universe/accounts/{acct.account_id}">{acct.account_id}</a></td><td>{acct.name}</td><td>{acct.owner_principal}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
+        rows += f'<tr><td><a href="/universe/accounts/{acct.account_id}">{_escape_html(acct.account_id)}</a></td><td>{_escape_html(acct.name)}</td><td>{_escape_html(acct.owner_principal)}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
     content = f"""
         <div class="page-header"><h2>Accounts</h2><p>Multi-Account Identity Boundaries</p></div>
         <div class="detail-panel">
@@ -1327,20 +1328,20 @@ def universe_account_detail_page(account, csrf_token=""):
         <div class="page-header">
             <a href="/universe/accounts" class="btn btn-secondary">← Back</a>
             <h2>Account Details</h2>
-            <p>{account.account_id}</p>
+            <p>{_escape_html(account.account_id)}</p>
         </div>
         <div class="detail-panel">
             <h3>Identity</h3>
-            <pre><code>Name: {account.name}
-Owner: {account.owner_principal}</code></pre>
+            <pre><code>Name: {_escape_html(account.name)}
+Owner: {_escape_html(account.owner_principal)}</code></pre>
         </div>
     """
-    return base_layout(f"Account {account.account_id}", content, "/universe/accounts", csrf_token)
+    return base_layout(f"Account {_escape_html(account.account_id)}", content, "/universe/accounts", csrf_token)
 
 def universe_organization_page(orgs, csrf_token=""):
     rows = ""
     for org in orgs:
-        rows += f'<tr><td>{org.get("login", "—")}</td><td>{org.get("id", "—")}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
+        rows += f'<tr><td>{_escape_html(org.get("login", "—"))}</td><td>{_escape_html(org.get("id", "—"))}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
     content = f"""
         <div class="page-header"><h2>Organization Map</h2><p>Discovered Github Organizations</p></div>
         <div class="detail-panel">
@@ -1365,7 +1366,7 @@ def universe_repositories_page(repos, csrf_token=""):
         name = r.get('name', '—')
         owner = r.get('owner', '—')
         vis = r.get('visibility', '—')
-        rows += f'<tr><td class="mono">{owner}/{name}</td><td>{vis}</td><td>GitHub</td><td><a href="/universe/resources">View in Fabric</a></td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(owner)}/{_escape_html(name)}</td><td>{_escape_html(vis)}</td><td>GitHub</td><td><a href="/universe/resources">View in Fabric</a></td></tr>'
     content = f"""
         <div class="page-header"><h2>Repository Map</h2><p>Discovered Code Repositories</p></div>
         <div class="detail-panel">
@@ -1384,7 +1385,7 @@ def universe_resources_page(resources, csrf_token=""):
         prov_id = getattr(res, 'provenance_id', res.get('provenance_id', '—') if isinstance(res, dict) else '—')
         state = getattr(res, 'state', res.get('state', 'UNKNOWN') if isinstance(res, dict) else 'UNKNOWN')
         badge = 'badge-success' if state == 'ACTIVE' else 'badge-muted'
-        rows += f'<tr><td class="mono">{res_id}</td><td><span class="badge {badge}">{state}</span></td><td><a href="/audit/provenance?id={prov_id}" class="mono">{prov_id}</a></td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(res_id)}</td><td><span class="badge {badge}">{_escape_html(state)}</span></td><td><a href="/audit/provenance?id={prov_id}" class="mono">{_escape_html(prov_id)}</a></td></tr>'
     
     content = f"""
         <div class="page-header"><h2>Fabric Resources</h2><p>Canonical domain entities registered in Fabric</p></div>
@@ -1400,7 +1401,7 @@ def universe_resources_page(resources, csrf_token=""):
 def execution_tasks_page(tasks, csrf_token=""):
     rows = ""
     for t_id, task in tasks.items():
-        rows += f'<tr><td class="mono">{t_id}</td><td>{task.capability_id}</td><td><span class="badge badge-info">QUEUED</span></td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(t_id)}</td><td>{_escape_html(task.capability_id)}</td><td><span class="badge badge-info">QUEUED</span></td></tr>'
     content = f"""
         <div class="page-header"><h2>Pending Tasks</h2><p>Tasks waiting for execution</p></div>
         <div class="detail-panel">
@@ -1417,7 +1418,7 @@ def execution_workers_page(workers, csrf_token=""):
     for w_id, worker in workers.items():
         state = worker.state.value if hasattr(worker.state, 'value') else str(worker.state)
         badge = 'badge-success' if state == 'SUCCEEDED' else ('badge-info' if state == 'RUNNING' else 'badge-muted')
-        rows += f'<tr><td class="mono">{w_id}</td><td>{worker.capability_id}</td><td>{worker.model_id}</td><td><span class="badge {badge}">{state}</span></td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(w_id)}</td><td>{_escape_html(worker.capability_id)}</td><td>{_escape_html(worker.model_id)}</td><td><span class="badge {badge}">{_escape_html(state)}</span></td></tr>'
     content = f"""
         <div class="page-header"><h2>Worker Topology</h2><p>Active and historical workers</p></div>
         <div class="detail-panel">
@@ -1439,7 +1440,7 @@ def intelligence_capabilities_page(caps, bindings, csrf_token=""):
             if b.capability_id == c_id and b.preferred:
                 pref_model = b.model_id
                 break
-        rows += f'<tr><td class="mono">{c_id}</td><td>{cap.name}</td><td class="mono">{pref_model}</td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(c_id)}</td><td>{_escape_html(cap.name)}</td><td class="mono">{_escape_html(pref_model)}</td></tr>'
     
     content = f"""
         <div class="page-header"><h2>Capability Map</h2><p>Registered capabilities and preferred models</p></div>
@@ -1489,7 +1490,7 @@ def audit_events_page(events, csrf_token=""):
         status = _escape_html(status_raw)
         msg = _escape_html(ev[7])
         badge = 'badge-success' if status_raw == 'SUCCESS' else ('badge-danger' if status_raw == 'ERROR' else 'badge-info')
-        rows += f'<tr><td>{timestamp}</td><td>{mod}</td><td>{typ}</td><td><span class="badge {badge}">{status}</span></td><td class="mono">{msg}</td></tr>'
+        rows += f'<tr><td>{_escape_html(timestamp)}</td><td>{_escape_html(mod)}</td><td>{_escape_html(typ)}</td><td><span class="badge {badge}">{_escape_html(status)}</span></td><td class="mono">{_escape_html(msg)}</td></tr>'
         
     content = f"""
         <div class="page-header"><h2>Audit Events</h2><p>Chronological system logs</p></div>
@@ -1505,7 +1506,7 @@ def audit_events_page(events, csrf_token=""):
 def audit_provenance_page(prov_data, csrf_token=""):
     content = f"""
         <div class="page-header"><h2>Provenance & Evidence</h2><p>Cryptographic traces</p></div>
-        <pre style="background:var(--bg-secondary); padding: 16px; border-radius: var(--radius-sm); font-size:12px;">{prov_data if prov_data else 'No provenance data selected or available.'}</pre>
+        <pre style="background:var(--bg-secondary); padding: 16px; border-radius: var(--radius-sm); font-size:12px;">{_escape_html(prov_data if prov_data else 'No provenance data selected or available.')}</pre>
     """
     return base_layout("Provenance", content, "/audit/provenance", csrf_token)
 
@@ -1712,7 +1713,7 @@ def browser_dashboard_page(sessions: list, csrf_token: str = "") -> str:
             <td><a href="{_safe_href('/browser/' + str(s.session_id))}" style="color:var(--accent-blue)">{session_id}...</a></td>
             <td><code>{worker_id}</code></td>
             <td>{mode}</td>
-            <td><span style="color:{status_color}">{state}</span></td>
+            <td><span style="color:{status_color}">{_escape_html(state)}</span></td>
             <td>{current_url_text}</td>
             <td>{created_at}</td>
         </tr>
@@ -1760,7 +1761,7 @@ def browser_session_page(session, csrf_token: str = "") -> str:
                 <h3>Session Status</h3>
                 <table class="data-table">
                     <tr><td style="color:var(--text-muted);width:30%">Mode</td><td>{mode}</td></tr>
-                    <tr><td style="color:var(--text-muted)">State</td><td><span style="color:{status_color}">{state}</span></td></tr>
+                    <tr><td style="color:var(--text-muted)">State</td><td><span style="color:{status_color}">{_escape_html(state)}</span></td></tr>
                     <tr><td style="color:var(--text-muted)">Current URL</td><td><a href="{safe_current_url}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-blue)">{current_url_text}</a></td></tr>
                     <tr><td style="color:var(--text-muted)">Worker ID</td><td><code>{worker_id}</code></td></tr>
                     <tr><td style="color:var(--text-muted)">Task ID</td><td><code>{task_id}</code></td></tr>
