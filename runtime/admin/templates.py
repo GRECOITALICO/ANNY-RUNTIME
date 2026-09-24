@@ -1119,7 +1119,7 @@ def executions_page(executions, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/executions", csrf_token)
+    """, "/execution/executions", csrf_token, "execution.execution_runs")
 
 
 def capabilities_page(capabilities, csrf_token=""):
@@ -1195,7 +1195,7 @@ def workers_page(workers, csrf_token=""):
     for w in workers:
         state_badge = 'badge-success' if w.state.value == 'SUCCEEDED' else 'badge-danger' if w.state.value in ('FAILED', 'TIMED_OUT', 'LIMIT_EXCEEDED') else 'badge-warning'
         rows += f"""<tr>
-            <td class="mono"><a href="/workers/{w.worker_id}">{_escape_html(w.worker_id)}</a></td>
+            <td class="mono"><a href="{_safe_href('/workers/' + str(w.worker_id))}">{_escape_html(w.worker_id)}</a></td>
             <td class="mono">{_escape_html(w.execution_id)}</td>
             <td class="mono">{_escape_html(w.capability_id)}</td>
             <td>{_escape_html(w.executor_type)}</td>
@@ -1254,7 +1254,7 @@ def models_page(models, csrf_token=""):
     for m in models:
         badge_cls = 'badge-success' if m.state.value in ('AVAILABLE', 'REGISTERED') else 'badge-danger'
         rows += f"""<tr>
-            <td class="mono"><a href="/models/{m.model_id}">{_escape_html(m.model_id)}</a></td>
+            <td class="mono"><a href="{_safe_href('/models/' + str(m.model_id))}">{_escape_html(m.model_id)}</a></td>
             <td>{_escape_html(m.model_name)}</td>
             <td>{_escape_html(m.provider)}</td>
             <td>{_escape_html(m.version)}</td>
