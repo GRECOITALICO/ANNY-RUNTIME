@@ -808,3 +808,80 @@ def test_legacy_ready_view_does_not_link_to_planned_routes():
     assert 'href="/github"' in html
     assert 'href="/fabric"' in html
     assert 'href="/models"' in html
+
+
+def test_continuity_timeline_uses_durable_events_and_registered_route():
+    from types import SimpleNamespace
+    from runtime.admin.templates import continuity_timeline_page
+    from runtime.admin.projections import DEFAULT_PROJECTION_REGISTRY
+
+    event = SimpleNamespace(
+        sequence=7,
+        timestamp="2026-09-24T04:00:00Z",
+        mission_id="<MISSION>",
+        task_id="<TASK>",
+        event_type=SimpleNamespace(value="<EVENT>"),
+        status="<STATUS>",
+        result="<RESULT>",
+        evidence_refs=["e1", "e2"],
+    )
+    html = continuity_timeline_page([event])
+
+    projection = DEFAULT_PROJECTION_REGISTRY.get("continuity.status")
+    assert projection is not None
+    assert projection.implementation_status == "BOUND"
+    assert projection.source_authority == "CONTINUITY_ENGINE"
+    assert 'href="/continuity/timeline"' in html or 'data-projection-id="continuity.status"' in html
+    assert 'data-projection-id="continuity.status"' in html
+    assert '&lt;MISSION&gt;' in html
+    assert '&lt;TASK&gt;' in html
+    assert '&lt;EVENT&gt;' in html
+    assert '&lt;STATUS&gt;' in html
+    assert '&lt;RESULT&gt;' in html
+    assert '>2</td>' in html
+
+
+def test_continuity_engine_recent_events_is_read_only_and_bounded(tmp_path):
+    from runtime.continuity.engine import ContinuityEngine
+    from runtime.continuity.models import EventRecord
+
+    engine = ContinuityEngine(str(tmp_path))
+    for sequence in range(1, 6):
+        engine.append_event(EventRecord(
+            event_id=f"evt-{sequence}",
+            sequence=0,
+            timestamp=f"2026-09-24T04:00:0{sequence}Z",
+            mission_id="MISSION",
+            task_id=f"TASK-{sequence}",
+            step_id="STEP",
+            parent_event_id=None,
+            actor_id="ANNY",
+            actor_level="L0",
+            parent_actor_id=None,
+            event_type="TASK_CREATED",
+            target="target",
+            intent="intent",
+            inputs={},
+            repository=None,
+            branch=None,
+            commit_before=None,
+            commit_after=None,
+            files_changed=[],
+            observation="obs",
+            result="QUEUED",
+            evidence_refs=[],
+            test_results=[],
+            decision_ref=None,
+            state_change="QUEUED",
+            status="QUEUED",
+            implementation_state="QUEUED",
+            verification_state="PENDING",
+            certification_state="NOT_CERTIFIED",
+            blocker_refs=[],
+            next_action="EXECUTE",
+            execution_id=None,
+        ))
+
+    events = engine.get_recent_events(3)
+    assert [e.task_id for e in events] == ["TASK-3", "TASK-4", "TASK-5"]
+    assert len(engine._events) == 5
