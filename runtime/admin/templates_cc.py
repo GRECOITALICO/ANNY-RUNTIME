@@ -300,6 +300,15 @@ def control_center_page(csrf_token: str) -> str:
 <script>
 const CSRF_TOKEN = "__CSRF__";
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function badge(text) {
     if (!text) return '<span class="badge unknown">UNKNOWN</span>';
     const u = String(text).toUpperCase().split(' ').join('_');
@@ -307,7 +316,7 @@ function badge(text) {
                  ['FAIL','BLOCKED','ERROR','DENIED'].includes(u) ? 'fail' :
                  ['VERIFYING','STARTING'].includes(u) ? 'verifying' :
                  ['STALE','PENDING','NOT_CONFIGURED','UNAVAILABLE','UNAUTHORIZED'].includes(u) ? 'stale' : 'unknown');
-    return '<span class="badge ' + cls + '">' + u + '</span>';
+    return '<span class="badge ' + cls + '">' + escapeHtml(u) + '</span>';
 }
 
 function dot(v) { return '<span class="dot ' + (v ? 'on' : 'off') + '"></span>'; }
@@ -327,7 +336,7 @@ function populateTable(tbodyId, arr, cols) {
         return;
     }
     setInner(tbodyId, arr.map(function(i) {
-        return '<tr><td class="mono">' + (i.name || i.id || '--') + '</td><td>' + badge(i.status) + '</td></tr>';
+        return '<tr><td class="mono">' + escapeHtml(i.name || i.id || '--') + '</td><td>' + badge(i.status) + '</td></tr>';
     }).join(''));
 }
 
@@ -335,7 +344,7 @@ function updateUI(d) {
     // Header badges
     const stateBadge = document.getElementById('rt-state-badge');
     if (stateBadge) {
-        stateBadge.innerHTML = (d.runtime_state || 'UNKNOWN');
+        stateBadge.textContent = (d.runtime_state || 'UNKNOWN');
         stateBadge.className = 'badge ' + (d.runtime_state || 'unknown').toLowerCase().replace(/_/g,'-');
         const isActive = ['STARTING','VERIFYING'].includes((d.runtime_state||'').toUpperCase());
         if (isActive) stateBadge.classList.add('pulse'); else stateBadge.classList.remove('pulse');
@@ -366,9 +375,9 @@ function updateUI(d) {
     // Gates
     if (d.gates && d.gates.length) {
         setInner('gates-tbody', d.gates.map(function(g) {
-            return '<tr><td>' + (g.phase||'') + '</td><td class="mono">' + (g.gate||'') + '</td><td>' +
-                   badge(g.status) + '</td><td>' + (g.detail||'') + '</td><td class="mono" style="font-size:.7rem">' +
-                   (g.evidence||'') + '</td></tr>';
+            return '<tr><td>' + escapeHtml(g.phase||'') + '</td><td class="mono">' + escapeHtml(g.gate||'') + '</td><td>' +
+                   badge(g.status) + '</td><td>' + escapeHtml(g.detail||'') + '</td><td class="mono" style="font-size:.7rem">' +
+                   escapeHtml(g.evidence||'') + '</td></tr>';
         }).join(''));
     } else if (d.runtime_state === 'STARTING') {
         setInner('gates-tbody', '<tr><td colspan="5" style="color:var(--verifying)">Bootstrap running...</td></tr>');
@@ -377,7 +386,7 @@ function updateUI(d) {
     // Health
     if (d.health && Object.keys(d.health).length) {
         setInner('health-tbody', Object.entries(d.health).map(function(kv) {
-            return '<tr><td class="mono">' + kv[0] + '</td><td>' + badge(kv[1]) + '</td></tr>';
+            return '<tr><td class="mono">' + escapeHtml(kv[0]) + '</td><td>' + badge(kv[1]) + '</td></tr>';
         }).join(''));
     }
 
@@ -393,7 +402,7 @@ function updateUI(d) {
     // Access
     if (d.access && d.access.length) {
         setInner('access-tbody', d.access.map(function(a) {
-            return '<tr><td class="mono">' + a.capability + '</td><td class="mono">' + a.expected + '</td><td>' + badge(a.result) + '</td></tr>';
+            return '<tr><td class="mono">' + escapeHtml(a.capability) + '</td><td class="mono">' + escapeHtml(a.expected) + '</td><td>' + badge(a.result) + '</td></tr>';
         }).join(''));
     } else {
         setInner('access-tbody', '<tr><td colspan="3" style="color:var(--text-secondary)">None</td></tr>');
@@ -402,10 +411,10 @@ function updateUI(d) {
     // Contract
     if (d.contract) {
         setInner('contract-div',
-            '<div style="margin-bottom:.4rem"><strong>ALLOWED:</strong> <span class="mono">' + (d.contract.allowed||'NONE') + '</span></div>' +
-            '<div style="margin-bottom:.4rem"><strong>DENIED:</strong> <span class="mono">' + (d.contract.denied||'NONE') + '</span></div>' +
-            '<div style="margin-bottom:.4rem"><strong>NETWORK:</strong> <span class="mono">' + (d.contract.network||'UNKNOWN') + '</span></div>' +
-            '<div><strong>WORKER LIMITS:</strong> <span class="mono">' + (d.contract.worker_limits||'UNKNOWN') + '</span></div>'
+            '<div style="margin-bottom:.4rem"><strong>ALLOWED:</strong> <span class="mono">' + escapeHtml(d.contract.allowed||'NONE') + '</span></div>' +
+            '<div style="margin-bottom:.4rem"><strong>DENIED:</strong> <span class="mono">' + escapeHtml(d.contract.denied||'NONE') + '</span></div>' +
+            '<div style="margin-bottom:.4rem"><strong>NETWORK:</strong> <span class="mono">' + escapeHtml(d.contract.network||'UNKNOWN') + '</span></div>' +
+            '<div><strong>WORKER LIMITS:</strong> <span class="mono">' + escapeHtml(d.contract.worker_limits||'UNKNOWN') + '</span></div>'
         );
     }
 
@@ -413,7 +422,7 @@ function updateUI(d) {
     if (d.capabilities && d.capabilities.length) {
         setInner('cap-tbody', d.capabilities.map(function(c) {
             var s = c.states || {};
-            return '<tr><td class="mono">' + c.id + '</td>' +
+            return '<tr><td class="mono">' + escapeHtml(c.id) + '</td>' +
                    ['DECLARED','CONFIGURED','ENABLED','AUTHORIZED','AVAILABLE','FUNCTIONAL','TESTED','VERIFIED'].map(function(k) {
                        return '<td>' + dot(s[k]) + '</td>';
                    }).join('') + '</tr>';
@@ -474,7 +483,7 @@ async function fetchProcessingMatrix() {
         }
         if (d.departments && Object.keys(d.departments).length > 0) {
             for (const [dept, stats] of Object.entries(d.departments)) {
-                html += '<tr><td class="mono">' + (dept||'UNKNOWN') + '</td>' +
+                html += '<tr><td class="mono">' + escapeHtml(dept||'UNKNOWN') + '</td>' +
                        '<td>' + (stats.total||0) + '</td>' +
                        '<td>' + (stats.deterministic||0) + '</td>' +
                        '<td>' + (stats.local_model||0) + '</td>' +
