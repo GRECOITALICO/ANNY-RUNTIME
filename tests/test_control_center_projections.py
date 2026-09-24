@@ -492,3 +492,10 @@ def test_project_map_renders_registered_projects_instead_of_static_empty_state()
     assert '&lt;Project Name&gt;' in html
     assert '&lt;READY&gt;' in html
     assert '>2</td>' in html
+
+
+def test_browser_session_projection_is_bound_to_implemented_detail_route():
+    projection = DEFAULT_PROJECTION_REGISTRY.get("browser.session_detail")
+    assert projection is not None
+    assert projection.implementation_status == "BOUND"
+    assert projection.route_or_detail == "/browser/{session_id}"
