@@ -1360,9 +1360,37 @@ def universe_organization_page(orgs, csrf_token=""):
     return base_layout("Organization Map", content, "/universe/organization", csrf_token)
 
 def universe_projects_page(projects, csrf_token=""):
+    rows = ""
+    for project in projects:
+        if isinstance(project, dict):
+            project_id = project.get("project_id", project.get("id", "—"))
+            name = project.get("name", project_id)
+            status = project.get("status", "UNKNOWN")
+            repo_count = project.get("repository_count", project.get("repositories_count", "—"))
+        else:
+            project_id = getattr(project, "project_id", getattr(project, "id", "—"))
+            name = getattr(project, "name", project_id)
+            status = getattr(project, "status", "UNKNOWN")
+            repo_values = getattr(project, "repositories", None)
+            repo_count = len(repo_values) if repo_values is not None and hasattr(repo_values, "__len__") else getattr(project, "repository_count", "—")
+        rows += f"""
+        <tr>
+            <td class="mono">{_escape_html(project_id)}</td>
+            <td>{_escape_html(name)}</td>
+            <td><span class="badge badge-info">{_escape_html(status)}</span></td>
+            <td>{_escape_html(repo_count)}</td>
+        </tr>
+        """
+    if not rows:
+        rows = '<tr><td colspan="4" style="text-align:center;">No projects discovered</td></tr>'
     content = f"""
-        <div class="page-header"><h2>Project Map</h2><p>Logical Groupings</p></div>
-        {_render_empty_state('No projects configured.')}
+        <div class="page-header"><h2>Project Map</h2><p>Logical project groupings derived from the current Runtime registry.</p></div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Project ID</th><th>Name</th><th>Status</th><th>Repositories</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
     """
     return base_layout("Project Map", content, "/universe/projects", csrf_token)
 
