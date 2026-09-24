@@ -7,6 +7,7 @@ does not silently disconnect the GUI from its governed SYNC/status surface.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import http.client
 import tempfile
 from pathlib import Path
