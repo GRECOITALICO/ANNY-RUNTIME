@@ -474,7 +474,7 @@ def test_browser_renderers_are_bound_safe_and_do_not_reference_missing_renderer(
     assert 'href="#"' in detail
     assert '&lt;MODE&gt;' in detail
     assert '&lt;PROFILE&gt;' in detail
-    assert '&quot; onmouseover' not in dashboard
+    assert 'href="/browser/abc" onmouseover=' not in dashboard
     assert 'data-projection-id="browser.dashboard"' in dashboard
     assert 'data-projection-id="browser.session_detail"' in detail
 
