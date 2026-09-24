@@ -1194,7 +1194,15 @@ class AdminRouter:
         )
 
     def handle_continuity_timeline(self, parsed) -> str:
-        return generic_placeholder_page("Continuity Timeline", "/continuity/timeline", self._get_csrf())
+        engine = self.context.get('runtime_engine')
+        continuity = getattr(engine, 'continuity_engine', None) if engine else None
+        events = []
+        if continuity and hasattr(continuity, 'get_recent_events'):
+            try:
+                events = continuity.get_recent_events(limit=100)
+            except Exception:
+                events = []
+        return continuity_timeline_page(events, self._get_csrf())
 
     def handle_audit_events(self, parsed) -> str:
         events = []
