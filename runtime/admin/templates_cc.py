@@ -259,16 +259,42 @@ def control_center_page(csrf_token: str) -> str:
                 Loading registry...
             </div>
         </div>
-        <label style="font-size:.7rem;color:var(--text-secondary)">
-            PRIORITY
-            <select id="projection-priority-filter" style="margin-left:.35rem;background:#111827;color:#f3f4f6;border:1px solid var(--border);border-radius:5px;padding:.3rem .45rem">
-                <option value="">ALL</option>
-                <option value="P0">P0</option>
-                <option value="P1">P1</option>
-                <option value="P2">P2</option>
-                <option value="P3">P3</option>
-            </select>
-        </label>
+        <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+            <input id="projection-search" type="search" placeholder="SEARCH ID / TITLE / SECTION / TAG"
+                   style="width:min(330px,70vw);background:#111827;color:#f3f4f6;border:1px solid var(--border);border-radius:5px;padding:.3rem .45rem;font:inherit">
+            <label style="font-size:.7rem;color:var(--text-secondary)">
+                PRIORITY
+                <select id="projection-priority-filter" style="margin-left:.35rem;background:#111827;color:#f3f4f6;border:1px solid var(--border);border-radius:5px;padding:.3rem .45rem">
+                    <option value="">ALL</option>
+                    <option value="P0">P0</option>
+                    <option value="P1">P1</option>
+                    <option value="P2">P2</option>
+                    <option value="P3">P3</option>
+                </select>
+            </label>
+            <label style="font-size:.7rem;color:var(--text-secondary)">
+                STATUS
+                <select id="projection-status-filter" style="margin-left:.35rem;background:#111827;color:#f3f4f6;border:1px solid var(--border);border-radius:5px;padding:.3rem .45rem">
+                    <option value="">ALL</option>
+                    <option value="BOUND">BOUND</option>
+                    <option value="PARTIAL">PARTIAL</option>
+                    <option value="PLANNED">PLANNED</option>
+                    <option value="BLOCKED">BLOCKED</option>
+                    <option value="NOT_IMPLEMENTED">NOT IMPLEMENTED</option>
+                </select>
+            </label>
+            <label style="font-size:.7rem;color:var(--text-secondary)">
+                TRUTH
+                <select id="projection-truth-filter" style="margin-left:.35rem;background:#111827;color:#f3f4f6;border:1px solid var(--border);border-radius:5px;padding:.3rem .45rem">
+                    <option value="">ALL</option>
+                    <option value="FACT">FACT</option>
+                    <option value="HYPOTHESIS">HYPOTHESIS</option>
+                    <option value="UNKNOWN">UNKNOWN</option>
+                    <option value="UNVERIFIED">UNVERIFIED</option>
+                </select>
+            </label>
+            <button type="button" class="btn btn-ghost" id="projection-refresh-btn">↻ REFRESH</button>
+        </div>
     </div>
     <div style="overflow-x:auto;margin-top:.9rem">
         <table>
@@ -280,6 +306,13 @@ def control_center_page(csrf_token: str) -> str:
                 <tr><td colspan="8" style="color:var(--text-secondary)">Loading...</td></tr>
             </tbody>
         </table>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.65rem;gap:.5rem;flex-wrap:wrap;font-size:.7rem;color:var(--text-secondary)">
+        <span id="projection-registry-page-meta">PAGE —</span>
+        <div style="display:flex;gap:.35rem">
+            <button type="button" class="btn btn-ghost" id="projection-prev-btn">← PREV</button>
+            <button type="button" class="btn btn-ghost" id="projection-next-btn">NEXT →</button>
+        </div>
     </div>
 </div>
 
@@ -519,14 +552,28 @@ async function triggerVerify() {
     finally { btn.disabled = false; btn.textContent = '⟳ VERIFY NOW'; }
 }
 
-async function fetchProjectionRegistry() {
+let projectionOffset = 0;
+const PROJECTION_PAGE_SIZE = 100;
+
+function projectionQuery() {
+    const params = new URLSearchParams();
+    const search = document.getElementById('projection-search');
+    const priority = document.getElementById('projection-priority-filter');
+    const status = document.getElementById('projection-status-filter');
+    const truth = document.getElementById('projection-truth-filter');
+    if (search && search.value.trim()) params.set('q', search.value.trim());
+    if (priority && priority.value) params.set('priority', priority.value);
+    if (status && status.value) params.set('implementation_status', status.value);
+    if (truth && truth.value) params.set('truth_class', truth.value);
+    params.set('limit', String(PROJECTION_PAGE_SIZE));
+    params.set('offset', String(projectionOffset));
+    return params.toString();
+}
+
+async function fetchProjectionRegistry(resetOffset = false) {
     try {
-        const filter = document.getElementById('projection-priority-filter');
-        const priority = filter ? filter.value : '';
-        const url = priority
-            ? '/api/control-center/projections?priority=' + encodeURIComponent(priority)
-            : '/api/control-center/projections';
-        const r = await fetch(url);
+        if (resetOffset) projectionOffset = 0;
+        const r = await fetch('/api/control-center/projections?' + projectionQuery());
         if (!r.ok) return;
         const d = await r.json();
 
@@ -538,6 +585,7 @@ async function fetchProjectionRegistry() {
                 'MASTER=' + (d.master_inventory_boundary || 'UNKNOWN') +
                 ' · P0 VIEWPORT TARGET=' + String(d.initial_p0_viewport_target || '—') +
                 ' · REGISTERED=' + String(s.total_definitions || 0) +
+                ' · FILTERED=' + String((d.page || {}).total_filtered || 0) +
                 ' · P0=' + String(byPriority.P0 || 0) +
                 ' · P1=' + String(byPriority.P1 || 0) +
                 ' · P2=' + String(byPriority.P2 || 0) +
@@ -558,44 +606,78 @@ async function fetchProjectionRegistry() {
             cell.style.color = 'var(--text-secondary)';
             row.appendChild(cell);
             tbody.appendChild(row);
-            return;
+        } else {
+            for (const item of projections) {
+                const row = document.createElement('tr');
+                const cells = [
+                    item.projection_id, item.title, item.section, item.priority,
+                    item.implementation_status, item.truth_class, item.freshness,
+                    item.source_authority
+                ];
+                for (const value of cells) {
+                    const cell = document.createElement('td');
+                    cell.className = 'mono';
+                    cell.textContent = value === null || value === undefined || value === ''
+                        ? '—'
+                        : String(value);
+                    row.appendChild(cell);
+                }
+                tbody.appendChild(row);
+            }
         }
 
-        for (const item of projections) {
-            const row = document.createElement('tr');
-            const cells = [
-                item.projection_id, item.title, item.section, item.priority,
-                item.implementation_status, item.truth_class, item.freshness,
-                item.source_authority
-            ];
-            for (const value of cells) {
-                const cell = document.createElement('td');
-                cell.className = 'mono';
-                cell.textContent = value === null || value === undefined || value === ''
-                    ? '—'
-                    : String(value);
-                row.appendChild(cell);
-            }
-            tbody.appendChild(row);
+        const page = d.page || {};
+        const pageMeta = document.getElementById('projection-registry-page-meta');
+        if (pageMeta) {
+            const total = Number(page.total_filtered || 0);
+            const startRow = total === 0 ? 0 : Number(page.offset || 0) + 1;
+            const endRow = Number(page.offset || 0) + Number(page.returned || 0);
+            pageMeta.textContent = 'ROWS ' + startRow + '–' + endRow + ' OF ' + total;
         }
+        const prev = document.getElementById('projection-prev-btn');
+        const next = document.getElementById('projection-next-btn');
+        if (prev) prev.disabled = projectionOffset <= 0;
+        if (next) next.disabled = !page.has_more;
     } catch(e) {
         console.error('Projection registry fetch failed:', e);
     }
 }
 
+
 fetchStatus();
 fetchProcessingMatrix();
 fetchProjectionRegistry();
+
 setInterval(function() {
     fetchStatus();
     fetchProcessingMatrix();
-    fetchProjectionRegistry();
 }, 2000);
 
-const projectionFilter = document.getElementById('projection-priority-filter');
-if (projectionFilter) {
-    projectionFilter.addEventListener('change', fetchProjectionRegistry);
+setInterval(function() {
+    fetchProjectionRegistry();
+}, 10000);
+
+for (const id of ['projection-priority-filter','projection-status-filter','projection-truth-filter']) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', () => fetchProjectionRegistry(true));
 }
+const searchEl = document.getElementById('projection-search');
+if (searchEl) {
+    searchEl.addEventListener('input', () => fetchProjectionRegistry(true));
+}
+const refreshEl = document.getElementById('projection-refresh-btn');
+if (refreshEl) refreshEl.addEventListener('click', () => fetchProjectionRegistry(false));
+
+const prevEl = document.getElementById('projection-prev-btn');
+if (prevEl) prevEl.addEventListener('click', () => {
+    projectionOffset = Math.max(0, projectionOffset - PROJECTION_PAGE_SIZE);
+    fetchProjectionRegistry(false);
+});
+const nextEl = document.getElementById('projection-next-btn');
+if (nextEl) nextEl.addEventListener('click', () => {
+    projectionOffset += PROJECTION_PAGE_SIZE;
+    fetchProjectionRegistry(false);
+});
 </script>
 </body>
 </html>"""
