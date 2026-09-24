@@ -180,3 +180,16 @@ def test_projection_detail_filter_is_exact():
     payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(projection_id="does.not.exist", limit=1)
     assert payload["page"]["total_filtered"] == 0
     assert payload["projections"] == []
+
+
+def test_active_navigation_items_resolve_to_real_get_routes():
+    from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS
+    from runtime.admin.routes import AdminRouter
+
+    router = AdminRouter({})
+    get_routes = router._get_routes
+
+    for item in DEFAULT_NAVIGATION_ITEMS:
+        if item.availability == "PLANNED":
+            continue
+        assert item.path in get_routes, item.path
