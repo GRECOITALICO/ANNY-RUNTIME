@@ -499,3 +499,13 @@ def test_browser_session_projection_is_bound_to_implemented_detail_route():
     assert projection is not None
     assert projection.implementation_status == "BOUND"
     assert projection.route_or_detail == "/browser/{session_id}"
+
+
+def test_control_center_truth_as_of_uses_server_timestamp_not_client_clock():
+    from runtime.admin.templates_cc import control_center_page
+
+    html = control_center_page("csrf-token")
+    assert 'id="last-verified">TRUTH AS OF: —' in html
+    assert "setText('last-verified', 'TRUTH AS OF: ' + (d.timestamp || 'UNKNOWN'))" in html
+    assert "LAST POLLED" not in html
+    assert "new Date().toISOString()" not in html
