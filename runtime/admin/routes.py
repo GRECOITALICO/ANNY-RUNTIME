@@ -12,7 +12,7 @@ from runtime.admin.templates import (
     models_page, model_detail_page,
     universe_accounts_page, universe_account_detail_page,
     universe_organization_page, universe_projects_page, universe_repositories_page,
-    universe_resources_page, execution_tasks_page, execution_workers_page,
+    universe_resources_page, execution_missions_page, execution_tasks_page, execution_workers_page,
     intelligence_capabilities_page, infrastructure_topology_page, audit_events_page,
     audit_provenance_page, search_page, generic_placeholder_page,
     telemetry_live_page, telemetry_timeline_page
@@ -612,7 +612,7 @@ class AdminRouter:
             fabric_status="CONNECTED" if fabric_node else "NOT_CONFIGURED",
             organizations=[],
             repositories=repo_dtos,
-            blockers=[],
+            blockers=blockers,
             l2_worker_summary=L2WorkerSummaryDTO(count=0, registered_workers=[])
         )
 
@@ -1042,7 +1042,7 @@ class AdminRouter:
         return universe_resources_page(resources, self._get_csrf())
 
     def handle_execution_missions(self, parsed) -> str:
-        return generic_placeholder_page("Missions", "/execution/missions", self._get_csrf())
+        return execution_missions_page(self._get_continuity_dto(), self._get_csrf())
 
     def handle_execution_tasks(self, parsed) -> str:
         tasks = {}
@@ -1059,7 +1059,9 @@ class AdminRouter:
         return execution_workers_page(workers, self._get_csrf())
 
     def handle_execution_executions(self, parsed) -> str:
-        return generic_placeholder_page("Executions", "/execution/executions", self._get_csrf())
+        exec_mgr = self.context.get('execution_manager')
+        executions = exec_mgr.get_all_executions() if exec_mgr else []
+        return executions_page(executions, self._get_csrf())
 
     def handle_execution_workspaces(self, parsed) -> str:
         return generic_placeholder_page("Workspaces", "/execution/workspaces", self._get_csrf())
