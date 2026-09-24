@@ -457,7 +457,7 @@ class AdminRouter:
 
         truth_sources = {
             'runtime_state': 'runtime_engine.state',
-            'runtime_health': 'runtime_engine.health_check' if callable(health_check) else 'UNKNOWN',
+            'runtime_health': 'runtime_engine.health_check' if health_check is not None else 'UNKNOWN',
             'runtime_id': 'auth_manager.runtime_id' if runtime_id != 'UNKNOWN' else 'UNKNOWN',
             'runtime_version': 'runtime.core.version.__version__',
             'timestamp': 'bootstrap_report.completed_at' if report and getattr(report, 'completed_at', None) else (
