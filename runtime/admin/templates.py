@@ -4,6 +4,8 @@ Dark-mode, responsive, glassmorphism design. No external dependencies.
 All CSS is embedded. No CDN, no framework, no external JS.
 """
 
+from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS
+
 COMMON_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -117,6 +119,8 @@ body {
     transition: var(--transition);
     margin: 2px 0;
 }
+
+.nav-link.disabled { opacity: .45; cursor: default; pointer-events: none; }
 
 .nav-link:hover {
     background: var(--bg-glass);
@@ -451,9 +455,43 @@ body {
 }"""
 
 
-def _nav_link(path, icon, label, active_path):
+def _nav_link(path, icon, label, active_path, availability="ACTIVE"):
     active = ' active' if path == active_path else ''
+    if availability == "PLANNED":
+        return (
+            f'<span class="nav-link disabled{active}" aria-disabled="true" '
+            f'title="Projection not available in this Runtime build">'
+            f'<span class="nav-icon">{icon}</span><span>{label}</span></span>'
+        )
     return f'<a href="{path}" class="nav-link{active}"><span class="nav-icon">{icon}</span><span>{label}</span></a>'
+
+
+def _render_navigation(active_path):
+    sections = []
+    current = None
+    for item in DEFAULT_NAVIGATION_ITEMS:
+        if current != item.section:
+            current = item.section
+            sections.append([item])
+        else:
+            sections[-1].append(item)
+
+    rendered = []
+    for items in sections:
+        section = items[0].section
+        rendered.append(f'<div class="nav-section"><div class="nav-section-label">{section}</div>')
+        for item in items:
+            rendered.append(
+                _nav_link(
+                    item.path,
+                    item.icon,
+                    item.label,
+                    active_path,
+                    availability=item.availability,
+                )
+            )
+        rendered.append('</div>')
+    return ''.join(rendered)
 
 
 def base_layout(title, content, active_path="/", csrf_token=""):
@@ -477,63 +515,7 @@ def base_layout(title, content, active_path="/", csrf_token=""):
             
             <div class="version" style="margin-top:8px;">Runtime: ANNY-RUNTIME</div>
         </div>
-        <div class="nav-section">
-            <div class="nav-section-label">OVERVIEW</div>
-            {_nav_link('/', '⬡', 'Dashboard', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">UNIVERSE</div>
-            {_nav_link('/universe/organization', '❖', 'Organization', active_path)}
-            {_nav_link('/universe/projects', '◫', 'Projects', active_path)}
-            {_nav_link('/universe/repositories', '⊙', 'Repositories', active_path)}
-            {_nav_link('/universe/resources', '◈', 'Resources', active_path)}
-            {_nav_link('/universe/dependencies', '⋈', 'Dependencies', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">EXECUTION</div>
-            {_nav_link('/execution/missions', '🎯', 'Missions', active_path)}
-            {_nav_link('/execution/tasks', '✓', 'Tasks', active_path)}
-            {_nav_link('/execution/workers', '⚙', 'Workers', active_path)}
-            {_nav_link('/execution/executions', '▶', 'Executions', active_path)}
-            {_nav_link('/execution/workspaces', '📁', 'Workspaces', active_path)}
-            {_nav_link('/execution/results', '📊', 'Results', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">INTELLIGENCE</div>
-            {_nav_link('/intelligence/models', '🧠', 'Models', active_path)}
-            {_nav_link('/intelligence/capabilities', '⚡', 'Capabilities', active_path)}
-            {_nav_link('/intelligence/executors', '🛠', 'Executors', active_path)}
-            {_nav_link('/intelligence/performance', '📈', 'Performance', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">INFRASTRUCTURE</div>
-            {_nav_link('/infrastructure/runtime', '🖥', 'Runtime', active_path)}
-            {_nav_link('/infrastructure/github', '🐙', 'GitHub', active_path)}
-            {_nav_link('/infrastructure/fabric', '☁', 'Fabric', active_path)}
-            {_nav_link('/infrastructure/mcp', '🔌', 'MCP', active_path)}
-            {_nav_link('/infrastructure/azure', '🔷', 'Azure', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">TELEMETRY</div>
-            {_nav_link('/telemetry/live', '📡', 'Live Stream', active_path)}
-            {_nav_link('/telemetry/timeline', '⏱', 'Timeline', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">CONTINUITY</div>
-            {_nav_link('/continuity/state', '⏱', 'Current state', active_path)}
-            {_nav_link('/continuity/mission', '🎯', 'Mission', active_path)}
-            {_nav_link('/continuity/task', '✓', 'Task', active_path)}
-            {_nav_link('/continuity/next', '⏭', 'Next action', active_path)}
-            {_nav_link('/continuity/blockers', '🛑', 'Blockers', active_path)}
-            {_nav_link('/continuity/recovery', '⚕', 'Recovery', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">AUDIT</div>
-            {_nav_link('/audit/events', '📋', 'Events', active_path)}
-            {_nav_link('/audit/provenance', '🔍', 'Provenance', active_path)}
-            {_nav_link('/audit/evidence', '🛡', 'Evidence', active_path)}
-            {_nav_link('/audit/changes', '📝', 'Changes', active_path)}
-        </div>
+        {_render_navigation(active_path)}
         <div class="sidebar-footer">
             <form method="POST" action="/logout" style="display:inline;">
                 <input type="hidden" name="csrf_token" value="{csrf_token}">
