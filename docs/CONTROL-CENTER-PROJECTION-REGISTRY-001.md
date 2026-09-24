@@ -45,6 +45,16 @@ Every projection definition carries at least:
 
 ## Truth rules
 
+
+The Control Center's `/api/status` projection is a read-only observation surface, not an authority source.
+The CONRRAD boundary is considered verified only when all eight mandatory services have externally
+supplied records with `online_status=ONLINE_VERIFIED` and `trust_status=VERIFIED`.
+
+When no external registry observation exists, the UI renders the eight required service names with
+`online_status=NOT_CONFIGURED`, `trust_status=UNKNOWN`, `evidence_ref=UNKNOWN`, and a `BLOCKED` gate.
+Configured Runtime values such as a Fabric organization/repository are not treated as live proof of
+external connectivity, admission, trust, or tenant binding.
+
 UI rendering must preserve the distinction between:
 
 - `FACT`
