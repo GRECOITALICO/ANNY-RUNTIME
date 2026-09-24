@@ -5,6 +5,7 @@ All CSS is embedded. No CDN, no framework, no external JS.
 """
 
 import html
+from urllib.parse import urlsplit
 
 from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS
 
@@ -12,6 +13,17 @@ from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS
 def _escape_html(value) -> str:
     """Escape backend-fed text before insertion into HTML."""
     return html.escape("" if value is None else str(value), quote=True)
+
+
+def _safe_href(value) -> str:
+    """Allow only internal paths or explicit HTTP(S) URLs."""
+    raw = "" if value is None else str(value).strip()
+    if raw.startswith("/") and not raw.startswith("//"):
+        return _escape_html(raw)
+    parsed = urlsplit(raw)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return _escape_html(raw)
+    return "#"
 
 COMMON_CSS = """
 
@@ -462,14 +474,17 @@ body {
 
 
 def _nav_link(path, icon, label, active_path, availability="ACTIVE"):
+    safe_path = _safe_href(path)
+    safe_icon = _escape_html(icon)
+    safe_label = _escape_html(label)
     active = ' active' if path == active_path else ''
     if availability == "PLANNED":
         return (
             f'<span class="nav-link disabled{active}" aria-disabled="true" '
             f'title="Projection not available in this Runtime build">'
-            f'<span class="nav-icon">{icon}</span><span>{label}</span></span>'
+            f'<span class="nav-icon">{safe_icon}</span><span>{safe_label}</span></span>'
         )
-    return f'<a href="{path}" class="nav-link{active}"><span class="nav-icon">{icon}</span><span>{label}</span></a>'
+    return f'<a href="{safe_path}" class="nav-link{active}"><span class="nav-icon">{safe_icon}</span><span>{safe_label}</span></a>'
 
 
 def _render_navigation(active_path):
@@ -484,7 +499,7 @@ def _render_navigation(active_path):
 
     rendered = []
     for items in sections:
-        section = items[0].section
+        section = _escape_html(items[0].section)
         rendered.append(f'<div class="nav-section"><div class="nav-section-label">{section}</div>')
         for item in items:
             rendered.append(
@@ -502,7 +517,9 @@ def _render_navigation(active_path):
 
 def base_layout(title, content, active_path="/", csrf_token="", projection_id=None):
     """Wrap content in the full admin shell layout."""
-    projection_attr = f' data-projection-id="{projection_id}"' if projection_id else ""
+    safe_title = _escape_html(title)
+    safe_csrf = _escape_html(csrf_token)
+    projection_attr = f' data-projection-id="{_escape_html(projection_id)}"' if projection_id else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -510,7 +527,7 @@ def base_layout(title, content, active_path="/", csrf_token="", projection_id=No
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title>{title} — ANNY Runtime</title>
+    <title>{safe_title} — ANNY Runtime</title>
     <style>{COMMON_CSS}</style>
 </head>
 <body>
@@ -525,7 +542,7 @@ def base_layout(title, content, active_path="/", csrf_token="", projection_id=No
         {_render_navigation(active_path)}
         <div class="sidebar-footer">
             <form method="POST" action="/logout" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{csrf_token}">
+                <input type="hidden" name="csrf_token" value="{safe_csrf}">
                 <button type="submit" class="btn btn-ghost" style="width:100%;">⏻ Logout</button>
             </form>
         </div>
@@ -1288,7 +1305,7 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
 # New Templates for Control Plane Universe 001
 
 def _render_empty_state(message="No data available."):
-    return f'<div style="padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px;">{message}</div>'
+    return f'<div style="padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px;">{_escape_html(message)}</div>'
 
 def universe_accounts_page(accounts, csrf_token=""):
     rows = ""
@@ -1464,13 +1481,14 @@ def audit_events_page(events, csrf_token=""):
     rows = ""
     for ev in events:
         # Event fields: id, timestamp, level, category, module, event_type, status, message, data, instance_id, runtime_id
-        timestamp = ev[1]
+        timestamp = _escape_html(ev[1])
         cat = ev[3]
-        mod = ev[4]
-        typ = ev[5]
-        status = ev[6]
-        msg = ev[7]
-        badge = 'badge-success' if status == 'SUCCESS' else ('badge-danger' if status == 'ERROR' else 'badge-info')
+        mod = _escape_html(ev[4])
+        typ = _escape_html(ev[5])
+        status_raw = ev[6]
+        status = _escape_html(status_raw)
+        msg = _escape_html(ev[7])
+        badge = 'badge-success' if status_raw == 'SUCCESS' else ('badge-danger' if status_raw == 'ERROR' else 'badge-info')
         rows += f'<tr><td>{timestamp}</td><td>{mod}</td><td>{typ}</td><td><span class="badge {badge}">{status}</span></td><td class="mono">{msg}</td></tr>'
         
     content = f"""
@@ -1493,7 +1511,7 @@ def audit_provenance_page(prov_data, csrf_token=""):
 
 def search_page(query, csrf_token=""):
     content = f"""
-        <div class="page-header"><h2>Global Search</h2><p>Results for: {query}</p></div>
+        <div class="page-header"><h2>Global Search</h2><p>Results for: {_escape_html(query)}</p></div>
         {_render_empty_state('Search returned 0 results. Indexing is lazy.')}
     """
     return base_layout("Search", content, "/search", csrf_token)
@@ -1503,71 +1521,50 @@ def generic_placeholder_page(title, path, csrf_token=""):
 
 
 def telemetry_live_page(csrf_token=""):
+    """Render live telemetry using DOM text nodes for all remote event values."""
     return base_layout("Live Telemetry", f"""
         <div class="page-header">
             <h2>Live Telemetry Stream</h2>
-            <p>Real-time observability of ANNY Universe execution events.</p>
+            <p>Real-time observability of ANNY Runtime events.</p>
         </div>
-        
-        <div class="card" style="margin-bottom: 24px; padding: 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div id="connection-indicator" style="width: 12px; height: 12px; border-radius: 50%; background: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald);"></div>
-                    <span id="connection-status" style="font-weight: 600; font-size: 13px;">CONNECTED</span>
+        <div class="card" style="margin-bottom:24px;padding:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div id="connection-indicator" style="width:12px;height:12px;border-radius:50%;background:var(--accent-emerald);"></div>
+                    <span id="connection-status" style="font-weight:600;font-size:13px;">CONNECTING...</span>
                 </div>
-                <button id="clear-btn" class="btn btn-ghost" style="padding: 6px 12px; font-size: 12px;">Clear Output</button>
+                <button id="clear-btn" class="btn btn-ghost" style="padding:6px 12px;font-size:12px;">Clear Output</button>
             </div>
         </div>
-
-        <div id="telemetry-console" style="background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius); padding: 16px; height: 600px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5;">
-            <!-- Events will be appended here -->
-        </div>
-
+        <div id="telemetry-console" style="background:var(--bg-primary);border:1px solid var(--border-subtle);border-radius:var(--radius);padding:16px;height:600px;overflow-y:auto;font-family:var(--font-mono);font-size:12px;line-height:1.5;"></div>
         <script>
             const consoleEl = document.getElementById('telemetry-console');
             const statusEl = document.getElementById('connection-status');
             const indicatorEl = document.getElementById('connection-indicator');
             const clearBtn = document.getElementById('clear-btn');
-            
             let eventSource = null;
 
-            function connect() {{
-                if (eventSource) {{
-                    eventSource.close();
-                }}
-                
-                statusEl.textContent = 'CONNECTING...';
-                indicatorEl.style.background = 'var(--accent-amber)';
-                indicatorEl.style.boxShadow = '0 0 8px var(--accent-amber)';
-
-                eventSource = new EventSource('/api/v1/telemetry/stream');
-                
-                eventSource.onopen = function() {{
-                    statusEl.textContent = 'CONNECTED';
-                    indicatorEl.style.background = 'var(--accent-emerald)';
-                    indicatorEl.style.boxShadow = '0 0 8px var(--accent-emerald)';
-                }};
-                
-                eventSource.onmessage = function(event) {{
-                    try {{
-                        const data = JSON.parse(event.data);
-                        appendEvent(data);
-                    }} catch (e) {{
-                        console.error("Error parsing event data", e);
-                    }}
-                }};
-                
-                eventSource.onerror = function() {{
-                    statusEl.textContent = 'DISCONNECTED - RECONNECTING...';
-                    indicatorEl.style.background = 'var(--accent-rose)';
-                    indicatorEl.style.boxShadow = '0 0 8px var(--accent-rose)';
-                }};
+            function setConnection(state, color) {{
+                statusEl.textContent = state;
+                indicatorEl.style.background = color;
             }}
-            
+
             function formatTime(isoString) {{
                 if (!isoString) return '';
                 const d = new Date(isoString);
-                return d.toLocaleTimeString('en-US', {{ hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit', fractionalSecondDigits: 3 }});
+                if (Number.isNaN(d.getTime())) return String(isoString);
+                return d.toLocaleTimeString('en-US', {{
+                    hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    fractionalSecondDigits: 3
+                }});
+            }}
+
+            function appendText(parent, value, className) {{
+                const node = document.createElement('span');
+                if (className) node.className = className;
+                node.textContent = value === null || value === undefined ? '' : String(value);
+                parent.appendChild(node);
+                return node;
             }}
 
             function appendEvent(env) {{
@@ -1575,34 +1572,43 @@ def telemetry_live_page(csrf_token=""):
                 el.style.borderBottom = '1px solid var(--border-subtle)';
                 el.style.padding = '8px 0';
                 el.style.display = 'flex';
+                el.style.flexWrap = 'wrap';
                 el.style.gap = '16px';
-                
-                // Timestamp
+
                 const tsEl = document.createElement('div');
                 tsEl.style.color = 'var(--text-muted)';
                 tsEl.style.minWidth = '110px';
                 tsEl.textContent = formatTime(env.timestamp);
-                
-                // Component & Source
+
                 const compEl = document.createElement('div');
                 compEl.style.minWidth = '150px';
-                compEl.innerHTML = `<span style="color: var(--accent-blue)">${{env.component}}</span><br><span style="color: var(--text-muted); font-size: 10px;">${{env.source || ''}}</span>`;
-                
-                // Event Type & Trace
-                const nameEl = document.createElement('div');
-                nameEl.style.flex = '1';
-                nameEl.innerHTML = `<span style="color: var(--text-primary); font-weight: 600;">${{env.event_type}}</span>`;
-                
+                const component = appendText(compEl, env.component, null);
+                component.style.color = 'var(--accent-blue)';
+                compEl.appendChild(document.createElement('br'));
+                const source = appendText(compEl, env.source || '', null);
+                source.style.color = 'var(--text-muted)';
+                source.style.fontSize = '10px';
+
+                const containerEl = document.createElement('div');
+                containerEl.style.flex = '2';
+                const name = appendText(containerEl, env.event_type, null);
+                name.style.color = 'var(--text-primary)';
+                name.style.fontWeight = '600';
+
                 if (env.trace_id) {{
-                    nameEl.innerHTML += `<br><span style="color: var(--text-muted); font-size: 10px;">Trace: ${{env.trace_id.substring(0,8)}} | Span: ${{(env.span_id || '').substring(0,8)}}</span>`;
+                    const traceLine = document.createElement('div');
+                    traceLine.style.color = 'var(--text-muted)';
+                    traceLine.style.fontSize = '10px';
+                    traceLine.textContent = 'Trace: ' + String(env.trace_id).substring(0, 8) +
+                        ' | Span: ' + String(env.span_id || '').substring(0, 8);
+                    containerEl.appendChild(traceLine);
                 }}
-                
+
                 el.appendChild(tsEl);
                 el.appendChild(compEl);
-                el.appendChild(nameEl);
-                
-                // Metadata preview (if any)
-                if (env.metadata && Object.keys(env.metadata).length > 0) {{
+                el.appendChild(containerEl);
+
+                if (env.metadata && Object.keys(env.metadata).length) {{
                     const dataEl = document.createElement('div');
                     dataEl.style.width = '100%';
                     dataEl.style.marginTop = '4px';
@@ -1611,35 +1617,41 @@ def telemetry_live_page(csrf_token=""):
                     dataEl.style.borderRadius = '4px';
                     dataEl.style.color = 'var(--accent-emerald)';
                     dataEl.textContent = JSON.stringify(env.metadata);
-                    
-                    const containerEl = document.createElement('div');
-                    containerEl.style.display = 'flex';
-                    containerEl.style.flexDirection = 'column';
-                    containerEl.style.flex = '2';
-                    containerEl.appendChild(nameEl);
-                    containerEl.appendChild(dataEl);
-                    el.replaceChild(containerEl, nameEl);
+                    el.appendChild(dataEl);
                 }}
-                
+
                 consoleEl.appendChild(el);
-                
-                // Auto scroll to bottom
                 consoleEl.scrollTop = consoleEl.scrollHeight;
-                
-                // Keep only last 500 events
-                while (consoleEl.children.length > 500) {{
-                    consoleEl.removeChild(consoleEl.firstChild);
-                }}
+                while (consoleEl.children.length > 500) consoleEl.removeChild(consoleEl.firstChild);
             }}
-            
-            clearBtn.addEventListener('click', () => {{
-                consoleEl.innerHTML = '';
+
+            function connect() {{
+                if (eventSource) eventSource.close();
+                setConnection('CONNECTING...', 'var(--accent-amber)');
+                eventSource = new EventSource('/api/v1/telemetry/stream');
+                eventSource.onopen = function() {{
+                    setConnection('CONNECTED', 'var(--accent-emerald)');
+                }};
+                eventSource.onmessage = function(event) {{
+                    try {{
+                        appendEvent(JSON.parse(event.data));
+                    }} catch (e) {{
+                        console.error('Telemetry event parse failed', e);
+                    }}
+                }};
+                eventSource.onerror = function() {{
+                    setConnection('DISCONNECTED - RECONNECTING...', 'var(--accent-rose)');
+                }};
+            }}
+
+            clearBtn.addEventListener('click', function() {{
+                consoleEl.replaceChildren();
             }});
-            
-            // Connect on load
             document.addEventListener('DOMContentLoaded', connect);
         </script>
     """, "/telemetry/live", csrf_token, "telemetry.live")
+
+
 
 
 def telemetry_timeline_page(recent_events, csrf_token=""):
@@ -1649,48 +1661,124 @@ def telemetry_timeline_page(recent_events, csrf_token=""):
         comp = env.component if hasattr(env, 'component') else env.get("component", "")
         src = env.source if hasattr(env, 'source') else env.get("source", "")
         evt = env.event_type if hasattr(env, 'event_type') else env.get("event_type", "")
-        
         tid = (env.trace_id if hasattr(env, 'trace_id') else env.get("trace_id")) or ""
         sid = (env.span_id if hasattr(env, 'span_id') else env.get("span_id")) or ""
-        tid = tid[:8] if tid else ""
-        sid = sid[:8] if sid else ""
-        
         rows += f"""
         <tr>
-            <td class="mono">{ts}</td>
-            <td><span class="badge badge-info">{comp}</span></td>
-            <td>{src}</td>
-            <td style="font-weight: 600;">{evt}</td>
-            <td class="mono" style="color: var(--text-muted);">{tid}</td>
-            <td class="mono" style="color: var(--text-muted);">{sid}</td>
+            <td class="mono">{_escape_html(ts)}</td>
+            <td><span class="badge badge-info">{_escape_html(comp)}</span></td>
+            <td>{_escape_html(src)}</td>
+            <td style="font-weight:600;">{_escape_html(evt)}</td>
+            <td class="mono" style="color:var(--text-muted);">{_escape_html(tid[:8])}</td>
+            <td class="mono" style="color:var(--text-muted);">{_escape_html(sid[:8])}</td>
         </tr>
         """
+    if not rows:
+        rows = '<tr><td colspan="6" style="color:var(--text-secondary);text-align:center;">No telemetry events.</td></tr>'
 
-        
     return base_layout("Telemetry Timeline", f"""
         <div class="page-header">
             <h2>Telemetry Timeline</h2>
             <p>Historical view of recent execution events across the stack.</p>
         </div>
-        
-        <div class="card" style="padding: 0; overflow-x: auto;">
+        <div class="card" style="padding:0;overflow-x:auto;">
             <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Timestamp</th>
-                        <th>Component</th>
-                        <th>Source</th>
-                        <th>Event Type</th>
-                        <th>Trace ID</th>
-                        <th>Span ID</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows}
-                </tbody>
+                <thead><tr><th>Timestamp</th><th>Component</th><th>Source</th><th>Event Type</th><th>Trace ID</th><th>Span ID</th></tr></thead>
+                <tbody>{rows}</tbody>
             </table>
         </div>
     """, "/telemetry/timeline", csrf_token, "telemetry.timeline")
+
+
+
+
+def browser_dashboard_page(sessions: list, csrf_token: str = "") -> str:
+    rows = ""
+    for s_tuple in sessions:
+        s = s_tuple[0]
+        session_id = _escape_html(s.session_id[:8])
+        worker_id = _escape_html(s.worker_id[:8])
+        mode = _escape_html(s.mode.value)
+        state = _escape_html(s.status.value)
+        current_url = _escape_html(s.current_url or "N/A")
+        created_at = _escape_html(s.created_at.isoformat() if s.created_at else "N/A")
+        status_color = "var(--accent-green)" if s.status.value == "RUNNING" else "var(--text-muted)"
+        if s.status.value == "FAILED":
+            status_color = "var(--accent-rose)"
+        elif s.status.value == "PAUSED_FOR_HUMAN":
+            status_color = "var(--accent-yellow)"
+        rows += f"""
+        <tr>
+            <td><a href="{_safe_href('/browser/' + str(s.session_id))}" style="color:var(--accent-blue)">{session_id}...</a></td>
+            <td><code>{worker_id}</code></td>
+            <td>{mode}</td>
+            <td><span style="color:{status_color}">{state}</span></td>
+            <td>{current_url}</td>
+            <td>{created_at}</td>
+        </tr>
+        """
+    if not rows:
+        rows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">No active browser sessions</td></tr>'
+    return base_layout("Browser Integration", f"""
+        <div class="page-header"><h2>Browser Integration</h2><p>Active and recent managed browser sessions.</p></div>
+        <div class="card" style="padding:0;overflow-x:auto;">
+            <table class="data-table">
+                <thead><tr><th>Session ID</th><th>Worker ID</th><th>Mode</th><th>Status</th><th>Current URL</th><th>Started At</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    """, "/browser", csrf_token, "browser.dashboard")
+
+
+def browser_session_page(session, csrf_token: str = "") -> str:
+    state_raw = session.status.value
+    status_color = "var(--accent-green)" if state_raw == "RUNNING" else "var(--text-muted)"
+    if state_raw == "FAILED":
+        status_color = "var(--accent-rose)"
+    elif state_raw == "PAUSED_FOR_HUMAN":
+        status_color = "var(--accent-yellow)"
+    sid = _escape_html(session.session_id[:8])
+    mode = _escape_html(session.mode.value)
+    state = _escape_html(state_raw)
+    current_url = session.current_url or ""
+    safe_current_url = _safe_href(current_url) if current_url else "#"
+    worker_id = _escape_html(session.worker_id)
+    task_id = _escape_html(session.task_id)
+    network_policy = _escape_html(session.policy.network_policy)
+    allowed_domains = _escape_html(", ".join(session.policy.allowed_domains) or "None")
+    timeout_ms = _escape_html(session.policy.timeout_ms)
+    human_assist = _escape_html("Yes" if session.policy.human_assistance_allowed else "No")
+    profile_path = _escape_html(session.profile_path or "N/A")
+    current_url_text = _escape_html(current_url or "N/A")
+    return base_layout(f"Browser Session {sid}", f"""
+        <div class="page-header">
+            <h2>Session {sid}</h2>
+            <p><a href="/browser" style="color:var(--accent-blue)">&larr; Back to Browser Dashboard</a></p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
+            <div class="card">
+                <h3>Session Status</h3>
+                <table class="data-table">
+                    <tr><td style="color:var(--text-muted);width:30%">Mode</td><td>{mode}</td></tr>
+                    <tr><td style="color:var(--text-muted)">State</td><td><span style="color:{status_color}">{state}</span></td></tr>
+                    <tr><td style="color:var(--text-muted)">Current URL</td><td><a href="{safe_current_url}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-blue)">{current_url_text}</a></td></tr>
+                    <tr><td style="color:var(--text-muted)">Worker ID</td><td><code>{worker_id}</code></td></tr>
+                    <tr><td style="color:var(--text-muted)">Task ID</td><td><code>{task_id}</code></td></tr>
+                </table>
+            </div>
+            <div class="card">
+                <h3>Policy & Constraints</h3>
+                <table class="data-table">
+                    <tr><td style="color:var(--text-muted);width:30%">Network Policy</td><td>{network_policy}</td></tr>
+                    <tr><td style="color:var(--text-muted)">Allowed Domains</td><td>{allowed_domains}</td></tr>
+                    <tr><td style="color:var(--text-muted)">Timeout</td><td>{timeout_ms} ms</td></tr>
+                    <tr><td style="color:var(--text-muted)">Human Assist</td><td>{human_assist}</td></tr>
+                    <tr><td style="color:var(--text-muted)">Profile Path</td><td><code>{profile_path}</code></td></tr>
+                </table>
+            </div>
+        </div>
+    """, "/browser", csrf_token, "browser.session_detail")
+
 
 def browser_dashboard_page(sessions: list, csrf_token: str = "") -> str:
     rows = ""
