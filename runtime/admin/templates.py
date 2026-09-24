@@ -1522,30 +1522,36 @@ def intelligence_capabilities_page(caps, bindings, csrf_token=""):
     """
     return base_layout("Capabilities", content, "/intelligence/capabilities", csrf_token)
 
-def infrastructure_topology_page(gh_status, fabric_status, mcp_status, csrf_token=""):
+def infrastructure_topology_page(gh_status, fabric_status, mcp_status, runtime_state="UNKNOWN", runtime_health="UNKNOWN", csrf_token=""):
     gh_badge = 'badge-success' if gh_status else 'badge-danger'
     fab_badge = 'badge-success' if fabric_status else 'badge-danger'
+    rt = _escape_html(runtime_state or "UNKNOWN")
+    health = _escape_html(runtime_health or "UNKNOWN")
+    mcp = _escape_html(mcp_status or "UNKNOWN")
+    rt_badge = 'badge-success' if str(runtime_health).upper() == 'HEALTHY' else 'badge-warning' if str(runtime_health).upper() == 'DEGRADED' else 'badge-muted'
+    mcp_badge = 'badge-success' if str(mcp_status).upper() in {'ONLINE', 'VERIFIED'} else 'badge-muted'
     content = f"""
-        <div class="page-header"><h2>Infrastructure Topology</h2><p>System boundaries</p></div>
+        <div class="page-header"><h2>Infrastructure Topology</h2><p>System boundaries using available Runtime observations.</p></div>
         <div style="font-family: var(--font-mono); font-size: 14px; background: var(--bg-secondary); padding: 24px; border-radius: var(--radius-md); text-align:center; line-height:2;">
             <div>[ GitHub <span class="badge {gh_badge}">{"UP" if gh_status else "DOWN"}</span> ]</div>
             <div>│</div>
             <div>▼</div>
-            <div>[ ANNY-RUNTIME <span class="badge badge-success">UP</span> ]</div>
+            <div>[ ANNY-RUNTIME <span class="badge {rt_badge}">{rt}</span> ]</div>
+            <div>[ Runtime health <span class="badge {rt_badge}">{health}</span> ]</div>
             <div>│</div>
             <div style="display:flex; justify-content:center; gap: 40px;">
-                <div>▼<br>[ MCP <span class="badge badge-muted">0 Nodes</span> ]</div>
+                <div>▼<br>[ MCP <span class="badge {mcp_badge}">{mcp}</span> ]</div>
                 <div>▼<br>[ Workers ]</div>
                 <div>▼<br>[ Fabric <span class="badge {fab_badge}">{"UP" if fabric_status else "DOWN"}</span> ]</div>
             </div>
             <div style="display:flex; justify-content:center; gap: 40px;">
                 <div>▼<br>[ Tools ]</div>
                 <div>▼<br>[ Models ]</div>
-                <div>▼<br>[ Azure ]</div>
+                <div>▼<br>[ Azure — UNKNOWN ]</div>
             </div>
         </div>
     """
-    return base_layout("Infrastructure Topology", content, "/infrastructure/runtime", csrf_token)
+    return base_layout("Infrastructure Topology", content, "/infrastructure/runtime", csrf_token, "infrastructure.runtime")
 
 def audit_events_page(events, csrf_token=""):
     rows = ""
