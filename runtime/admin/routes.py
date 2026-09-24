@@ -326,12 +326,17 @@ class AdminRouter:
                 offset=offset,
             )
         except ValueError as exc:
-            error_code = "INVALID_PRIORITY" if priority and priority not in VALID_PRIORITIES else "INVALID_PROJECTION_QUERY"
-            self.context['direct_json_response'] = {
-                "error": error_code,
-                "status": "BLOCKED",
-                "detail": str(exc),
-            }
+            if priority and priority not in VALID_PRIORITIES:
+                self.context['direct_json_response'] = {
+                    "error": "INVALID_PRIORITY",
+                    "status": "BLOCKED",
+                }
+            else:
+                self.context['direct_json_response'] = {
+                    "error": "INVALID_PROJECTION_QUERY",
+                    "status": "BLOCKED",
+                    "detail": str(exc),
+                }
             return '/'
         self.context['direct_json_response'] = payload
         return '/'
