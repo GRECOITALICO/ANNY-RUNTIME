@@ -268,6 +268,10 @@ def test_control_center_conrrad_projection_is_strict_and_non_synthetic():
     assert data["contract_revision"] == "UNKNOWN"
     assert data["capabilities"] == "UNKNOWN"
     assert data["anny_ready"] is False
+    assert data["configured_endpoint"] is None
+    assert data["truth_sources"]["runtime_state"] == "NO_RUNTIME_ENGINE"
+    assert data["truth_sources"]["conrrad"] == "NOT_CONFIGURED"
+    assert data["main_execution_verified"] is False
     assert "N/A" not in str(data)
 
     class Engine:
@@ -311,6 +315,13 @@ def test_control_center_conrrad_projection_is_strict_and_non_synthetic():
     assert data["anny_ready"] is True
     assert data["fabric_status"] == "ONLINE_VERIFIED"
     assert data["continuity"]["status"] == "UNKNOWN"
+    assert data["truth_sources"]["runtime_state"] == "runtime_engine.state"
+    assert data["truth_sources"]["runtime_health"] == "runtime_engine.health_check"
+    assert data["truth_sources"]["runtime_id"] == "UNKNOWN"
+    assert data["truth_sources"]["runtime_version"] == "runtime.core.version.__version__"
+    assert data["truth_sources"]["timestamp"] == "bootstrap_report.completed_at"
+    assert data["truth_sources"]["conrrad"] == "bootstrap_report.conrrad_dependencies"
+    assert data["main_execution_verified"] is False
 
 
 def test_control_center_conrrad_panel_is_bound_and_offline_safe():
