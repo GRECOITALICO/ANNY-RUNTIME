@@ -112,3 +112,17 @@ def test_control_center_existing_panels_have_stable_projection_ids():
     }
     assert all(f'data-projection-id="{projection_id}"' in html for projection_id in panel_ids)
     assert all(DEFAULT_PROJECTION_REGISTRY.get(projection_id) is not None for projection_id in panel_ids)
+
+
+def test_control_center_dynamic_html_rendering_escapes_backend_values():
+    from runtime.admin.templates_cc import control_center_page
+
+    html = control_center_page("")
+    assert "function escapeHtml(value)" in html
+    assert "escapeHtml(g.phase||'')" in html
+    assert "escapeHtml(g.gate||'')" in html
+    assert "escapeHtml(g.detail||'')" in html
+    assert "escapeHtml(g.evidence||'')" in html
+    assert "escapeHtml(a.capability)" in html
+    assert "escapeHtml(d.contract.allowed||'NONE')" in html
+    assert "stateBadge.innerHTML = (d.runtime_state || 'UNKNOWN')" not in html
