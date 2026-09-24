@@ -627,3 +627,23 @@ def test_sync_control_is_first_class_but_unimplemented_lifecycle_remains_blocked
     assert "stageBtn.disabled = true" in html
     assert "activateBtn.disabled = true" in html
     assert "rollbackBtn.disabled = true" in html
+
+
+def test_infrastructure_topology_does_not_claim_unobserved_runtime_or_mcp_up():
+    from runtime.admin.templates import infrastructure_topology_page
+
+    html = infrastructure_topology_page(
+        gh_status=True,
+        fabric_status=False,
+        mcp_status=None,
+        runtime_state="ADMIN_MODE",
+        runtime_health="DEGRADED",
+        csrf_token="",
+    )
+    assert "ADMIN_MODE" in html
+    assert "DEGRADED" in html
+    assert "[ Runtime health" in html
+    assert "MCP <span class=\"badge badge-muted\">UNKNOWN</span>" in html
+    assert "[ ANNY-RUNTIME <span class=\"badge badge-success\">UP</span> ]" not in html
+    assert "Azure — UNKNOWN" in html
+    assert 'data-projection-id="infrastructure.runtime"' in html
