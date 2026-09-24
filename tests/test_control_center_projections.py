@@ -695,3 +695,12 @@ def test_doctor_renderer_uses_runtime_github_and_conrrad_observations():
     assert "CONNECTED" in html
     assert "CONRRAD mandatory services" in html
     assert "BLOCKED" in html
+
+
+def test_generic_placeholder_escapes_user_controlled_title_and_rejects_executable_path():
+    from runtime.admin.templates import generic_placeholder_page
+
+    html = generic_placeholder_page('<img src=x onerror=alert(1)>', 'javascript:alert(1)')
+    assert '<img src=x onerror=alert(1)>' not in html
+    assert '&lt;img src=x onerror=alert(1)&gt;' in html
+    assert 'javascript:alert(1)' not in html
