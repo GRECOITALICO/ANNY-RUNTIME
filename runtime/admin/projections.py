@@ -101,8 +101,11 @@ class ProjectionRegistry:
         freshness: Optional[str] = None,
         tag: Optional[str] = None,
         q: Optional[str] = None,
+        projection_id: Optional[str] = None,
     ) -> List[ProjectionDefinition]:
         items = list(self._items.values())
+        if projection_id:
+            items = [item for item in items if item.projection_id == projection_id]
         if priority:
             items = [item for item in items if item.priority == priority]
         if section:
@@ -171,6 +174,7 @@ class ProjectionRegistry:
         freshness: Optional[str] = None,
         tag: Optional[str] = None,
         q: Optional[str] = None,
+        projection_id: Optional[str] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> Dict[str, object]:
@@ -186,6 +190,7 @@ class ProjectionRegistry:
             freshness=freshness,
             tag=tag,
             q=q,
+            projection_id=projection_id,
         )
         total_filtered = len(items)
         page = items[offset:offset + limit]
@@ -210,6 +215,7 @@ class ProjectionRegistry:
                 "freshness": freshness,
                 "tag": tag,
                 "q": q,
+                "projection_id": projection_id,
             },
             "projections": [item.to_dict() for item in page],
         }
