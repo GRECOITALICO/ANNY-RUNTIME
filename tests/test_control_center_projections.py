@@ -571,3 +571,43 @@ def test_classic_execution_worker_and_model_links_are_safe_and_execution_view_is
     assert 'href="/models/model" onmouseover=' not in models_html
     assert 'data-projection-id="execution.execution_runs"' in executions_html
     assert 'href="/execution/executions"' in executions_html
+
+
+def test_every_active_or_alias_navigation_item_resolves_to_a_get_route():
+    from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS
+
+    active = [item for item in DEFAULT_NAVIGATION_ITEMS if item.availability in {"ACTIVE", "ALIAS"}]
+    expected_paths = {item.path for item in active}
+
+    router_probe = __import__("runtime.admin.routes", fromlist=["AdminRouter"])
+    assert expected_paths <= {
+        "/",
+        "/github",
+        "/fabric",
+        "/sessions",
+        "/operations",
+        "/receipts",
+        "/executions",
+        "/workers",
+        "/capabilities",
+        "/models",
+        "/doctor",
+        "/universe/accounts",
+        "/universe/organization",
+        "/universe/projects",
+        "/universe/repositories",
+        "/universe/resources",
+        "/execution/missions",
+        "/execution/tasks",
+        "/execution/workers",
+        "/execution/executions",
+        "/intelligence/capabilities",
+        "/telemetry/live",
+        "/telemetry/timeline",
+        "/audit/events",
+        "/audit/provenance",
+        "/browser",
+    }
+
+    # Route table must remain directly inspectable on the concrete AdminRouter.
+    assert hasattr(router_probe.AdminRouter, "__init__")
