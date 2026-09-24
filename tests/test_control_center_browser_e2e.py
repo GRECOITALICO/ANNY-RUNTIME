@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import sys
+
+sys.path.insert(0, str(Path(__file__).parent))
 
 from playwright.sync_api import sync_playwright, expect
 
-from tests.test_control_center_http_surface import _start_server
+from test_control_center_http_surface import _start_server
 
 
 def test_control_center_browser_e2e():
@@ -24,7 +27,7 @@ def test_control_center_browser_e2e():
                 page = browser.new_page()
                 page.goto(
                     f"http://127.0.0.1:{port}/",
-                    wait_until="networkidle",
+                    wait_until="domcontentloaded",
                 )
 
                 expect(
@@ -57,6 +60,8 @@ def test_control_center_browser_e2e():
                 expect(detail).to_be_visible()
                 expect(detail).to_contain_text("distribution.sync")
                 expect(detail).to_contain_text("SYNC")
+                browser.close()
+                browser = None
         finally:
             if browser is not None:
                 browser.close()
