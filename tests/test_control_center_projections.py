@@ -647,3 +647,51 @@ def test_infrastructure_topology_does_not_claim_unobserved_runtime_or_mcp_up():
     assert "[ ANNY-RUNTIME <span class=\"badge badge-success\">UP</span> ]" not in html
     assert "Azure — UNKNOWN" in html
     assert 'data-projection-id="infrastructure.runtime"' in html
+
+
+def test_sessions_renderer_uses_observed_admin_session_manager_data():
+    from runtime.admin.routes import AdminRouter
+    from runtime.admin.auth import AdminSessionManager
+    from pathlib import Path
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        mgr = AdminSessionManager(tmp, "runtime-1")
+        session = mgr.create_session("operator@example")
+        router = AdminRouter({"auth_manager": mgr})
+        html = router.handle_sessions(None)
+
+    assert session.admin_session_id[:16] in html
+    assert "operator@example" in html
+    assert "LOCAL_ADMIN" in html
+
+
+def test_non_authoritative_classic_views_are_marked_partial():
+    from runtime.admin.projections import DEFAULT_PROJECTION_REGISTRY
+
+    assert DEFAULT_PROJECTION_REGISTRY.get("admin.operations").implementation_status == "PARTIAL"
+    assert DEFAULT_PROJECTION_REGISTRY.get("admin.receipts").implementation_status == "PARTIAL"
+    assert DEFAULT_PROJECTION_REGISTRY.get("intelligence.executors_view").implementation_status == "PARTIAL"
+
+
+def test_doctor_renderer_uses_runtime_github_and_conrrad_observations():
+    from runtime.admin.routes import AdminRouter
+    from types import SimpleNamespace
+
+    class Engine:
+        bootstrap_report = None
+
+        def health_check(self):
+            return {"status": "ok", "subsystems": {"identity": "ok", "journal": "ok", "execution": "ok"}}
+
+    class Github:
+        def get_status(self):
+            return SimpleNamespace(auth_status="CONNECTED")
+
+    router = AdminRouter({"runtime_engine": Engine(), "github_manager": Github()})
+    html = router.handle_doctor(None)
+
+    assert "Runtime health" in html
+    assert "CONNECTED" in html
+    assert "CONRRAD mandatory services" in html
+    assert "BLOCKED" in html
