@@ -413,3 +413,28 @@ def test_stage_and_rollback_do_not_mutate_verified_sync_state(tmp_path: Path):
     assert stage["sync_state"] == SyncState.BLOCKED.value
     assert rollback["sync_state"] == SyncState.BLOCKED.value
     assert service.status()["sync_state"] == SyncState.VERIFIED.value
+
+
+def test_activate_rejects_stale_persisted_staged_record(tmp_path: Path):
+    record_dir = tmp_path / "sync"
+    record_dir.mkdir()
+    stale = {
+        "sync_id": "sync-old",
+        "trace_id": "trace-old",
+        "requested_at": "2026-09-23T00:00:00+00:00",
+        "sync_state": "STAGED",
+        "stage": "STAGE",
+        "source": "legacy-test",
+        "local_version": "v0.4.0",
+        "candidate_version": "v0.5.0",
+        "activation_performed": False,
+        "details": {},
+    }
+    (record_dir / "sync_records.jsonl").write_text(json.dumps(stale) + "\n", encoding="utf-8")
+
+    service = SyncService(tmp_path, local_version="v0.4.0")
+    result = service.activate()
+
+    assert result["status"] == "blocked"
+    assert result["error_classification"] == "ACTIVATION_NOT_IMPLEMENTED"
+    assert service.local_version == "v0.4.0"
