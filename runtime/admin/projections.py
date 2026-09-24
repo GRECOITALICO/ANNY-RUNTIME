@@ -253,3 +253,64 @@ def default_projection_registry() -> ProjectionRegistry:
 
 
 DEFAULT_PROJECTION_REGISTRY = default_projection_registry()
+
+@dataclass(frozen=True)
+class NavigationItem:
+    """Canonical sidebar navigation item backed by a projection contract."""
+
+    section: str
+    label: str
+    icon: str
+    path: str
+    projection_id: Optional[str] = None
+    availability: str = "ACTIVE"
+
+    def __post_init__(self) -> None:
+        if self.availability not in {"ACTIVE", "ALIAS", "PLANNED"}:
+            raise ValueError(f"Unsupported navigation availability: {self.availability}")
+        if not self.path.startswith("/"):
+            raise ValueError("Navigation paths must be absolute")
+
+
+DEFAULT_NAVIGATION_ITEMS: Tuple[NavigationItem, ...] = (
+    NavigationItem("OVERVIEW", "Dashboard", "⬡", "/"),
+    NavigationItem("UNIVERSE", "Organization", "❖", "/universe/organization"),
+    NavigationItem("UNIVERSE", "Projects", "◫", "/universe/projects"),
+    NavigationItem("UNIVERSE", "Repositories", "⊙", "/universe/repositories"),
+    NavigationItem("UNIVERSE", "Resources", "◈", "/universe/resources"),
+    NavigationItem("UNIVERSE", "Dependencies", "⋈", "/universe/dependencies", "fabric.connection", "PLANNED"),
+
+    NavigationItem("EXECUTION", "Missions", "🎯", "/execution/missions", "project.current_mission"),
+    NavigationItem("EXECUTION", "Tasks", "✓", "/execution/tasks", "execution.tasks"),
+    NavigationItem("EXECUTION", "Workers", "⚙", "/execution/workers", "execution.workers"),
+    NavigationItem("EXECUTION", "Executions", "▶", "/execution/executions"),
+    NavigationItem("EXECUTION", "Workspaces", "📁", "/execution/workspaces"),
+    NavigationItem("EXECUTION", "Results", "📊", "/execution/results", "execution.results", "PLANNED"),
+
+    NavigationItem("INTELLIGENCE", "Models", "🧠", "/models", "intelligence.models", "ALIAS"),
+    NavigationItem("INTELLIGENCE", "Capabilities", "⚡", "/intelligence/capabilities", "intelligence.capabilities"),
+    NavigationItem("INTELLIGENCE", "Executors", "🛠", "/intelligence/executors", "intelligence.executors"),
+    NavigationItem("INTELLIGENCE", "Performance", "📈", "/intelligence/performance", "intelligence.performance", "PLANNED"),
+
+    NavigationItem("INFRASTRUCTURE", "Runtime", "🖥", "/infrastructure/runtime", "infrastructure.runtime"),
+    NavigationItem("INFRASTRUCTURE", "GitHub", "🐙", "/infrastructure/github", "infrastructure.github", "PLANNED"),
+    NavigationItem("INFRASTRUCTURE", "Fabric", "☁", "/infrastructure/fabric", "infrastructure.fabric", "PLANNED"),
+    NavigationItem("INFRASTRUCTURE", "MCP", "🔌", "/infrastructure/mcp", "infrastructure.mcp", "PLANNED"),
+    NavigationItem("INFRASTRUCTURE", "Azure", "🔷", "/infrastructure/azure", "infrastructure.azure", "PLANNED"),
+
+    NavigationItem("TELEMETRY", "Live Stream", "📡", "/telemetry/live", "telemetry.live"),
+    NavigationItem("TELEMETRY", "Timeline", "⏱", "/telemetry/timeline", "telemetry.timeline"),
+
+    NavigationItem("CONTINUITY", "Current state", "⏱", "/continuity/state", "continuity.status", "PLANNED"),
+    NavigationItem("CONTINUITY", "Mission", "🎯", "/continuity/mission", "project.current_mission", "PLANNED"),
+    NavigationItem("CONTINUITY", "Task", "✓", "/continuity/task", "project.current_task", "PLANNED"),
+    NavigationItem("CONTINUITY", "Next action", "⏭", "/continuity/next", "project.next_action", "PLANNED"),
+    NavigationItem("CONTINUITY", "Blockers", "🛑", "/continuity/blockers", "project.blockers", "PLANNED"),
+    NavigationItem("CONTINUITY", "Recovery", "⚕", "/continuity/recovery", "continuity.recovery", "PLANNED"),
+
+    NavigationItem("AUDIT", "Events", "📋", "/audit/events"),
+    NavigationItem("AUDIT", "Provenance", "🔍", "/audit/provenance", "evidence.provenance"),
+    NavigationItem("AUDIT", "Evidence", "🛡", "/audit/evidence", "evidence.freshness", "PLANNED"),
+    NavigationItem("AUDIT", "Changes", "📝", "/audit/changes", "evidence.provenance", "PLANNED"),
+)
+
