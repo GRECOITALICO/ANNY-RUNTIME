@@ -556,14 +556,16 @@ def base_layout(title, content, active_path="/", csrf_token="", projection_id=No
 
 
 def first_run_page(error=None, csrf_token="", device_flow_available=False):
-    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px;">{error}</div>' if error else ''
+    safe_csrf = _escape_html(csrf_token)
+    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px;">{_escape_html(error)}</div>' if error else ''
+
     device_flow_html = f"""<form method="POST" action="/github/device/init">
-            <input type="hidden" name="csrf_token" value="{csrf_token}">
+            <input type="hidden" name="csrf_token" value="{safe_csrf}">
             <button type="submit" class="btn btn-primary login-btn">CONNECT WITH GITHUB DEVICE FLOW</button>
         </form>""" if device_flow_available else ""
 
     token_html = f"""<form method="POST" action="/github/token" style="margin-top:16px;">
-            <input type="hidden" name="csrf_token" value="{csrf_token}">
+            <input type="hidden" name="csrf_token" value="{safe_csrf}">
             <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">GITHUB ACCESS TOKEN</label>
             <input type="password" name="github_token" id="github_token_input" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
             <button type="submit" class="btn btn-primary login-btn">CONNECT WITH ACCESS TOKEN</button>
@@ -600,6 +602,8 @@ def first_run_page(error=None, csrf_token="", device_flow_available=False):
 </html>"""
 
 def device_flow_page(user_code, verification_uri, csrf_token=""):
+    safe_user_code = _escape_html(user_code)
+    safe_verification_uri = _safe_href(verification_uri)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -616,9 +620,9 @@ def device_flow_page(user_code, verification_uri, csrf_token=""):
         <h2 style="margin-bottom:16px;">GitHub Authorization</h2>
         <p style="color:var(--text-secondary);margin-bottom:24px;">Please enter this code on GitHub to authorize ANNY:</p>
         <div style="font-size:32px; letter-spacing:4px; font-weight:700; margin-bottom:24px; padding:16px; background:var(--bg-secondary); border-radius:8px;">
-            {user_code}
+            {safe_user_code}
         </div>
-        <a href="{verification_uri}" target="_blank" class="btn btn-primary login-btn" style="text-decoration:none; display:block; margin-bottom:24px;">OPEN GITHUB</a>
+        <a href="{safe_verification_uri}" target="_blank" rel="noopener noreferrer" class="btn btn-primary login-btn" style="text-decoration:none; display:block; margin-bottom:24px;">OPEN GITHUB</a>
         <p id="status-text" style="color:var(--text-secondary);font-size:14px;">Waiting for authorization...</p>
     </div>
 </div>
@@ -649,11 +653,13 @@ def device_flow_page(user_code, verification_uri, csrf_token=""):
 </html>"""
 
 def fabric_setup_page(organizations, error=None, csrf_token=""):
-    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px;">{error}</div>' if error else ''
+    safe_csrf = _escape_html(csrf_token)
+    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px;">{_escape_html(error)}</div>' if error else ''
     
     org_options = ""
     for org in organizations:
-        org_options += f'<option value="{org.get("login")}">{org.get("login")}</option>'
+        login = _escape_html(org.get("login", "—"))
+        org_options += f'<option value="{login}">{login}</option>'
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -662,7 +668,7 @@ def fabric_setup_page(organizations, error=None, csrf_token=""):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>Fabric Setup — ANNY Runtime</title>
-    <style>{{COMMON_CSS}}</style>
+    <style>{COMMON_CSS}</style>
 </head>
 <body>
 <div class="login-container">
@@ -671,7 +677,7 @@ def fabric_setup_page(organizations, error=None, csrf_token=""):
         <p style="color:var(--text-secondary);margin-bottom:24px; text-align:center;">Select your organization and Fabric repository.</p>
         {{error_html}}
         <form method="POST" action="/fabric/setup">
-            <input type="hidden" name="csrf_token" value="{{csrf_token}}">
+            <input type="hidden" name="csrf_token" value="{{safe_csrf}}">
             <div style="margin-bottom: 16px;">
                 <label style="display:block; margin-bottom: 8px; font-weight: 600;">Organization</label>
                 <select name="fabric_org" style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
@@ -1311,7 +1317,7 @@ def _render_empty_state(message="No data available."):
 def universe_accounts_page(accounts, csrf_token=""):
     rows = ""
     for acct in accounts:
-        rows += f'<tr><td><a href="/universe/accounts/{acct.account_id}">{_escape_html(acct.account_id)}</a></td><td>{_escape_html(acct.name)}</td><td>{_escape_html(acct.owner_principal)}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
+        rows += f'<tr><td><a href="/universe/accounts/{_escape_html(acct.account_id)}">{_escape_html(acct.account_id)}</a></td><td>{_escape_html(acct.name)}</td><td>{_escape_html(acct.owner_principal)}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
     content = f"""
         <div class="page-header"><h2>Accounts</h2><p>Multi-Account Identity Boundaries</p></div>
         <div class="detail-panel">
@@ -1385,7 +1391,7 @@ def universe_resources_page(resources, csrf_token=""):
         prov_id = getattr(res, 'provenance_id', res.get('provenance_id', '—') if isinstance(res, dict) else '—')
         state = getattr(res, 'state', res.get('state', 'UNKNOWN') if isinstance(res, dict) else 'UNKNOWN')
         badge = 'badge-success' if state == 'ACTIVE' else 'badge-muted'
-        rows += f'<tr><td class="mono">{_escape_html(res_id)}</td><td><span class="badge {badge}">{_escape_html(state)}</span></td><td><a href="/audit/provenance?id={prov_id}" class="mono">{_escape_html(prov_id)}</a></td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(res_id)}</td><td><span class="badge {badge}">{_escape_html(state)}</span></td><td><a href="/audit/provenance?id={_escape_html(prov_id)}" class="mono">{_escape_html(prov_id)}</a></td></tr>'
     
     content = f"""
         <div class="page-header"><h2>Fabric Resources</h2><p>Canonical domain entities registered in Fabric</p></div>
