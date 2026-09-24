@@ -803,18 +803,19 @@ def ready_page(status, csrf_token=""):
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Runtime</div>
                 <div style="font-size:22px; font-weight:700;"><span class="badge badge-success">{_escape_html(cont.get('runtime_status', 'UNKNOWN'))}</span></div>
             </a>
-            <a href="/infrastructure/github" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+            <a href="/github" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">GitHub</div>
                 <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if gh.get('connected') else 'badge-danger' }">{_escape_html(gh.get('auth_status', 'UNKNOWN'))}</span></div>
             </a>
-            <a href="/infrastructure/fabric" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+            <a href="/fabric" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Fabric</div>
                 <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if status.get('fabric_connected') else 'badge-danger' }">{_escape_html('CONNECTED' if status.get('fabric_connected') else 'ERROR')}</span></div>
             </a>
-            <a href="/infrastructure/mcp" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+            <div class="card" style="padding:20px;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">MCP Nodes</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('mcp_count', 0))}</div>
-            </a>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('mcp_count', 'UNKNOWN'))}</div>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Route not yet implemented.</div>
+            </div>
 
             <!-- UNIVERSE -->
             <a href="/universe/projects" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
@@ -831,7 +832,7 @@ def ready_page(status, csrf_token=""):
             </a>
 
             <!-- INTELLIGENCE -->
-            <a href="/intelligence/models" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+            <a href="/models" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Models</div>
                 <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('model_count', 0))}</div>
             </a>
@@ -849,10 +850,11 @@ def ready_page(status, csrf_token=""):
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Pending Tasks</div>
                 <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('task_count', 0))}</div>
             </a>
-            <a href="/continuity/blockers" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+            <div class="card" style="padding:20px;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Blockers</div>
                 <div style="font-size:22px; font-weight:700; color:var(--accent-amber);">{_escape_html(blocker_count)}</div>
-            </a>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Continuity blocker route is planned.</div>
+            </div>
         </div>
 
         <div class="detail-panel" style="margin-bottom: 24px;">
