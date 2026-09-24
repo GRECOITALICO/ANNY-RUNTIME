@@ -444,6 +444,23 @@ class AdminRouter:
                                  if item.get("service_name") == "CONRRAD.REPOSITORY_FABRIC"), None)
         fabric_status = str(repository_fabric.get('online_status', 'UNKNOWN')) if repository_fabric else 'UNKNOWN'
 
+        truth_sources = {
+            'runtime_state': 'runtime_engine.state',
+            'runtime_health': 'runtime_engine.health_check' if callable(health_check) else 'UNKNOWN',
+            'runtime_id': 'auth_manager.runtime_id' if runtime_id != 'UNKNOWN' else 'UNKNOWN',
+            'runtime_version': 'runtime.core.version.__version__',
+            'timestamp': 'bootstrap_report.completed_at' if report and getattr(report, 'completed_at', None) else (
+                'bootstrap_report.started_at' if report and getattr(report, 'started_at', None) else 'UNKNOWN'
+            ),
+            'conrrad': 'bootstrap_report.conrrad_dependencies' if report and getattr(report, 'conrrad_dependencies', None) else 'NOT_CONFIGURED',
+            'fabric': 'bootstrap_report.fabric_node' if report and getattr(report, 'fabric_node', None) else 'UNKNOWN',
+        }
+        configured_endpoint = None
+        configured_host = getattr(config, 'host', None) if config else None
+        configured_port = getattr(config, 'port', None) if config else None
+        if configured_host and configured_port:
+            configured_endpoint = f"http://{configured_host}:{configured_port}"
+
         data = {
             'anny_ready': anny_ready, 'bootstrap_state': bootstrap_state,
             'runtime_state': state_name, 'runtime_health': runtime_health,
@@ -458,6 +475,9 @@ class AdminRouter:
             'reconciliation_status': _report_status('reconciliation_status', {'COHERENT', 'INCOHERENT', 'BLOCKED', 'UNKNOWN'}),
             'timestamp': timestamp,
             'runtime_id': runtime_id, 'runtime_version': __version__, 'github_org': 'UNKNOWN',
+            'configured_endpoint': configured_endpoint,
+            'truth_sources': truth_sources,
+            'main_execution_verified': False,
             'fabric_org': getattr(config, 'fabric_org', None) if config else None,
             'fabric_repo': getattr(config, 'fabric_repo', None) if config else None,
             'fabric_node': fabric_node, 'tenant': 'UNKNOWN',
