@@ -339,13 +339,15 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("continuity.status", "Continuity status", "Continuity", source_authority="CANONICAL_STATE", implementation_status="PARTIAL", route_or_detail="/continuity/timeline", sort_order=150, tags=("continuity",)),
         _p("continuity.recovery", "Continuity recovery", "Continuity", priority="P1", source_authority="CANONICAL_STATE", implementation_status="PLANNED", route_or_detail="/continuity/recovery", sort_order=160, tags=("recovery",)),
         _p("evidence.freshness", "Evidence freshness", "Evidence / Provenance", priority="P0", source_authority="EVIDENCE_REGISTRY", implementation_status="PLANNED", sort_order=170, tags=("evidence", "freshness")),
+        _p("audit.events", "Audit events", "Evidence / Provenance", priority="P1", source_authority="AUDIT_STORE", route_or_detail="/audit/events", implementation_status="BOUND", sort_order=181, tags=("audit", "events")),
+        
         _p("evidence.provenance", "Evidence provenance", "Evidence / Provenance", priority="P1", source_authority="EVIDENCE_REGISTRY", implementation_status="PARTIAL", route_or_detail="/audit/provenance", sort_order=180, tags=("provenance",)),
         _p("execution.processing_matrix", "Processing matrix", "Execution", source_authority="TELEMETRY_AGGREGATOR", route_or_detail="/api/processing/matrix", sort_order=190, tags=("execution", "telemetry")),
         _p("execution.tasks", "Execution tasks", "Execution", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/tasks", implementation_status="BOUND", sort_order=200, tags=("tasks",)),
         _p("execution.workers", "Execution workers", "Execution", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/workers", implementation_status="BOUND", sort_order=210, tags=("workers",)),
         _p("execution.results", "Execution results", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/results", implementation_status="PLANNED", sort_order=220, tags=("results",)),
         _p("intelligence.capabilities", "Intelligence capabilities", "Intelligence", priority="P1", route_or_detail="/intelligence/capabilities", sort_order=230, tags=("capabilities",)),
-        _p("intelligence.models", "Intelligence models", "Intelligence", priority="P1", route_or_detail="/intelligence/models", implementation_status="PARTIAL", sort_order=240, tags=("models",)),
+        _p("intelligence.models", "Intelligence models", "Intelligence", priority="P1", route_or_detail="/models", implementation_status="PARTIAL", sort_order=240, tags=("models",)),
         _p("intelligence.executors", "Intelligence executors", "Intelligence", priority="P1", route_or_detail="/intelligence/executors", implementation_status="BOUND", sort_order=250, tags=("executors",)),
         _p("intelligence.performance", "Intelligence performance", "Intelligence", priority="P2", route_or_detail="/intelligence/performance", implementation_status="PLANNED", sort_order=260, tags=("performance",)),
         _p("infrastructure.runtime", "Runtime topology", "Infrastructure", priority="P1", route_or_detail="/infrastructure/runtime", sort_order=270, tags=("topology",)),
@@ -384,21 +386,28 @@ class NavigationItem:
             raise ValueError(f"Unsupported navigation availability: {self.availability}")
         if not self.path.startswith("/"):
             raise ValueError("Navigation paths must be absolute")
+        if self.availability in {"ACTIVE", "ALIAS"}:
+            if not self.projection_id:
+                raise ValueError("Active navigation items require projection_id")
+            if DEFAULT_PROJECTION_REGISTRY.get(self.projection_id) is None:
+                raise ValueError(
+                    f"Navigation projection_id is not registered: {self.projection_id}"
+                )
 
 
 DEFAULT_NAVIGATION_ITEMS: Tuple[NavigationItem, ...] = (
-    NavigationItem("OVERVIEW", "Dashboard", "⬡", "/"),
-    NavigationItem("UNIVERSE", "Organization", "❖", "/universe/organization"),
-    NavigationItem("UNIVERSE", "Projects", "◫", "/universe/projects"),
-    NavigationItem("UNIVERSE", "Repositories", "⊙", "/universe/repositories"),
-    NavigationItem("UNIVERSE", "Resources", "◈", "/universe/resources"),
+    NavigationItem("OVERVIEW", "Dashboard", "⬡", "/", "control.top_level_state"),
+    NavigationItem("UNIVERSE", "Organization", "❖", "/universe/organization", "universe.organization"),
+    NavigationItem("UNIVERSE", "Projects", "◫", "/universe/projects", "universe.projects"),
+    NavigationItem("UNIVERSE", "Repositories", "⊙", "/universe/repositories", "universe.repositories"),
+    NavigationItem("UNIVERSE", "Resources", "◈", "/universe/resources", "universe.resources"),
     NavigationItem("UNIVERSE", "Dependencies", "⋈", "/universe/dependencies", "fabric.connection", "PLANNED"),
 
     NavigationItem("EXECUTION", "Missions", "🎯", "/execution/missions", "project.current_mission"),
     NavigationItem("EXECUTION", "Tasks", "✓", "/execution/tasks", "execution.tasks"),
     NavigationItem("EXECUTION", "Workers", "⚙", "/execution/workers", "execution.workers"),
-    NavigationItem("EXECUTION", "Executions", "▶", "/execution/executions"),
-    NavigationItem("EXECUTION", "Workspaces", "📁", "/execution/workspaces"),
+    NavigationItem("EXECUTION", "Executions", "▶", "/execution/executions", "execution.execution_runs"),
+    NavigationItem("EXECUTION", "Workspaces", "📁", "/execution/workspaces", "execution.workspaces"),
     NavigationItem("EXECUTION", "Results", "📊", "/execution/results", "execution.results", "PLANNED"),
 
     NavigationItem("INTELLIGENCE", "Models", "🧠", "/models", "intelligence.models", "ALIAS"),
@@ -422,7 +431,7 @@ DEFAULT_NAVIGATION_ITEMS: Tuple[NavigationItem, ...] = (
     NavigationItem("CONTINUITY", "Blockers", "🛑", "/continuity/blockers", "project.blockers", "PLANNED"),
     NavigationItem("CONTINUITY", "Recovery", "⚕", "/continuity/recovery", "continuity.recovery", "PLANNED"),
 
-    NavigationItem("AUDIT", "Events", "📋", "/audit/events"),
+    NavigationItem("AUDIT", "Events", "📋", "/audit/events", "audit.events"),
     NavigationItem("AUDIT", "Provenance", "🔍", "/audit/provenance", "evidence.provenance"),
     NavigationItem("AUDIT", "Evidence", "🛡", "/audit/evidence", "evidence.freshness", "PLANNED"),
     NavigationItem("AUDIT", "Changes", "📝", "/audit/changes", "evidence.provenance", "PLANNED"),
