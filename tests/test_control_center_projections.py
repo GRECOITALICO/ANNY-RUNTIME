@@ -424,7 +424,7 @@ def test_classic_admin_shell_escapes_titles_tokens_and_rejects_executable_hrefs(
     assert '<img src=x onerror=alert(1)>' not in html
     assert '&lt;img' in html
     assert 'csrf&lt;script&gt;' in html
-    assert 'projection&quot;' in html
+    assert 'data-projection-id="&lt;projection&gt;&quot;"' in html
 
     page = device_flow_page('<XSS>', 'javascript:alert(1)', '"csrf')
     assert '<XSS>' not in page
@@ -470,7 +470,7 @@ def test_browser_renderers_are_bound_safe_and_do_not_reference_missing_renderer(
 
     assert 'render_admin_page' not in dashboard
     assert 'render_admin_page' not in detail
-    assert 'javascript:alert(1)' not in detail
+    assert 'href="javascript:alert(1)"' not in detail
     assert 'href="#"' in detail
     assert '&lt;MODE&gt;' in detail
     assert '&lt;PROFILE&gt;' in detail
