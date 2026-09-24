@@ -75,6 +75,15 @@ A projection must not convert missing evidence into a positive operational statu
 `source_authority` identifies where the projection is expected to obtain truth. It does
 not grant authority to the UI.
 
+The Control Center also exposes descriptive `truth_sources` metadata through `/api/status`.
+These labels identify the observed source used for primary displayed fields; they never upgrade
+the associated `truth_class` or operational state.
+
+The server-provided `/api/status` timestamp is rendered as `TRUTH AS OF`. The browser clock is
+not used as the verification timestamp. `configured_endpoint`, when present, is explicitly
+configuration-derived and is not evidence of reachability. `main_execution_verified` remains
+false until independent authoritative execution evidence establishes it.
+
 ## Availability rules
 
 Implementation states are:
