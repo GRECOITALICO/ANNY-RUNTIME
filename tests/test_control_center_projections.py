@@ -126,3 +126,42 @@ def test_control_center_dynamic_html_rendering_escapes_backend_values():
     assert "escapeHtml(a.capability)" in html
     assert "escapeHtml(d.contract.allowed||'NONE')" in html
     assert "stateBadge.innerHTML = (d.runtime_state || 'UNKNOWN')" not in html
+
+
+def test_projection_registry_search_and_pagination():
+    payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(q="runtime", limit=2, offset=0)
+
+    assert payload["page"]["limit"] == 2
+    assert payload["page"]["offset"] == 0
+    assert payload["page"]["returned"] <= 2
+    assert payload["page"]["total_filtered"] >= payload["page"]["returned"]
+    assert all(
+        "runtime" in (
+            item["projection_id"].lower()
+            + " " + item["title"].lower()
+            + " " + item["section"].lower()
+            + " " + item["source_authority"].lower()
+        )
+        for item in payload["projections"]
+    )
+
+    later = DEFAULT_PROJECTION_REGISTRY.to_api_dict(limit=2, offset=2)
+    assert later["page"]["offset"] == 2
+
+
+def test_projection_registry_rejects_invalid_page_size():
+    with pytest.raises(ValueError, match="limit"):
+        DEFAULT_PROJECTION_REGISTRY.to_api_dict(limit=201)
+
+    with pytest.raises(ValueError, match="offset"):
+        DEFAULT_PROJECTION_REGISTRY.to_api_dict(offset=-1)
+
+
+def test_projection_registry_filters_by_truth_and_implementation():
+    blocked = DEFAULT_PROJECTION_REGISTRY.to_api_dict(implementation_status="BLOCKED")
+    assert blocked["projections"]
+    assert all(item["implementation_status"] == "BLOCKED" for item in blocked["projections"])
+
+    unknown = DEFAULT_PROJECTION_REGISTRY.to_api_dict(truth_class="UNKNOWN")
+    assert unknown["projections"]
+    assert all(item["truth_class"] == "UNKNOWN" for item in unknown["projections"])
