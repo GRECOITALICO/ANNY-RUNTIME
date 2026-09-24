@@ -222,3 +222,22 @@ def test_projection_freshness_default_reflects_implementation_state():
 
     assert bound.freshness == "LIVE_ON_READ"
     assert planned.freshness == "NOT_BOUND"
+
+
+def test_projection_registry_exposes_section_and_freshness_dimensions():
+    payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(limit=1)
+
+    assert payload["summary"]["by_section"]
+    assert payload["summary"]["by_freshness"]
+
+    section = next(iter(payload["summary"]["by_section"]))
+    section_payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(section=section)
+    assert section_payload["page"]["total_filtered"] == payload["summary"]["by_section"][section]
+    assert section_payload["projections"]
+    assert all(item["section"] == section for item in section_payload["projections"])
+
+    freshness = next(iter(payload["summary"]["by_freshness"]))
+    freshness_payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(freshness=freshness)
+    assert freshness_payload["page"]["total_filtered"] == payload["summary"]["by_freshness"][freshness]
+    assert freshness_payload["projections"]
+    assert all(item["freshness"] == freshness for item in freshness_payload["projections"])
