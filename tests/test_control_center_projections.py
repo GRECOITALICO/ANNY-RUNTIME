@@ -247,3 +247,92 @@ def test_admin_shell_has_no_external_font_dependency():
     from runtime.admin.templates import COMMON_CSS
 
     assert "fonts.googleapis.com" not in COMMON_CSS
+
+
+def test_control_center_conrrad_projection_is_strict_and_non_synthetic():
+    from types import SimpleNamespace
+
+    router = AdminRouter({})
+    router.handle_api_status(urlparse("/api/status"))
+    data = router.context["direct_json_response"]
+
+    assert data["conrrad_gate_status"] == "BLOCKED"
+    assert data["conrrad_required_service_count"] == 8
+    assert data["conrrad_observed_service_count"] == 0
+    assert data["conrrad_online_verified_count"] == 0
+    assert data["conrrad_trust_verified_count"] == 0
+    assert len(data["conrrad_dependencies"]) == 8
+    assert data["github_org"] == "UNKNOWN"
+    assert data["tenant"] == "UNKNOWN"
+    assert data["policy_revision"] == "UNKNOWN"
+    assert data["contract_revision"] == "UNKNOWN"
+    assert data["capabilities"] == "UNKNOWN"
+    assert data["anny_ready"] is False
+    assert "N/A" not in str(data)
+
+    class Engine:
+        state = SimpleNamespace(name="READY")
+        config = SimpleNamespace(fabric_org="configured-org", fabric_repo="configured-repo")
+        bootstrap_report = SimpleNamespace(
+            anny_ready=True,
+            bootstrap_state="READY",
+            fabric_node="fabric-node-observed",
+            policy_revision="policy-1",
+            admission_status="ADMITTED",
+            reconciliation_status="COHERENT",
+            capabilities=SimpleNamespace(declared=["capability.one"]),
+            tools=SimpleNamespace(declared=["tool.one"]),
+            models=SimpleNamespace(declared=["model.one"]),
+            workers=SimpleNamespace(declared=["worker.one"]),
+            connectors=SimpleNamespace(declared=["connector.one"]),
+            gates=[],
+            completed_at="2026-09-23T21:00:00+00:00",
+            conrrad_dependencies=[
+                {
+                    "service_name": name,
+                    "online_status": "ONLINE_VERIFIED",
+                    "trust_status": "VERIFIED",
+                    "certification_state": "CERTIFIED_BY_LIVE_EVIDENCE",
+                    "last_live_check": "2026-09-23T21:00:00+00:00",
+                    "evidence_ref": "evidence/" + name,
+                }
+                for name in __import__("runtime.bootstrap.conrrad", fromlist=["REQUIRED_CONRRAD_SERVICES"]).REQUIRED_CONRRAD_SERVICES
+            ],
+            health_check=lambda: {"status": "ok"},
+        )
+
+    router = AdminRouter({"runtime_engine": Engine()})
+    router.handle_api_status(urlparse("/api/status"))
+    data = router.context["direct_json_response"]
+    assert data["conrrad_gate_status"] == "ONLINE_VERIFIED"
+    assert data["conrrad_observed_service_count"] == 8
+    assert data["conrrad_online_verified_count"] == 8
+    assert data["conrrad_trust_verified_count"] == 8
+    assert data["anny_ready"] is True
+    assert data["fabric_status"] == "ONLINE_VERIFIED"
+    assert data["continuity"]["status"] == "UNKNOWN"
+
+
+def test_control_center_conrrad_panel_is_bound_and_offline_safe():
+    from runtime.admin.templates_cc import control_center_page
+
+    html = control_center_page("")
+    assert 'data-projection-id="control.conrrad_mandatory_services"' in html
+    assert 'id="conrrad-deps-tbody"' in html
+    assert "ONLINE_VERIFIED" in html
+    assert "CERTIFIED_BY_LIVE_EVIDENCE" in html
+    assert "No CONRRAD" not in html
+
+
+def test_control_center_has_no_external_font_dependency():
+    from runtime.admin.templates_cc import control_center_page
+    from runtime.admin.routes import AdminRouter
+
+    html = control_center_page("")
+    assert "fonts.googleapis.com" not in html
+    assert "fonts.gstatic.com" not in html
+
+    router = AdminRouter({})
+    source = __import__("inspect").getsource(router._set_security_headers)
+    assert "fonts.googleapis.com" not in source
+    assert "fonts.gstatic.com" not in source
