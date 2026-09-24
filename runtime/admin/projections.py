@@ -337,7 +337,7 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("project.current_task", "Current task", "Project State", source_authority="CANONICAL_STATE", implementation_status="PARTIAL", sort_order=120, tags=("task",)),
         _p("project.next_action", "Next action", "Project State", source_authority="CANONICAL_STATE", implementation_status="PARTIAL", sort_order=130, tags=("next-action",)),
         _p("project.blockers", "Blockers", "Project State", source_authority="CANONICAL_STATE", implementation_status="PARTIAL", sort_order=140, tags=("blockers",)),
-        _p("continuity.status", "Continuity status", "Continuity", source_authority="CANONICAL_STATE", implementation_status="PARTIAL", route_or_detail="/continuity/timeline", sort_order=150, tags=("continuity",)),
+        _p("continuity.status", "Continuity timeline", "Continuity", source_authority="CONTINUITY_ENGINE", implementation_status="BOUND", route_or_detail="/continuity/timeline", sort_order=150, tags=("continuity", "timeline")),
         _p("continuity.recovery", "Continuity recovery", "Continuity", priority="P1", source_authority="CANONICAL_STATE", implementation_status="PLANNED", route_or_detail="/continuity/recovery", sort_order=160, tags=("recovery",)),
         _p("evidence.freshness", "Evidence freshness", "Evidence / Provenance", priority="P0", source_authority="EVIDENCE_REGISTRY", implementation_status="PLANNED", sort_order=170, tags=("evidence", "freshness")),
         _p("audit.events", "Audit events", "Evidence / Provenance", priority="P1", source_authority="AUDIT_STORE", route_or_detail="/audit/events", implementation_status="BOUND", sort_order=181, tags=("audit", "events")),
@@ -427,7 +427,7 @@ DEFAULT_NAVIGATION_ITEMS: Tuple[NavigationItem, ...] = (
     NavigationItem("TELEMETRY", "Live Stream", "📡", "/telemetry/live", "telemetry.live"),
     NavigationItem("TELEMETRY", "Timeline", "⏱", "/telemetry/timeline", "telemetry.timeline"),
 
-    NavigationItem("CONTINUITY", "Current state", "⏱", "/continuity/state", "continuity.status", "PLANNED"),
+    NavigationItem("CONTINUITY", "Timeline", "⏱", "/continuity/timeline", "continuity.status"),
     NavigationItem("CONTINUITY", "Mission", "🎯", "/continuity/mission", "project.current_mission", "PLANNED"),
     NavigationItem("CONTINUITY", "Task", "✓", "/continuity/task", "project.current_task", "PLANNED"),
     NavigationItem("CONTINUITY", "Next action", "⏭", "/continuity/next", "project.next_action", "PLANNED"),
