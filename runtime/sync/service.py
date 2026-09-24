@@ -127,40 +127,7 @@ class SyncService:
             }
 
     def activate(self) -> Dict[str, Any]:
-        with self._lock:
-            if self._active is not None:
-                return {"status": "already_running", "sync_state": self._active.sync_state.value}
-            if self._latest is None or self._latest.sync_state != SyncState.STAGED:
-                return {"status": "blocked", "error": "Cannot activate without a STAGED candidate"}
-
-            result = self._latest
-            result.sync_state = SyncState.ACTIVATING
-            result.stage = "ACTIVATE"
-            self._active = result
-            self._persist(result)
-
-        def _run_activate():
-            try:
-                # Activation is not physically implemented yet.
-                # Must fail-closed and leave explicitly blocked to avoid faking state.
-                result.sync_state = SyncState.BLOCKED
-                result.error_classification = "ACTIVATION_NOT_IMPLEMENTED"
-            except Exception as exc:
-                result.sync_state = SyncState.FAILED
-                result.error_classification = exc.__class__.__name__
-                result.details = {"message": str(exc)[:500]}
-            finally:
-                with self._lock:
-                    self._active = None
-                    self._persist(result)
-
-        self._active_thread = threading.Thread(target=_run_activate, daemon=True)
-        self._active_thread.start()
-
-        return {"status": "activating", "sync_state": SyncState.ACTIVATING.value, "sync_id": result.sync_id}
-
-    def rollback(self) -> Dict[str, Any]:
-        """Fail closed until physical rollback is implemented."""
+        """Fail closed: physical activation is not implemented or permitted by this service."""
         with self._lock:
             trace_id = self._latest.trace_id if self._latest is not None else f"trace-{secrets.token_hex(12)}"
             sync_id = self._latest.sync_id if self._latest is not None else None
@@ -169,8 +136,8 @@ class SyncService:
                 "sync_state": SyncState.BLOCKED.value,
                 "sync_id": sync_id,
                 "trace_id": trace_id,
-                "error": "Physical rollback is not implemented",
-                "error_classification": "ROLLBACK_NOT_IMPLEMENTED",
+                "error": "Physical activation is not implemented",
+                "error_classification": "ACTIVATION_NOT_IMPLEMENTED",
             }
 
     def _discover_compare_verify(self, result: SyncResult) -> None:
