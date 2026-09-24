@@ -495,6 +495,7 @@ def _render_navigation(active_path):
 
 def base_layout(title, content, active_path="/", csrf_token="", projection_id=None):
     """Wrap content in the full admin shell layout."""
+    projection_attr = f' data-projection-id="{projection_id}"' if projection_id else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -522,7 +523,7 @@ def base_layout(title, content, active_path="/", csrf_token="", projection_id=No
             </form>
         </div>
     </nav>
-    <main class="main-content animate-fade-in"{f' data-projection-id="{projection_id}"' if projection_id else ""}>
+    <main class="main-content animate-fade-in"{projection_attr}>
         {content}
     </main>
 </div>
