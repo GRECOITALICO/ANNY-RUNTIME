@@ -1593,7 +1593,14 @@ def search_page(query, csrf_token=""):
     return base_layout("Search", content, "/search", csrf_token)
 
 def generic_placeholder_page(title, path, csrf_token=""):
-    return base_layout(title, f'<div class="page-header"><h2>{title}</h2></div>{_render_empty_state("No instances found.")}', path, csrf_token)
+    safe_title = _escape_html(title)
+    safe_path = _safe_href(path)
+    return base_layout(
+        safe_title,
+        f'<div class="page-header"><h2>{safe_title}</h2></div>{_render_empty_state("No instances found.")}',
+        path=safe_path,
+        csrf_token=csrf_token,
+    )
 
 
 def telemetry_live_page(csrf_token=""):
