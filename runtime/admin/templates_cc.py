@@ -107,7 +107,7 @@ def control_center_page(csrf_token: str) -> str:
         </div>
     </div>
     <div class="header-actions">
-        <span id="last-verified">LAST POLLED: —</span>
+        <span id="last-verified">TRUTH AS OF: —</span>
         <button id="verify-btn" onclick="triggerVerify()">⟳ VERIFY NOW</button>
     </div>
 </header>
@@ -431,8 +431,8 @@ function updateUI(d) {
     setInner('st-admission', badge(d.admission_status));
     setInner('st-recon', badge(d.reconciliation_status));
 
-    // Timestamp
-    if (d.timestamp) setText('last-verified', 'LAST POLLED: ' + d.timestamp);
+    // Server-observed truth timestamp. Never replace it with client clock time.
+    setText('last-verified', 'TRUTH AS OF: ' + (d.timestamp || 'UNKNOWN'));
 
     // Snapshot
     setText('snap-id', d.runtime_id);
@@ -574,8 +574,6 @@ async function fetchStatus() {
         if (!r.ok) return;
         const d = await r.json();
         updateUI(d);
-        const now = new Date().toISOString().replace('T',' ').substring(0,19);
-        setText('last-verified', 'LAST POLLED: ' + now + ' UTC');
     } catch(e) {
         console.error('Status fetch failed:', e);
     }
