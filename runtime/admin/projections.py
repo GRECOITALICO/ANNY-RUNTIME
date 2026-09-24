@@ -310,6 +310,7 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("control.top_level_state", "Top-Level State panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=1, tags=("panel", "shell")),
         _p("control.operational_snapshot", "Operational Snapshot panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=2, tags=("panel",)),
         _p("control.bootstrap_verification", "Bootstrap Verification panel", "Control Center", priority="P0", source_authority="BOOTSTRAP_ENGINE", sort_order=3, tags=("panel", "gates")),
+        _p("control.truth_freshness", "Truth & Freshness panel", "Control Center", priority="P0", source_authority="RUNTIME_OBSERVATION", sort_order=3.5, tags=("panel", "truth", "freshness")),
         _p("control.runtime_health", "Runtime Health panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=4, tags=("panel", "health")),
         _p("control.conrrad_mandatory_services", "CONRRAD Mandatory Services live truth", "Control Center", priority="P0", source_authority="CONRRAD_EXTERNAL_REGISTRY", sort_order=4.5, tags=("panel", "conrrad", "live-truth", "mandatory-services")),
 
