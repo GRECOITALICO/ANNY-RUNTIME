@@ -531,3 +531,43 @@ def test_missions_route_renders_canonical_continuity_projection_and_execution_al
     assert ">2</span>" in html
     assert 'data-projection-id="execution.missions"' in html
     assert "generic_placeholder_page" not in html
+
+
+def test_classic_execution_worker_and_model_links_are_safe_and_execution_view_is_projection_bound():
+    from runtime.admin.templates import executions_page, models_page, workers_page
+    from types import SimpleNamespace
+    from datetime import datetime
+
+    worker = SimpleNamespace(
+        worker_id='worker" onmouseover="x',
+        execution_id='exec',
+        capability_id='cap',
+        executor_type='deterministic',
+        state=SimpleNamespace(value='RUNNING'),
+        created_at=datetime(2026, 1, 1),
+    )
+    model = SimpleNamespace(
+        model_id='model" onmouseover="x',
+        model_name='Model',
+        provider='provider',
+        version='1',
+        state=SimpleNamespace(value='READY'),
+    )
+    execution = SimpleNamespace(
+        execution_id='exec',
+        task_id='task',
+        capability_id='cap',
+        status=SimpleNamespace(value='SUCCEEDED'),
+        started_at=None,
+        completed_at=None,
+        duration_ms=None,
+    )
+
+    workers_html = workers_page([worker])
+    models_html = models_page([model])
+    executions_html = executions_page([execution])
+
+    assert 'href="/workers/worker" onmouseover=' not in workers_html
+    assert 'href="/models/model" onmouseover=' not in models_html
+    assert 'data-projection-id="execution.execution_runs"' in executions_html
+    assert 'href="/execution/executions"' in executions_html
