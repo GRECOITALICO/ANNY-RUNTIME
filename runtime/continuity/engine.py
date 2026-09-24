@@ -155,6 +155,13 @@ class ContinuityEngine:
         with self._lock:
             return [e for e in self._events if e.task_id == task_id]
 
+    def get_recent_events(self, limit: int = 100) -> List[EventRecord]:
+        """Return the newest durable continuity events without mutating state."""
+        with self._lock:
+            if limit <= 0:
+                return []
+            return list(self._events[-limit:])
+
     def reconstruct_execution(self, execution_id: str) -> Optional[Dict[str, Any]]:
         """
         Deductively reconstruct full execution context state from durable logs.
