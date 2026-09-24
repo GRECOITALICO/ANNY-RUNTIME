@@ -716,12 +716,32 @@ class AdminRouter:
             return fabric_page(status, self._get_csrf())
 
     def handle_sessions(self, parsed) -> str:
-        return sessions_page([], self._get_csrf())
+        sessions = []
+        auth_mgr = self.context.get('auth_manager')
+        if auth_mgr:
+            try:
+                sessions = [
+                    {
+                        "session_id": s.admin_session_id,
+                        "provider": "LOCAL_ADMIN",
+                        "principal": s.principal,
+                        "tenant": "LOCAL",
+                        "created_at": s.issued_at,
+                        "expires_at": s.expires_at,
+                        "status": "ACTIVE",
+                    }
+                    for s in getattr(auth_mgr, "_sessions", {}).values()
+                ]
+            except Exception:
+                sessions = []
+        return sessions_page(sessions, self._get_csrf())
 
     def handle_operations(self, parsed) -> str:
+        # No canonical operation registry is currently exposed by Runtime.
         return operations_page([], self._get_csrf())
 
     def handle_receipts(self, parsed) -> str:
+        # No canonical receipt registry is currently exposed by Runtime.
         return receipts_page([], self._get_csrf())
         
     def handle_executions(self, parsed) -> str:
@@ -792,8 +812,36 @@ class AdminRouter:
         return policies_page(policy, self._get_csrf())
 
     def handle_doctor(self, parsed) -> str:
-        diagnostics = {'checks': [{'name': 'Core', 'status': 'OK'}]}
-        return doctor_page(diagnostics, self._get_csrf())
+        checks = []
+        engine = self.context.get('runtime_engine')
+        if engine and callable(getattr(engine, 'health_check', None)):
+            try:
+                health = engine.health_check()
+                checks.append({"name": "Runtime health", "status": str(health.get("status", "UNKNOWN")).upper()})
+                subsystems = health.get("subsystems", {})
+                for name, status in subsystems.items():
+                    checks.append({"name": f"Runtime / {name}", "status": str(status).upper()})
+            except Exception:
+                checks.append({"name": "Runtime health", "status": "UNKNOWN"})
+        else:
+            checks.append({"name": "Runtime health", "status": "NOT_CONFIGURED"})
+
+        gh_mgr = self.context.get('github_manager')
+        if gh_mgr:
+            try:
+                checks.append({"name": "GitHub authentication", "status": str(gh_mgr.get_status().auth_status).upper()})
+            except Exception:
+                checks.append({"name": "GitHub authentication", "status": "UNKNOWN"})
+        else:
+            checks.append({"name": "GitHub authentication", "status": "UNKNOWN"})
+
+        report = getattr(engine, 'bootstrap_report', None) if engine else None
+        dependency_matrix = project_dependency_matrix(report)
+        checks.append({
+            "name": "CONRRAD mandatory services",
+            "status": "ONLINE_VERIFIED" if registry_is_complete(dependency_matrix) else "BLOCKED",
+        })
+        return doctor_page({"checks": checks}, self._get_csrf())
 
     # --- POST Handlers (Action) ---
 
