@@ -612,3 +612,18 @@ def test_control_center_truth_projection_is_registered_and_uses_server_status_me
     assert "truth_sources.runtime_state" in html
     assert "truth_sources.conrrad" in html
     assert "main_execution_verified === true" in html
+
+
+def test_sync_control_is_first_class_but_unimplemented_lifecycle_remains_blocked():
+    from runtime.admin.sync_ui import inject_sync_controls
+
+    html = inject_sync_controls("<html><head></head><body><header><div>ANNY</div></header><main></main></body></html>", "csrf")
+    assert 'data-projection-id="distribution.sync"' in html
+    assert 'id="anny-sync-btn"' in html
+    assert 'SYNC NOW' in html
+    assert 'id="anny-sync-stage-btn"' in html
+    assert 'id="anny-sync-activate-btn"' in html
+    assert 'id="anny-sync-rollback-btn"' in html
+    assert "stageBtn.disabled = true" in html
+    assert "activateBtn.disabled = true" in html
+    assert "rollbackBtn.disabled = true" in html
