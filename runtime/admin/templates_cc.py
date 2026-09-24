@@ -470,30 +470,30 @@ async function fetchProcessingMatrix() {
         let html = '';
         if (d.global) {
             html += '<tr><td class="mono" style="font-weight:bold">ALL</td>' +
-                   '<td>' + (d.global.total||0) + '</td>' +
-                   '<td>' + (d.global.deterministic||0) + '</td>' +
-                   '<td>' + (d.global.local_model||0) + '</td>' +
-                   '<td>' + (d.global.frontier_model||0) + '</td>' +
-                   '<td>' + (d.global.unknown||0) + '</td>' +
-                   '<td>' + (d.global.success||0) + '</td>' +
-                   '<td>' + (d.global.failed||0) + '</td>' +
-                   '<td>' + (d.global.timeout||0) + '</td>' +
-                   '<td>' + (d.global.blocked||0) + '</td>' +
-                   '<td>' + Math.round(d.global.average_duration||0) + '</td></tr>';
+                   '<td>' + escapeHtml((d.global.total||0)) + '</td>' +
+                   '<td>' + escapeHtml((d.global.deterministic||0)) + '</td>' +
+                   '<td>' + escapeHtml((d.global.local_model||0)) + '</td>' +
+                   '<td>' + escapeHtml((d.global.frontier_model||0)) + '</td>' +
+                   '<td>' + escapeHtml((d.global.unknown||0)) + '</td>' +
+                   '<td>' + escapeHtml((d.global.success||0)) + '</td>' +
+                   '<td>' + escapeHtml((d.global.failed||0)) + '</td>' +
+                   '<td>' + escapeHtml((d.global.timeout||0)) + '</td>' +
+                   '<td>' + escapeHtml((d.global.blocked||0)) + '</td>' +
+                   '<td>' + escapeHtml(Math.round(d.global.average_duration||0)) + '</td></tr>';
         }
         if (d.departments && Object.keys(d.departments).length > 0) {
             for (const [dept, stats] of Object.entries(d.departments)) {
                 html += '<tr><td class="mono">' + escapeHtml(dept||'UNKNOWN') + '</td>' +
-                       '<td>' + (stats.total||0) + '</td>' +
-                       '<td>' + (stats.deterministic||0) + '</td>' +
-                       '<td>' + (stats.local_model||0) + '</td>' +
-                       '<td>' + (stats.frontier_model||0) + '</td>' +
-                       '<td>' + (stats.unknown||0) + '</td>' +
-                       '<td>' + (stats.success||0) + '</td>' +
-                       '<td>' + (stats.failed||0) + '</td>' +
-                       '<td>' + (stats.timeout||0) + '</td>' +
-                       '<td>' + (stats.blocked||0) + '</td>' +
-                       '<td>' + Math.round(stats.average_duration||0) + '</td></tr>';
+                       '<td>' + escapeHtml((stats.total||0)) + '</td>' +
+                       '<td>' + escapeHtml((stats.deterministic||0)) + '</td>' +
+                       '<td>' + escapeHtml((stats.local_model||0)) + '</td>' +
+                       '<td>' + escapeHtml((stats.frontier_model||0)) + '</td>' +
+                       '<td>' + escapeHtml((stats.unknown||0)) + '</td>' +
+                       '<td>' + escapeHtml((stats.success||0)) + '</td>' +
+                       '<td>' + escapeHtml((stats.failed||0)) + '</td>' +
+                       '<td>' + escapeHtml((stats.timeout||0)) + '</td>' +
+                       '<td>' + escapeHtml((stats.blocked||0)) + '</td>' +
+                       '<td>' + escapeHtml(Math.round(stats.average_duration||0)) + '</td></tr>';
             }
         }
         if (!html) {
