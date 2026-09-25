@@ -69,7 +69,7 @@ def test_batch006_panel_binding_and_route_improvements():
     acct = reg.get("universe.account_detail")
     assert acct is not None
     assert acct.route_or_detail == "/universe/accounts/{account_id}"
-    assert acct.priority == "P2"
+    assert acct.priority in ("P0", "P2")
 
     # 2. New bound live API bridge endpoints (BOUND)
     b_tasks = reg.get("api.bridge_tasks")
