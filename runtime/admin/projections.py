@@ -182,10 +182,10 @@ class ProjectionRegistry:
         tag: Optional[str] = None,
         q: Optional[str] = None,
         projection_id: Optional[str] = None,
-        limit: int = 100,
+        limit: Optional[int] = None,
         offset: int = 0,
     ) -> Dict[str, object]:
-        if limit < 1 or limit > 200:
+        if limit is not None and (limit < 1 or limit > 200):
             raise ValueError("limit must be between 1 and 200")
         if offset < 0:
             raise ValueError("offset must be >= 0")
@@ -200,7 +200,12 @@ class ProjectionRegistry:
             projection_id=projection_id,
         )
         total_filtered = len(items)
-        page = items[offset:offset + limit]
+        if limit is None:
+            page = items[offset:]
+            has_more = False
+        else:
+            page = items[offset:offset + limit]
+            has_more = offset + len(page) < total_filtered
         return {
             "contract_version": REGISTRY_CONTRACT_VERSION,
             "master_inventory_boundary": MASTER_INVENTORY_BOUNDARY,
@@ -208,11 +213,11 @@ class ProjectionRegistry:
             "initial_p0_viewport_target": INITIAL_P0_VIEWPORT_TARGET,
             "summary": self.summary(),
             "page": {
-                "limit": limit,
+                "limit": limit if limit is not None else total_filtered,
                 "offset": offset,
                 "returned": len(page),
                 "total_filtered": total_filtered,
-                "has_more": offset + len(page) < total_filtered,
+                "has_more": has_more,
             },
             "filters": {
                 "priority": priority,
@@ -380,6 +385,28 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("mcp.tool_policies", "MCP Tool policies", "Infrastructure", priority="P1", source_authority="RUNTIME_MCP", route_or_detail="/mcp/policies", implementation_status="PLANNED", sort_order=302, tags=("mcp", "policies")),
         _p("security.tool_manifests", "Secure tool manifests", "Security / Trust", priority="P1", source_authority="RUNTIME_SECURITY", route_or_detail="/security/tools/manifests", implementation_status="PLANNED", sort_order=321, tags=("security", "tools", "manifests")),
         _p("tools.manifests", "Runtime tool manifests", "Execution", priority="P1", source_authority="RUNTIME_TOOL_REGISTRY", route_or_detail="/tools/manifests", implementation_status="PLANNED", sort_order=203, tags=("tools", "manifests")),
+
+        # Batch 003: Master Inventory Expansion & Panel Binding
+        _p("processing.events", "Processing events stream", "Telemetry", priority="P1", source_authority="TELEMETRY_AGGREGATOR", route_or_detail="/api/processing/events", implementation_status="BOUND", sort_order=410, tags=("telemetry", "events", "processing")),
+        _p("events.bus", "Runtime event bus history", "Telemetry", priority="P1", source_authority="EVENT_BUS", route_or_detail="/api/events/bus", implementation_status="PLANNED", sort_order=411, tags=("events", "bus", "history")),
+        _p("journal.operations", "Operation journal records", "Evidence / Provenance", priority="P1", source_authority="RUNTIME_JOURNAL", route_or_detail="/journal/operations", implementation_status="PLANNED", sort_order=412, tags=("journal", "operations", "provenance")),
+        _p("journal.missions", "Mission journal history", "Project State", priority="P1", source_authority="RUNTIME_JOURNAL", route_or_detail="/journal/missions", implementation_status="PLANNED", sort_order=413, tags=("journal", "missions")),
+        _p("security.grants", "Security authorization grants", "Security / Trust", priority="P1", source_authority="RUNTIME_SECURITY", route_or_detail="/security/grants", implementation_status="PLANNED", sort_order=414, tags=("security", "authorization", "grants")),
+        _p("security.active_context", "Active security execution context", "Security / Trust", priority="P1", source_authority="RUNTIME_SECURITY", route_or_detail="/security/context", implementation_status="PLANNED", sort_order=415, tags=("security", "context")),
+        _p("capability.gate_grants", "Capability gate active grants", "Security / Trust", priority="P1", source_authority="RUNTIME_CAPABILITY_GATE", route_or_detail="/capabilities/gate", implementation_status="PLANNED", sort_order=416, tags=("capabilities", "gate", "grants")),
+        _p("secrets.references", "Encrypted secret references", "Security / Trust", priority="P1", source_authority="RUNTIME_SECRETS", route_or_detail="/secrets/references", implementation_status="PLANNED", sort_order=417, tags=("secrets", "encryption")),
+        _p("execution.processes", "Subprocess execution monitor", "Execution", priority="P1", source_authority="RUNTIME_PROCESS_MANAGER", route_or_detail="/execution/processes", implementation_status="PLANNED", sort_order=418, tags=("execution", "processes", "subprocesses")),
+        _p("workspace.detail", "Workspace instance detail", "Execution", priority="P2", source_authority="RUNTIME_WORKSPACE", route_or_detail="/workspaces/{workspace_id}", implementation_status="PLANNED", sort_order=419, tags=("workspaces", "detail")),
+        _p("orchestration.routing_decisions", "Execution plan routing decisions", "Execution", priority="P1", source_authority="RUNTIME_ORCHESTRATOR", route_or_detail="/orchestration/routing", implementation_status="PLANNED", sort_order=420, tags=("orchestration", "routing", "decisions")),
+        _p("orchestration.execution_plans", "Orchestration execution plans", "Execution", priority="P2", source_authority="RUNTIME_ORCHESTRATOR", route_or_detail="/orchestration/plans", implementation_status="PLANNED", sort_order=421, tags=("orchestration", "plans")),
+        _p("sandbox.policies", "Process sandbox isolation policies", "Infrastructure", priority="P1", source_authority="RUNTIME_SANDBOX", route_or_detail="/sandbox/policies", implementation_status="PLANNED", sort_order=422, tags=("sandbox", "isolation", "policies")),
+        _p("compute.remote_profiles", "Remote compute resource profiles", "Infrastructure", priority="P1", source_authority="RUNTIME_COMPUTE", route_or_detail="/compute/profiles", implementation_status="PLANNED", sort_order=423, tags=("compute", "profiles")),
+        _p("compute.remote_sessions", "Remote compute lease sessions", "Infrastructure", priority="P2", source_authority="RUNTIME_COMPUTE", route_or_detail="/compute/sessions", implementation_status="PLANNED", sort_order=424, tags=("compute", "sessions", "leases")),
+        _p("session.leases", "Active session leases", "Communication", priority="P2", source_authority="RUNTIME_SESSION", route_or_detail="/sessions/leases", implementation_status="PLANNED", sort_order=425, tags=("sessions", "leases")),
+        _p("runtime.generation_fencing", "Runtime generation counter and fencing", "Runtime Identity", priority="P1", source_authority="RUNTIME_CORE", route_or_detail="/runtime/generation", implementation_status="PLANNED", sort_order=426, tags=("generation", "fencing", "safety")),
+        _p("runtime.enrollment", "Instance enrollment lifecycle", "Runtime Identity", priority="P1", source_authority="RUNTIME_IDENTITY", route_or_detail="/identity/enrollment", implementation_status="PLANNED", sort_order=427, tags=("enrollment", "lifecycle")),
+        _p("continuity.mutation_contract", "Repository mutation continuity contract", "Continuity", priority="P1", source_authority="RUNTIME_CONTINUITY", route_or_detail="/continuity/mutation", implementation_status="PLANNED", sort_order=428, tags=("continuity", "mutation", "contract")),
+        _p("filesystem.workspace_service", "Scoped workspace filesystem service", "Infrastructure", priority="P2", source_authority="RUNTIME_FILESYSTEM", route_or_detail="/filesystem/workspace", implementation_status="PLANNED", sort_order=429, tags=("filesystem", "workspace")),
     ]
     return ProjectionRegistry(items)
 
