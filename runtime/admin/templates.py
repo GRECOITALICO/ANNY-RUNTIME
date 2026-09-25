@@ -4,8 +4,28 @@ Dark-mode, responsive, glassmorphism design. No external dependencies.
 All CSS is embedded. No CDN, no framework, no external JS.
 """
 
+import html
+from urllib.parse import urlsplit
+
+from runtime.admin.projections import DEFAULT_NAVIGATION_ITEMS
+
+
+def _escape_html(value) -> str:
+    """Escape backend-fed text before insertion into HTML."""
+    return html.escape("" if value is None else str(value), quote=True)
+
+
+def _safe_href(value) -> str:
+    """Allow only internal paths or explicit HTTP(S) URLs."""
+    raw = "" if value is None else str(value).strip()
+    if raw.startswith("/") and not raw.startswith("//"):
+        return _escape_html(raw)
+    parsed = urlsplit(raw)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return _escape_html(raw)
+    return "#"
+
 COMMON_CSS = """
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
     --bg-primary: #09090b;
@@ -117,6 +137,8 @@ body {
     transition: var(--transition);
     margin: 2px 0;
 }
+
+.nav-link.disabled { opacity: .45; cursor: default; pointer-events: none; }
 
 .nav-link:hover {
     background: var(--bg-glass);
@@ -451,13 +473,53 @@ body {
 }"""
 
 
-def _nav_link(path, icon, label, active_path):
+def _nav_link(path, icon, label, active_path, availability="ACTIVE"):
+    safe_path = _safe_href(path)
+    safe_icon = _escape_html(icon)
+    safe_label = _escape_html(label)
     active = ' active' if path == active_path else ''
-    return f'<a href="{path}" class="nav-link{active}"><span class="nav-icon">{icon}</span><span>{label}</span></a>'
+    if availability == "PLANNED":
+        return (
+            f'<span class="nav-link disabled{active}" aria-disabled="true" '
+            f'title="Projection not available in this Runtime build">'
+            f'<span class="nav-icon">{safe_icon}</span><span>{safe_label}</span></span>'
+        )
+    return f'<a href="{safe_path}" class="nav-link{active}"><span class="nav-icon">{safe_icon}</span><span>{safe_label}</span></a>'
 
 
-def base_layout(title, content, active_path="/", csrf_token=""):
+def _render_navigation(active_path):
+    sections = []
+    current = None
+    for item in DEFAULT_NAVIGATION_ITEMS:
+        if current != item.section:
+            current = item.section
+            sections.append([item])
+        else:
+            sections[-1].append(item)
+
+    rendered = []
+    for items in sections:
+        section = _escape_html(items[0].section)
+        rendered.append(f'<div class="nav-section"><div class="nav-section-label">{section}</div>')
+        for item in items:
+            rendered.append(
+                _nav_link(
+                    item.path,
+                    item.icon,
+                    item.label,
+                    active_path,
+                    availability=item.availability,
+                )
+            )
+        rendered.append('</div>')
+    return ''.join(rendered)
+
+
+def base_layout(title, content, active_path="/", csrf_token="", projection_id=None):
     """Wrap content in the full admin shell layout."""
+    safe_title = _escape_html(title)
+    safe_csrf = _escape_html(csrf_token)
+    projection_attr = f' data-projection-id="{_escape_html(projection_id)}"' if projection_id else ""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -465,7 +527,7 @@ def base_layout(title, content, active_path="/", csrf_token=""):
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
-    <title>{title} — ANNY Runtime</title>
+    <title>{safe_title} — ANNY Runtime</title>
     <style>{COMMON_CSS}</style>
 </head>
 <body>
@@ -477,71 +539,15 @@ def base_layout(title, content, active_path="/", csrf_token=""):
             
             <div class="version" style="margin-top:8px;">Runtime: ANNY-RUNTIME</div>
         </div>
-        <div class="nav-section">
-            <div class="nav-section-label">OVERVIEW</div>
-            {_nav_link('/', '⬡', 'Dashboard', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">UNIVERSE</div>
-            {_nav_link('/universe/organization', '❖', 'Organization', active_path)}
-            {_nav_link('/universe/projects', '◫', 'Projects', active_path)}
-            {_nav_link('/universe/repositories', '⊙', 'Repositories', active_path)}
-            {_nav_link('/universe/resources', '◈', 'Resources', active_path)}
-            {_nav_link('/universe/dependencies', '⋈', 'Dependencies', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">EXECUTION</div>
-            {_nav_link('/execution/missions', '🎯', 'Missions', active_path)}
-            {_nav_link('/execution/tasks', '✓', 'Tasks', active_path)}
-            {_nav_link('/execution/workers', '⚙', 'Workers', active_path)}
-            {_nav_link('/execution/executions', '▶', 'Executions', active_path)}
-            {_nav_link('/execution/workspaces', '📁', 'Workspaces', active_path)}
-            {_nav_link('/execution/results', '📊', 'Results', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">INTELLIGENCE</div>
-            {_nav_link('/intelligence/models', '🧠', 'Models', active_path)}
-            {_nav_link('/intelligence/capabilities', '⚡', 'Capabilities', active_path)}
-            {_nav_link('/intelligence/executors', '🛠', 'Executors', active_path)}
-            {_nav_link('/intelligence/performance', '📈', 'Performance', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">INFRASTRUCTURE</div>
-            {_nav_link('/infrastructure/runtime', '🖥', 'Runtime', active_path)}
-            {_nav_link('/infrastructure/github', '🐙', 'GitHub', active_path)}
-            {_nav_link('/infrastructure/fabric', '☁', 'Fabric', active_path)}
-            {_nav_link('/infrastructure/mcp', '🔌', 'MCP', active_path)}
-            {_nav_link('/infrastructure/azure', '🔷', 'Azure', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">TELEMETRY</div>
-            {_nav_link('/telemetry/live', '📡', 'Live Stream', active_path)}
-            {_nav_link('/telemetry/timeline', '⏱', 'Timeline', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">CONTINUITY</div>
-            {_nav_link('/continuity/state', '⏱', 'Current state', active_path)}
-            {_nav_link('/continuity/mission', '🎯', 'Mission', active_path)}
-            {_nav_link('/continuity/task', '✓', 'Task', active_path)}
-            {_nav_link('/continuity/next', '⏭', 'Next action', active_path)}
-            {_nav_link('/continuity/blockers', '🛑', 'Blockers', active_path)}
-            {_nav_link('/continuity/recovery', '⚕', 'Recovery', active_path)}
-        </div>
-        <div class="nav-section">
-            <div class="nav-section-label">AUDIT</div>
-            {_nav_link('/audit/events', '📋', 'Events', active_path)}
-            {_nav_link('/audit/provenance', '🔍', 'Provenance', active_path)}
-            {_nav_link('/audit/evidence', '🛡', 'Evidence', active_path)}
-            {_nav_link('/audit/changes', '📝', 'Changes', active_path)}
-        </div>
+        {_render_navigation(active_path)}
         <div class="sidebar-footer">
             <form method="POST" action="/logout" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{csrf_token}">
+                <input type="hidden" name="csrf_token" value="{safe_csrf}">
                 <button type="submit" class="btn btn-ghost" style="width:100%;">⏻ Logout</button>
             </form>
         </div>
     </nav>
-    <main class="main-content animate-fade-in">
+    <main class="main-content animate-fade-in"{projection_attr}>
         {content}
     </main>
 </div>
@@ -550,14 +556,16 @@ def base_layout(title, content, active_path="/", csrf_token=""):
 
 
 def first_run_page(error=None, csrf_token="", device_flow_available=False):
-    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px;">{error}</div>' if error else ''
+    safe_csrf = _escape_html(csrf_token)
+    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px;">{_escape_html(error)}</div>' if error else ''
+
     device_flow_html = f"""<form method="POST" action="/github/device/init">
-            <input type="hidden" name="csrf_token" value="{csrf_token}">
+            <input type="hidden" name="csrf_token" value="{safe_csrf}">
             <button type="submit" class="btn btn-primary login-btn">CONNECT WITH GITHUB DEVICE FLOW</button>
         </form>""" if device_flow_available else ""
 
     token_html = f"""<form method="POST" action="/github/token" style="margin-top:16px;">
-            <input type="hidden" name="csrf_token" value="{csrf_token}">
+            <input type="hidden" name="csrf_token" value="{safe_csrf}">
             <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">GITHUB ACCESS TOKEN</label>
             <input type="password" name="github_token" id="github_token_input" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
             <button type="submit" class="btn btn-primary login-btn">CONNECT WITH ACCESS TOKEN</button>
@@ -594,6 +602,8 @@ def first_run_page(error=None, csrf_token="", device_flow_available=False):
 </html>"""
 
 def device_flow_page(user_code, verification_uri, csrf_token=""):
+    safe_user_code = _escape_html(user_code)
+    safe_verification_uri = _safe_href(verification_uri)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -610,9 +620,9 @@ def device_flow_page(user_code, verification_uri, csrf_token=""):
         <h2 style="margin-bottom:16px;">GitHub Authorization</h2>
         <p style="color:var(--text-secondary);margin-bottom:24px;">Please enter this code on GitHub to authorize ANNY:</p>
         <div style="font-size:32px; letter-spacing:4px; font-weight:700; margin-bottom:24px; padding:16px; background:var(--bg-secondary); border-radius:8px;">
-            {user_code}
+            {safe_user_code}
         </div>
-        <a href="{verification_uri}" target="_blank" class="btn btn-primary login-btn" style="text-decoration:none; display:block; margin-bottom:24px;">OPEN GITHUB</a>
+        <a href="{safe_verification_uri}" target="_blank" rel="noopener noreferrer" class="btn btn-primary login-btn" style="text-decoration:none; display:block; margin-bottom:24px;">OPEN GITHUB</a>
         <p id="status-text" style="color:var(--text-secondary);font-size:14px;">Waiting for authorization...</p>
     </div>
 </div>
@@ -643,11 +653,13 @@ def device_flow_page(user_code, verification_uri, csrf_token=""):
 </html>"""
 
 def fabric_setup_page(organizations, error=None, csrf_token=""):
-    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px;">{error}</div>' if error else ''
+    safe_csrf = _escape_html(csrf_token)
+    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px;">{_escape_html(error)}</div>' if error else ''
     
     org_options = ""
     for org in organizations:
-        org_options += f'<option value="{org.get("login")}">{org.get("login")}</option>'
+        login = _escape_html(org.get("login", "—"))
+        org_options += f'<option value="{login}">{login}</option>'
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -656,7 +668,7 @@ def fabric_setup_page(organizations, error=None, csrf_token=""):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>Fabric Setup — ANNY Runtime</title>
-    <style>{{COMMON_CSS}}</style>
+    <style>{COMMON_CSS}</style>
 </head>
 <body>
 <div class="login-container">
@@ -665,7 +677,7 @@ def fabric_setup_page(organizations, error=None, csrf_token=""):
         <p style="color:var(--text-secondary);margin-bottom:24px; text-align:center;">Select your organization and Fabric repository.</p>
         {{error_html}}
         <form method="POST" action="/fabric/setup">
-            <input type="hidden" name="csrf_token" value="{{csrf_token}}">
+            <input type="hidden" name="csrf_token" value="{{safe_csrf}}">
             <div style="margin-bottom: 16px;">
                 <label style="display:block; margin-bottom: 8px; font-weight: 600;">Organization</label>
                 <select name="fabric_org" style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary);">
@@ -722,6 +734,8 @@ def reconnect_page(csrf_token=""):
 
 
 def failure_page(reason, csrf_token=""):
+    safe_reason = _escape_html(reason)
+    safe_csrf = _escape_html(csrf_token)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -737,9 +751,9 @@ def failure_page(reason, csrf_token=""):
     <div class="login-card animate-fade-in" style="text-align:center;">
         <h1>ANNY</h1>
         <p style="color:var(--text-primary);font-weight:600;margin-bottom:16px;">GitHub connection failed.</p>
-        <p style="color:var(--text-secondary);margin-bottom:32px;">Reason:<br>{reason}</p>
+        <p style="color:var(--text-secondary);margin-bottom:32px;">Reason:<br>{safe_reason}</p>
         <form method="POST" action="/github/token">
-            <input type="hidden" name="csrf_token" value="{csrf_token}">
+            <input type="hidden" name="csrf_token" value="{safe_csrf}">
             <div style="margin-bottom: 24px; text-align: left;">
                 <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">RECOVERY TOKEN (Admin Only)</label>
                 <input type="password" name="github_token" id="github_token_input" style="width:100%; padding:12px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
@@ -760,13 +774,13 @@ def ready_page(status, csrf_token=""):
     continuity_status = cont.get('status', 'UNKNOWN')
     badge_class = 'badge-success' if continuity_status in ('CONSISTENT', 'READY') else ('badge-warning' if continuity_status == 'DEGRADED' else 'badge-danger')
     
-    mission = cont.get('current_mission', '—')
-    task = cont.get('current_task', '—')
-    next_action = cont.get('next_action', '—')
+    mission = _escape_html(cont.get('current_mission', '—'))
+    task = _escape_html(cont.get('current_task', '—'))
+    next_action = _escape_html(cont.get('next_action', '—'))
     blocker_count = cont.get('blocker_count', 0)
     
     orgs = cont.get('organizations', [])
-    org_name = orgs[0].get('login') if orgs and isinstance(orgs[0], dict) else gh.get('principal', '—')
+    org_name = _escape_html(orgs[0].get('login')) if orgs and isinstance(orgs[0], dict) else _escape_html(gh.get('principal', '—'))
     
     repos = cont.get('repositories', [])
     repo_count = len(repos)
@@ -775,7 +789,7 @@ def ready_page(status, csrf_token=""):
     l2_count = l2_info.get('count', 0) if isinstance(l2_info, dict) else 0
 
     identity = status.get('identity', {}) if isinstance(status, dict) else {}
-    id_str = f"{identity.get('key_type', 'UNKNOWN')} / {identity.get('status', 'UNKNOWN')}"
+    id_str = _escape_html(f"{identity.get('key_type', 'UNKNOWN')} / {identity.get('status', 'UNKNOWN')}")
 
     return base_layout("Dashboard", f"""
         <div class="page-header">
@@ -787,78 +801,81 @@ def ready_page(status, csrf_token=""):
             <!-- INFRASTRUCTURE -->
             <a href="/infrastructure/runtime" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Runtime</div>
-                <div style="font-size:22px; font-weight:700;"><span class="badge badge-success">{cont.get('runtime_status', 'CONNECTED')}</span></div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge badge-success">{_escape_html(cont.get('runtime_status', 'UNKNOWN'))}</span></div>
             </a>
-            <a href="/infrastructure/github" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+            <a href="/github" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">GitHub</div>
-                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if gh.get('connected') else 'badge-danger' }">{gh.get('auth_status', 'ERROR')}</span></div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if gh.get('connected') else 'badge-danger' }">{_escape_html(gh.get('auth_status', 'UNKNOWN'))}</span></div>
             </a>
-            <a href="/infrastructure/fabric" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+            <a href="/fabric" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Fabric</div>
-                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if status.get('fabric_connected') else 'badge-danger' }">{ 'CONNECTED' if status.get('fabric_connected') else 'ERROR' }</span></div>
+                <div style="font-size:22px; font-weight:700;"><span class="badge { 'badge-success' if status.get('fabric_connected') else 'badge-danger' }">{_escape_html('CONNECTED' if status.get('fabric_connected') else 'ERROR')}</span></div>
             </a>
-            <a href="/infrastructure/mcp" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+            <div class="card" style="padding:20px;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">MCP Nodes</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('mcp_count', 0)}</div>
-            </a>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('mcp_count', 'UNKNOWN'))}</div>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Route not yet implemented.</div>
+            </div>
 
             <!-- UNIVERSE -->
             <a href="/universe/projects" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Projects</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('project_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('project_count', 0))}</div>
             </a>
             <a href="/universe/repositories" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Repositories</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{repo_count}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(repo_count)}</div>
             </a>
             <a href="/universe/resources" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Fabric Resources</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-emerald);">{status.get('resource_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-emerald);">{_escape_html(status.get('resource_count', 0))}</div>
             </a>
 
             <!-- INTELLIGENCE -->
-            <a href="/intelligence/models" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+            <a href="/models" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Models</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('model_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('model_count', 0))}</div>
             </a>
             <a href="/intelligence/capabilities" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Capabilities</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('capability_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('capability_count', 0))}</div>
             </a>
 
             <!-- EXECUTION -->
             <a href="/execution/workers" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Workers</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('worker_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('worker_count', 0))}</div>
             </a>
             <a href="/execution/tasks" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Pending Tasks</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{status.get('task_count', 0)}</div>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-indigo);">{_escape_html(status.get('task_count', 0))}</div>
             </a>
-            <a href="/continuity/blockers" style="text-decoration:none;" class="card" style="padding:20px; cursor:pointer;">
+            <div class="card" style="padding:20px;">
                 <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Blockers</div>
-                <div style="font-size:22px; font-weight:700; color:var(--accent-amber);">{blocker_count}</div>
-            </a>
+                <div style="font-size:22px; font-weight:700; color:var(--accent-amber);">{_escape_html(blocker_count)}</div>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:4px;">Continuity blocker route is planned.</div>
+            </div>
         </div>
 
         <div class="detail-panel" style="margin-bottom: 24px;">
             <h3 style="font-size:15px; margin-bottom:16px; color:var(--accent-indigo);">Canonical State Overview</h3>
             <div class="detail-row"><span class="detail-label">Runtime Identity</span><span class="detail-value">{id_str}</span></div>
-            <div class="detail-row"><span class="detail-label">GitHub Principal</span><span class="detail-value">{gh.get('principal', '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">GitHub Principal</span><span class="detail-value">{_escape_html(gh.get('principal', '—'))}</span></div>
             <div class="detail-row"><span class="detail-label">Organizations</span><span class="detail-value">{org_name}</span></div>
             <div class="detail-row"><span class="detail-label">Current Mission</span><span class="detail-value" style="font-weight:600; color:var(--accent-emerald);">{mission}</span></div>
         </div>
-    """, "/", csrf_token)
+    """, "/", csrf_token, "control.top_level_state")
 
 
 
 def github_page(gh_status, error=None, csrf_token=""):
     """Render the GitHub status page."""
+    safe_csrf = _escape_html(csrf_token)
     badge_class = 'badge-success' if gh_status.get('connected') else 'badge-danger'
-    status_text = 'CONNECTED' if gh_status.get('connected') else gh_status.get('auth_status', 'UNKNOWN')
-    scopes = ', '.join(gh_status.get('scopes', [])) or '—'
+    status_text = _escape_html('CONNECTED' if gh_status.get('connected') else gh_status.get('auth_status', 'UNKNOWN'))
+    scopes = _escape_html(', '.join(gh_status.get('scopes', [])) or '—')
 
-    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px; border: 1px solid rgba(235,87,87,0.3);">{error}</div>' if error else ''
+    error_html = f'<div style="color:var(--accent-ruby); margin-bottom:16px; font-size:14px; padding:12px; background:rgba(235,87,87,0.1); border-radius:4px; border: 1px solid rgba(235,87,87,0.3);">{_escape_html(error)}</div>' if error else ''
 
     input_form_html = ""
     if not gh_status.get('connected'):
@@ -867,7 +884,7 @@ def github_page(gh_status, error=None, csrf_token=""):
             <h3 style="margin-top:0; margin-bottom:16px; font-size:14px; color:var(--text-primary);">Connect GitHub</h3>
             {error_html}
             <form method="POST" action="/github/token">
-                <input type="hidden" name="csrf_token" value="{csrf_token}">
+                <input type="hidden" name="csrf_token" value="{_escape_html(csrf_token)}">
                 <div style="margin-bottom: 16px;">
                     <label for="github_token_input" style="display:block; margin-bottom:8px; color:var(--text-secondary); font-size:12px; font-weight:600; letter-spacing:1px;">RECOVERY TOKEN (Admin Only)</label>
                     <input type="password" name="github_token" id="github_token_input" style="width:100%; max-width:400px; padding:10px; border:1px solid var(--border-color); border-radius:4px; background:var(--bg-secondary); color:var(--text-primary); font-family:var(--font-mono); font-size:14px;" required autocomplete="off" spellcheck="false">
@@ -887,19 +904,19 @@ def github_page(gh_status, error=None, csrf_token=""):
 
         <div class="detail-panel">
             <div class="detail-row"><span class="detail-label">Status</span><span class="badge {badge_class}">{status_text}</span></div>
-            <div class="detail-row"><span class="detail-label">Principal</span><span class="detail-value">{gh_status.get('principal', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Token Status</span><span class="detail-value">{gh_status.get('token_status', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Token Expiry</span><span class="detail-value">{gh_status.get('token_expiry', '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Principal</span><span class="detail-value">{_escape_html(gh_status.get('principal', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Token Status</span><span class="detail-value">{_escape_html(gh_status.get('token_status', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Token Expiry</span><span class="detail-value">{_escape_html(gh_status.get('token_expiry', '—'))}</span></div>
             <div class="detail-row"><span class="detail-label">Scopes</span><span class="detail-value">{scopes}</span></div>
-            <div class="detail-row"><span class="detail-label">Last Validation</span><span class="detail-value">{gh_status.get('last_validation', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Last Failure</span><span class="detail-value">{gh_status.get('last_failure', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Failure Reason</span><span class="detail-value">{gh_status.get('last_failure_reason', '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Last Validation</span><span class="detail-value">{_escape_html(gh_status.get('last_validation', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Last Failure</span><span class="detail-value">{_escape_html(gh_status.get('last_failure', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Failure Reason</span><span class="detail-value">{_escape_html(gh_status.get('last_failure_reason', '—'))}</span></div>
         </div>
 
         <div class="btn-group">
-            <form method="POST" action="/github/disconnect"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-danger" type="submit">✕ Disconnect</button></form>
+            <form method="POST" action="/github/disconnect"><input type="hidden" name="csrf_token" value="{safe_csrf}"><button class="btn btn-danger" type="submit">✕ Disconnect</button></form>
         </div>
-    """, "/github", csrf_token)
+    """, "/github", csrf_token, "github.connection")
 
 
 def fabric_page(fab_status, csrf_token=""):
@@ -914,13 +931,13 @@ def fabric_page(fab_status, csrf_token=""):
             <div class="detail-row"><span class="detail-label">Connection</span><span class="badge {badge}">{'CONNECTED' if fab_status.get('connected') else 'DISCONNECTED'}</span></div>
             <div class="detail-row"><span class="detail-label">Fabric Resources</span><span class="detail-value">{fab_status.get('resource_count', '0')}</span></div>
             <div class="detail-row"><span class="detail-label">Provenance</span><span class="badge badge-success">HEALTHY</span></div>
-            <div class="detail-row"><span class="detail-label">Tenant</span><span class="detail-value">{fab_status.get('tenant', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">ANNY Instance</span><span class="detail-value">{fab_status.get('anny_instance', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Runtime Registration</span><span class="detail-value">{fab_status.get('runtime_registration', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Last Heartbeat</span><span class="detail-value">{fab_status.get('last_heartbeat', '—')}</span></div>
-            <div class="detail-row"><span class="detail-label">Last Reconciliation</span><span class="detail-value">{fab_status.get('last_reconciliation', '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Tenant</span><span class="detail-value">{_escape_html(fab_status.get('tenant', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">ANNY Instance</span><span class="detail-value">{_escape_html(fab_status.get('anny_instance', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Runtime Registration</span><span class="detail-value">{_escape_html(fab_status.get('runtime_registration', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Last Heartbeat</span><span class="detail-value">{_escape_html(fab_status.get('last_heartbeat', '—'))}</span></div>
+            <div class="detail-row"><span class="detail-label">Last Reconciliation</span><span class="detail-value">{_escape_html(fab_status.get('last_reconciliation', '—'))}</span></div>
         </div>
-    """, "/fabric", csrf_token)
+    """, "/fabric", csrf_token, "fabric.connection")
 
 
 def sessions_page(sessions, csrf_token=""):
@@ -929,13 +946,13 @@ def sessions_page(sessions, csrf_token=""):
     for s in sessions:
         badge = 'badge-success' if s.get('status') == 'ACTIVE' else 'badge-muted'
         rows += f"""<tr>
-            <td class="mono">{s.get('session_id', '—')[:16]}...</td>
-            <td>{s.get('provider', '—')}</td>
-            <td>{s.get('principal', '—')}</td>
-            <td>{s.get('tenant', '—')}</td>
-            <td>{s.get('created_at', '—')[:19]}</td>
-            <td>{s.get('expires_at', '—')[:19]}</td>
-            <td><span class="badge {badge}">{s.get('status', '—')}</span></td>
+            <td class="mono">{_escape_html(s.get('session_id', '—')[:16])}...</td>
+            <td>{_escape_html(s.get('provider', '—'))}</td>
+            <td>{_escape_html(s.get('principal', '—'))}</td>
+            <td>{_escape_html(s.get('tenant', '—'))}</td>
+            <td>{_escape_html(s.get('created_at', '—')[:19])}</td>
+            <td>{_escape_html(s.get('expires_at', '—')[:19])}</td>
+            <td><span class="badge {badge}">{_escape_html(s.get('status', '—'))}</span></td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">No active sessions</td></tr>'
@@ -951,7 +968,7 @@ def sessions_page(sessions, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/sessions", csrf_token)
+    """, "/sessions", csrf_token, "communication.sessions")
 
 
 def operations_page(operations, csrf_token=""):
@@ -959,13 +976,13 @@ def operations_page(operations, csrf_token=""):
     rows = ""
     for op in operations:
         rows += f"""<tr>
-            <td class="mono">{op.get('operation_id', '—')}</td>
-            <td>{op.get('actor', '—')}</td>
-            <td>{op.get('tenant', '—')}</td>
-            <td class="mono">{op.get('workspace', '—')[:20]}</td>
-            <td><span class="badge badge-info">{op.get('state', '—')}</span></td>
-            <td>{op.get('started_at', '—')[:19]}</td>
-            <td>{op.get('runtime_generation', '—')}</td>
+            <td class="mono">{_escape_html(op.get('operation_id', '—'))}</td>
+            <td>{_escape_html(op.get('actor', '—'))}</td>
+            <td>{_escape_html(op.get('tenant', '—'))}</td>
+            <td class="mono">{_escape_html(op.get('workspace', '—')[:20])}</td>
+            <td><span class="badge badge-info">{_escape_html(op.get('state', '—'))}</span></td>
+            <td>{_escape_html(op.get('started_at', '—')[:19])}</td>
+            <td>{_escape_html(op.get('runtime_generation', '—'))}</td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">No operations</td></tr>'
@@ -981,7 +998,7 @@ def operations_page(operations, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/operations", csrf_token)
+    """, "/operations", csrf_token, "admin.operations")
 
 
 def receipts_page(receipts, csrf_token=""):
@@ -990,12 +1007,12 @@ def receipts_page(receipts, csrf_token=""):
     for r in receipts:
         badge = 'badge-success' if r.get('status') == 'SUCCESS' else 'badge-danger'
         rows += f"""<tr>
-            <td class="mono">{r.get('receipt_id', '—')[:16]}</td>
-            <td class="mono">{r.get('operation', '—')}</td>
-            <td>{r.get('tool', '—')}</td>
-            <td><span class="badge {badge}">{r.get('status', '—')}</span></td>
-            <td>{r.get('timestamp', '—')[:19]}</td>
-            <td>{r.get('duration_ms', '—')}ms</td>
+            <td class="mono">{_escape_html(r.get('receipt_id', '—')[:16])}</td>
+            <td class="mono">{_escape_html(r.get('operation', '—'))}</td>
+            <td>{_escape_html(r.get('tool', '—'))}</td>
+            <td><span class="badge {badge}">{_escape_html(r.get('status', '—'))}</span></td>
+            <td>{_escape_html(r.get('timestamp', '—')[:19])}</td>
+            <td>{_escape_html(r.get('duration_ms', '—'))}ms</td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px;">No receipts</td></tr>'
@@ -1011,7 +1028,7 @@ def receipts_page(receipts, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/receipts", csrf_token)
+    """, "/receipts", csrf_token, "admin.receipts")
 
 
 def doctor_page(diagnostics, csrf_token=""):
@@ -1021,8 +1038,8 @@ def doctor_page(diagnostics, csrf_token=""):
         badge = 'badge-success' if check.get('status') == 'OK' else 'badge-danger'
         checks_html += f"""
         <div class="detail-row">
-            <span class="detail-label">{check.get('name', '—')}</span>
-            <span class="badge {badge}">{check.get('status', '—')}</span>
+            <span class="detail-label">{_escape_html(check.get('name', '—'))}</span>
+            <span class="badge {badge}">{_escape_html(check.get('status', '—'))}</span>
         </div>"""
     if not checks_html:
         checks_html = '<div class="detail-row"><span class="detail-label">No diagnostics available</span><span class="badge badge-muted">—</span></div>'
@@ -1036,7 +1053,42 @@ def doctor_page(diagnostics, csrf_token=""):
         <div class="btn-group">
             <form method="POST" action="/admin/diagnostics"><input type="hidden" name="csrf_token" value="{csrf_token}"><button class="btn btn-primary" type="submit">✚ Run Diagnostics</button></form>
         </div>
-    """, "/doctor", csrf_token)
+    """, "/doctor", csrf_token, "admin.doctor")
+
+
+def execution_missions_page(continuity, csrf_token=""):
+    """Render the canonical current mission/task/next-action projection."""
+    mission = _escape_html(getattr(continuity, "current_mission", None) or "UNKNOWN")
+    task = _escape_html(getattr(continuity, "current_task", None) or "UNKNOWN")
+    next_action = _escape_html(getattr(continuity, "next_action", None) or "UNKNOWN")
+    status = _escape_html(getattr(continuity, "status", None) or "UNKNOWN")
+    recon = _escape_html(getattr(continuity, "reconciliation_status", None) or "UNKNOWN")
+    blocker_count = getattr(continuity, "blocker_count", 0) or 0
+    try:
+        blocker_count = int(blocker_count)
+    except (TypeError, ValueError):
+        blocker_count = 0
+
+    return base_layout("Missions", f"""
+        <div class="page-header">
+            <h2>Current Mission</h2>
+            <p>Canonical mission projection from the current Runtime continuity boundary.</p>
+        </div>
+        <div class="kv-grid" style="margin-bottom:24px;">
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">MISSION</span><span class="detail-value mono">{mission}</span></div></div>
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">TASK</span><span class="detail-value mono">{task}</span></div></div>
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">NEXT ACTION</span><span class="detail-value mono">{next_action}</span></div></div>
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">BLOCKERS</span><span class="detail-value mono">{_escape_html(blocker_count)}</span></div></div>
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">CONTINUITY STATUS</span><span class="badge badge-info">{status}</span></div></div>
+            <div class="detail-panel"><div class="detail-row"><span class="detail-label">RECONCILIATION</span><span class="badge badge-info">{recon}</span></div></div>
+        </div>
+        <div class="detail-panel">
+            <h3 style="margin-top:0;">Truth Boundary</h3>
+            <p style="color:var(--text-secondary);margin-bottom:0;">
+                Values are presented only when the current continuity projection observes them; missing values remain UNKNOWN.
+            </p>
+        </div>
+    """, "/execution/missions", csrf_token, "execution.missions")
 
 
 def executions_page(executions, csrf_token=""):
@@ -1049,13 +1101,13 @@ def executions_page(executions, csrf_token=""):
         elif e.status.value == 'RUNNING': badge_cls = 'badge-info'
         
         rows += f"""<tr>
-            <td class="mono">{e.execution_id[:16]}...</td>
-            <td class="mono">{e.task_id[:16]}...</td>
-            <td>{e.capability_id}</td>
-            <td><span class="badge {badge_cls}">{e.status.value}</span></td>
-            <td>{e.started_at.isoformat()[:19] if e.started_at else '—'}</td>
-            <td>{e.completed_at.isoformat()[:19] if e.completed_at else '—'}</td>
-            <td>{e.duration_ms if e.duration_ms is not None else '—'}</td>
+            <td class="mono">{_escape_html(e.execution_id[:16])}...</td>
+            <td class="mono">{_escape_html(e.task_id[:16])}...</td>
+            <td>{_escape_html(e.capability_id)}</td>
+            <td><span class="badge {badge_cls}">{_escape_html(e.status.value)}</span></td>
+            <td>{_escape_html(e.started_at.isoformat()[:19] if e.started_at else '—')}</td>
+            <td>{_escape_html(e.completed_at.isoformat()[:19] if e.completed_at else '—')}</td>
+            <td>{_escape_html(e.duration_ms if e.duration_ms is not None else '—')}</td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:32px;">No executions</td></tr>'
@@ -1071,7 +1123,7 @@ def executions_page(executions, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/executions", csrf_token)
+    """, "/execution/executions", csrf_token, "execution.execution_runs")
 
 
 def capabilities_page(capabilities, csrf_token=""):
@@ -1080,12 +1132,12 @@ def capabilities_page(capabilities, csrf_token=""):
         badge_cls = 'badge-success' if c.enabled else 'badge-danger'
         inf_badge = 'badge-warning' if c.inference_required else 'badge-muted'
         rows += f"""<tr>
-            <td class="mono">{c.capability_id}</td>
-            <td>{c.name}</td>
+            <td class="mono">{_escape_html(c.capability_id)}</td>
+            <td>{_escape_html(c.name)}</td>
             <td><span class="badge {inf_badge}">{"Yes" if c.inference_required else "No"}</span></td>
-            <td>{c.preferred_executor.value if c.preferred_executor else '—'}</td>
+            <td>{_escape_html(c.preferred_executor.value if c.preferred_executor else '—')}</td>
             <td><span class="badge {badge_cls}">{"ENABLED" if c.enabled else "DISABLED"}</span></td>
-            <td>{c.risk_level}</td>
+            <td>{_escape_html(c.risk_level)}</td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px;">No capabilities registered</td></tr>'
@@ -1101,7 +1153,7 @@ def capabilities_page(capabilities, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/capabilities", csrf_token)
+    """, "/capabilities", csrf_token, "intelligence.capabilities")
 
 
 def executors_page(executors, csrf_token=""):
@@ -1123,7 +1175,7 @@ def executors_page(executors, csrf_token=""):
                 </tbody>
             </table>
         </div>
-    """, "/executors", csrf_token)
+    """, "/executors", csrf_token, "intelligence.executors_view")
 
 
 def policies_page(policy, csrf_token=""):
@@ -1137,9 +1189,9 @@ def policies_page(policy, csrf_token=""):
         <div class="detail-panel">
             <div class="detail-row"><span class="detail-label">LLM Executors Allowed</span><span class="badge {'badge-success' if allow_llm else 'badge-danger'}">{'YES' if allow_llm else 'NO'}</span></div>
             <div class="detail-row"><span class="detail-label">Strict Isolation Enforced</span><span class="badge {'badge-success' if isolation else 'badge-danger'}">{'YES' if isolation else 'NO'}</span></div>
-            <div class="detail-row"><span class="detail-label">Active Policy Version</span><span class="detail-value">{policy.version if policy else 'UNKNOWN'}</span></div>
+            <div class="detail-row"><span class="detail-label">Active Policy Version</span><span class="detail-value">{_escape_html(policy.version if policy else 'UNKNOWN')}</span></div>
         </div>
-    """, "/policies", csrf_token)
+    """, "/policies", csrf_token, "admin.policies")
 
 
 def workers_page(workers, csrf_token=""):
@@ -1147,12 +1199,12 @@ def workers_page(workers, csrf_token=""):
     for w in workers:
         state_badge = 'badge-success' if w.state.value == 'SUCCEEDED' else 'badge-danger' if w.state.value in ('FAILED', 'TIMED_OUT', 'LIMIT_EXCEEDED') else 'badge-warning'
         rows += f"""<tr>
-            <td class="mono"><a href="/workers/{w.worker_id}">{w.worker_id}</a></td>
-            <td class="mono">{w.execution_id}</td>
-            <td class="mono">{w.capability_id}</td>
-            <td>{w.executor_type}</td>
-            <td><span class="badge {state_badge}">{w.state.value}</span></td>
-            <td>{w.created_at.isoformat()}</td>
+            <td class="mono"><a href="{_safe_href('/workers/' + str(w.worker_id))}">{_escape_html(w.worker_id)}</a></td>
+            <td class="mono">{_escape_html(w.execution_id)}</td>
+            <td class="mono">{_escape_html(w.capability_id)}</td>
+            <td>{_escape_html(w.executor_type)}</td>
+            <td><span class="badge {state_badge}">{_escape_html(w.state.value)}</span></td>
+            <td>{_escape_html(w.created_at.isoformat())}</td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:32px;">No active workers</td></tr>'
@@ -1168,7 +1220,7 @@ def workers_page(workers, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/workers", csrf_token)
+    """, "/workers", csrf_token, "execution.workers")
 
 def worker_detail_page(w, csrf_token=""):
     state_badge = 'badge-success' if w.state.value == 'SUCCEEDED' else 'badge-danger' if w.state.value in ('FAILED', 'TIMED_OUT', 'LIMIT_EXCEEDED') else 'badge-warning'
@@ -1179,26 +1231,26 @@ def worker_detail_page(w, csrf_token=""):
 
     return base_layout(f"Worker {w.worker_id}", f"""
         <div class="page-header">
-            <h2>Worker Detail: <span class="mono">{w.worker_id}</span></h2>
+            <h2>Worker Detail: <span class="mono">{_escape_html(w.worker_id)}</span></h2>
         </div>
         <div class="detail-panel">
-            <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{w.state.value}</span></div>
-            <div class="detail-row"><span class="detail-label">Execution ID</span><span class="mono">{w.execution_id}</span></div>
-            <div class="detail-row"><span class="detail-label">Task ID</span><span class="mono">{w.task_id}</span></div>
-            <div class="detail-row"><span class="detail-label">Capability</span><span class="mono">{w.capability_id}</span></div>
-            <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{w.executor_type}</span></div>
-            <div class="detail-row"><span class="detail-label">Executor ID</span><span class="detail-value">{w.executor_id}</span></div>
-            <div class="detail-row"><span class="detail-label">Model ID</span><span class="detail-value">{w.model_id or '—'}</span></div>
-            <div class="detail-row"><span class="detail-label">Created At</span><span class="detail-value">{w.created_at.isoformat()}</span></div>
-            <div class="detail-row"><span class="detail-label">Started At</span><span class="detail-value">{w.started_at.isoformat() if w.started_at else '—'}</span></div>
-            <div class="detail-row"><span class="detail-label">Finished At</span><span class="detail-value">{w.finished_at.isoformat() if w.finished_at else '—'}</span></div>
-            <div class="detail-row"><span class="detail-label">Duration</span><span class="detail-value">{duration}</span></div>
-            <div class="detail-row"><span class="detail-label">Workspace ID</span><span class="mono">{w.workspace_id}</span></div>
-            <div class="detail-row"><span class="detail-label">Network Policy</span><span class="detail-value">{w.network_policy}</span></div>
-            <div class="detail-row"><span class="detail-label">Filesystem Policy</span><span class="detail-value">{w.filesystem_policy}</span></div>
-            <div class="detail-row"><span class="detail-label">Resource Limits</span><span class="detail-value">{w.resource_limits}</span></div>
+            <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{_escape_html(w.state.value)}</span></div>
+            <div class="detail-row"><span class="detail-label">Execution ID</span><span class="mono">{_escape_html(w.execution_id)}</span></div>
+            <div class="detail-row"><span class="detail-label">Task ID</span><span class="mono">{_escape_html(w.task_id)}</span></div>
+            <div class="detail-row"><span class="detail-label">Capability</span><span class="mono">{_escape_html(w.capability_id)}</span></div>
+            <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{_escape_html(w.executor_type)}</span></div>
+            <div class="detail-row"><span class="detail-label">Executor ID</span><span class="detail-value">{_escape_html(w.executor_id)}</span></div>
+            <div class="detail-row"><span class="detail-label">Model ID</span><span class="detail-value">{_escape_html(w.model_id or '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Created At</span><span class="detail-value">{_escape_html(w.created_at.isoformat())}</span></div>
+            <div class="detail-row"><span class="detail-label">Started At</span><span class="detail-value">{_escape_html(w.started_at.isoformat() if w.started_at else '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Finished At</span><span class="detail-value">{_escape_html(w.finished_at.isoformat() if w.finished_at else '—')}</span></div>
+            <div class="detail-row"><span class="detail-label">Duration</span><span class="detail-value">{_escape_html(duration)}</span></div>
+            <div class="detail-row"><span class="detail-label">Workspace ID</span><span class="mono">{_escape_html(w.workspace_id)}</span></div>
+            <div class="detail-row"><span class="detail-label">Network Policy</span><span class="detail-value">{_escape_html(w.network_policy)}</span></div>
+            <div class="detail-row"><span class="detail-label">Filesystem Policy</span><span class="detail-value">{_escape_html(w.filesystem_policy)}</span></div>
+            <div class="detail-row"><span class="detail-label">Resource Limits</span><span class="detail-value">{_escape_html(w.resource_limits)}</span></div>
         </div>
-    """, "/workers", csrf_token)
+    """, "/workers", csrf_token, "execution.worker_detail")
 
 
 def models_page(models, csrf_token=""):
@@ -1206,11 +1258,11 @@ def models_page(models, csrf_token=""):
     for m in models:
         badge_cls = 'badge-success' if m.state.value in ('AVAILABLE', 'REGISTERED') else 'badge-danger'
         rows += f"""<tr>
-            <td class="mono"><a href="/models/{m.model_id}">{m.model_id}</a></td>
-            <td>{m.model_name}</td>
-            <td>{m.provider}</td>
-            <td>{m.version}</td>
-            <td><span class="badge {badge_cls}">{m.state.value}</span></td>
+            <td class="mono"><a href="{_safe_href('/models/' + str(m.model_id))}">{_escape_html(m.model_id)}</a></td>
+            <td>{_escape_html(m.model_name)}</td>
+            <td>{_escape_html(m.provider)}</td>
+            <td>{_escape_html(m.version)}</td>
+            <td><span class="badge {badge_cls}">{_escape_html(m.state.value)}</span></td>
         </tr>"""
     if not rows:
         rows = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:32px;">No models registered</td></tr>'
@@ -1226,7 +1278,7 @@ def models_page(models, csrf_token=""):
                 <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/models", csrf_token)
+    """, "/models", csrf_token, "intelligence.models")
 
 def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
     state_badge = 'badge-success' if model.state.value in ('AVAILABLE', 'REGISTERED') else 'badge-danger'
@@ -1235,9 +1287,9 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
     for b in bindings:
         pref = 'badge-info' if b.preferred else 'badge-muted'
         bindings_rows += f"""<tr>
-            <td class="mono">{b.capability_id}</td>
+            <td class="mono">{_escape_html(b.capability_id)}</td>
             <td><span class="badge {pref}">{"Yes" if b.preferred else "No"}</span></td>
-            <td>{b.authorization}</td>
+            <td>{_escape_html(b.authorization)}</td>
         </tr>"""
     if not bindings_rows:
         bindings_rows = '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:16px;">No capabilities bound</td></tr>'
@@ -1245,35 +1297,35 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
     hw_info = ""
     if hw_profile:
         hw_info = f"""
-            <div class="detail-row"><span class="detail-label">Hardware Type</span><span class="detail-value">{hw_profile.hardware_type}</span></div>
-            <div class="detail-row"><span class="detail-label">VRAM MB</span><span class="detail-value">{hw_profile.vram_mb}</span></div>
-            <div class="detail-row"><span class="detail-label">RAM MB</span><span class="detail-value">{hw_profile.ram_mb}</span></div>
-            <div class="detail-row"><span class="detail-label">Compute Class</span><span class="detail-value">{hw_profile.compute_class}</span></div>
+            <div class="detail-row"><span class="detail-label">Hardware Type</span><span class="detail-value">{_escape_html(hw_profile.hardware_type)}</span></div>
+            <div class="detail-row"><span class="detail-label">VRAM MB</span><span class="detail-value">{_escape_html(hw_profile.vram_mb)}</span></div>
+            <div class="detail-row"><span class="detail-label">RAM MB</span><span class="detail-value">{_escape_html(hw_profile.ram_mb)}</span></div>
+            <div class="detail-row"><span class="detail-label">Compute Class</span><span class="detail-value">{_escape_html(hw_profile.compute_class)}</span></div>
         """
         
     perf_info = ""
     if perf_profile:
         perf_info = f"""
-            <div class="detail-row"><span class="detail-label">Context Window Size</span><span class="detail-value">{perf_profile.context_window_size}</span></div>
-            <div class="detail-row"><span class="detail-label">Max Output Tokens</span><span class="detail-value">{perf_profile.max_output_tokens}</span></div>
-            <div class="detail-row"><span class="detail-label">Avg Tokens/s</span><span class="detail-value">{perf_profile.avg_tokens_per_second}</span></div>
-            <div class="detail-row"><span class="detail-label">Cold Start Time (ms)</span><span class="detail-value">{perf_profile.cold_start_time_ms}</span></div>
-            <div class="detail-row"><span class="detail-label">Cost per 1k</span><span class="detail-value">{perf_profile.cost_per_1k}</span></div>
+            <div class="detail-row"><span class="detail-label">Context Window Size</span><span class="detail-value">{_escape_html(perf_profile.context_window_size)}</span></div>
+            <div class="detail-row"><span class="detail-label">Max Output Tokens</span><span class="detail-value">{_escape_html(perf_profile.max_output_tokens)}</span></div>
+            <div class="detail-row"><span class="detail-label">Avg Tokens/s</span><span class="detail-value">{_escape_html(perf_profile.avg_tokens_per_second)}</span></div>
+            <div class="detail-row"><span class="detail-label">Cold Start Time (ms)</span><span class="detail-value">{_escape_html(perf_profile.cold_start_time_ms)}</span></div>
+            <div class="detail-row"><span class="detail-label">Cost per 1k</span><span class="detail-value">{_escape_html(perf_profile.cost_per_1k)}</span></div>
         """
 
     return base_layout(f"Model {model.model_id}", f"""
         <div class="page-header">
-            <h2>Model Detail: <span class="mono">{model.model_id}</span></h2>
+            <h2>Model Detail: <span class="mono">{_escape_html(model.model_id)}</span></h2>
         </div>
         <div class="detail-panel">
             <h3 style="font-size:14px; margin-bottom:12px; color:var(--text-primary);">Definition</h3>
-            <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{model.state.value}</span></div>
-            <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">{model.model_name}</span></div>
-            <div class="detail-row"><span class="detail-label">Provider</span><span class="detail-value">{model.provider}</span></div>
-            <div class="detail-row"><span class="detail-label">Version</span><span class="detail-value">{model.version}</span></div>
-            <div class="detail-row"><span class="detail-label">Location Type</span><span class="detail-value">{model.location_type}</span></div>
-            <div class="detail-row"><span class="detail-label">Path/URI</span><span class="mono">{model.path_or_uri}</span></div>
-            <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{model.executor_type}</span></div>
+            <div class="detail-row"><span class="detail-label">State</span><span class="badge {state_badge}">{_escape_html(model.state.value)}</span></div>
+            <div class="detail-row"><span class="detail-label">Name</span><span class="detail-value">{_escape_html(model.model_name)}</span></div>
+            <div class="detail-row"><span class="detail-label">Provider</span><span class="detail-value">{_escape_html(model.provider)}</span></div>
+            <div class="detail-row"><span class="detail-label">Version</span><span class="detail-value">{_escape_html(model.version)}</span></div>
+            <div class="detail-row"><span class="detail-label">Location Type</span><span class="detail-value">{_escape_html(model.location_type)}</span></div>
+            <div class="detail-row"><span class="detail-label">Path/URI</span><span class="mono">{_escape_html(model.path_or_uri)}</span></div>
+            <div class="detail-row"><span class="detail-label">Executor Type</span><span class="detail-value">{_escape_html(model.executor_type)}</span></div>
         </div>
         
         <div class="detail-panel">
@@ -1293,18 +1345,18 @@ def model_detail_page(model, bindings, hw_profile, perf_profile, csrf_token=""):
                 <tbody>{bindings_rows}</tbody>
             </table>
         </div>
-    """, "/models", csrf_token)
+    """, "/models", csrf_token, "intelligence.model_detail")
 
 
 # New Templates for Control Plane Universe 001
 
 def _render_empty_state(message="No data available."):
-    return f'<div style="padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px;">{message}</div>'
+    return f'<div style="padding: 40px; text-align: center; color: var(--text-muted); font-size: 14px;">{_escape_html(message)}</div>'
 
 def universe_accounts_page(accounts, csrf_token=""):
     rows = ""
     for acct in accounts:
-        rows += f'<tr><td><a href="/universe/accounts/{acct.account_id}">{acct.account_id}</a></td><td>{acct.name}</td><td>{acct.owner_principal}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
+        rows += f'<tr><td><a href="/universe/accounts/{_escape_html(acct.account_id)}">{_escape_html(acct.account_id)}</a></td><td>{_escape_html(acct.name)}</td><td>{_escape_html(acct.owner_principal)}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
     content = f"""
         <div class="page-header"><h2>Accounts</h2><p>Multi-Account Identity Boundaries</p></div>
         <div class="detail-panel">
@@ -1321,20 +1373,20 @@ def universe_account_detail_page(account, csrf_token=""):
         <div class="page-header">
             <a href="/universe/accounts" class="btn btn-secondary">← Back</a>
             <h2>Account Details</h2>
-            <p>{account.account_id}</p>
+            <p>{_escape_html(account.account_id)}</p>
         </div>
         <div class="detail-panel">
             <h3>Identity</h3>
-            <pre><code>Name: {account.name}
-Owner: {account.owner_principal}</code></pre>
+            <pre><code>Name: {_escape_html(account.name)}
+Owner: {_escape_html(account.owner_principal)}</code></pre>
         </div>
     """
-    return base_layout(f"Account {account.account_id}", content, "/universe/accounts", csrf_token)
+    return base_layout(f"Account {_escape_html(account.account_id)}", content, "/universe/accounts", csrf_token)
 
 def universe_organization_page(orgs, csrf_token=""):
     rows = ""
     for org in orgs:
-        rows += f'<tr><td>{org.get("login", "—")}</td><td>{org.get("id", "—")}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
+        rows += f'<tr><td>{_escape_html(org.get("login", "—"))}</td><td>{_escape_html(org.get("id", "—"))}</td><td><span class="badge badge-success">ACTIVE</span></td></tr>'
     content = f"""
         <div class="page-header"><h2>Organization Map</h2><p>Discovered Github Organizations</p></div>
         <div class="detail-panel">
@@ -1347,9 +1399,37 @@ def universe_organization_page(orgs, csrf_token=""):
     return base_layout("Organization Map", content, "/universe/organization", csrf_token)
 
 def universe_projects_page(projects, csrf_token=""):
+    rows = ""
+    for project in projects:
+        if isinstance(project, dict):
+            project_id = project.get("project_id", project.get("id", "—"))
+            name = project.get("name", project_id)
+            status = project.get("status", "UNKNOWN")
+            repo_count = project.get("repository_count", project.get("repositories_count", "—"))
+        else:
+            project_id = getattr(project, "project_id", getattr(project, "id", "—"))
+            name = getattr(project, "name", project_id)
+            status = getattr(project, "status", "UNKNOWN")
+            repo_values = getattr(project, "repositories", None)
+            repo_count = len(repo_values) if repo_values is not None and hasattr(repo_values, "__len__") else getattr(project, "repository_count", "—")
+        rows += f"""
+        <tr>
+            <td class="mono">{_escape_html(project_id)}</td>
+            <td>{_escape_html(name)}</td>
+            <td><span class="badge badge-info">{_escape_html(status)}</span></td>
+            <td>{_escape_html(repo_count)}</td>
+        </tr>
+        """
+    if not rows:
+        rows = '<tr><td colspan="4" style="text-align:center;">No projects discovered</td></tr>'
     content = f"""
-        <div class="page-header"><h2>Project Map</h2><p>Logical Groupings</p></div>
-        {_render_empty_state('No projects configured.')}
+        <div class="page-header"><h2>Project Map</h2><p>Logical project groupings derived from the current Runtime registry.</p></div>
+        <div class="detail-panel">
+            <table class="data-table">
+                <thead><tr><th>Project ID</th><th>Name</th><th>Status</th><th>Repositories</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
     """
     return base_layout("Project Map", content, "/universe/projects", csrf_token)
 
@@ -1359,7 +1439,7 @@ def universe_repositories_page(repos, csrf_token=""):
         name = r.get('name', '—')
         owner = r.get('owner', '—')
         vis = r.get('visibility', '—')
-        rows += f'<tr><td class="mono">{owner}/{name}</td><td>{vis}</td><td>GitHub</td><td><a href="/universe/resources">View in Fabric</a></td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(owner)}/{_escape_html(name)}</td><td>{_escape_html(vis)}</td><td>GitHub</td><td><a href="/universe/resources">View in Fabric</a></td></tr>'
     content = f"""
         <div class="page-header"><h2>Repository Map</h2><p>Discovered Code Repositories</p></div>
         <div class="detail-panel">
@@ -1378,7 +1458,7 @@ def universe_resources_page(resources, csrf_token=""):
         prov_id = getattr(res, 'provenance_id', res.get('provenance_id', '—') if isinstance(res, dict) else '—')
         state = getattr(res, 'state', res.get('state', 'UNKNOWN') if isinstance(res, dict) else 'UNKNOWN')
         badge = 'badge-success' if state == 'ACTIVE' else 'badge-muted'
-        rows += f'<tr><td class="mono">{res_id}</td><td><span class="badge {badge}">{state}</span></td><td><a href="/audit/provenance?id={prov_id}" class="mono">{prov_id}</a></td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(res_id)}</td><td><span class="badge {badge}">{_escape_html(state)}</span></td><td><a href="/audit/provenance?id={_escape_html(prov_id)}" class="mono">{_escape_html(prov_id)}</a></td></tr>'
     
     content = f"""
         <div class="page-header"><h2>Fabric Resources</h2><p>Canonical domain entities registered in Fabric</p></div>
@@ -1394,7 +1474,7 @@ def universe_resources_page(resources, csrf_token=""):
 def execution_tasks_page(tasks, csrf_token=""):
     rows = ""
     for t_id, task in tasks.items():
-        rows += f'<tr><td class="mono">{t_id}</td><td>{task.capability_id}</td><td><span class="badge badge-info">QUEUED</span></td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(t_id)}</td><td>{_escape_html(task.capability_id)}</td><td><span class="badge badge-info">QUEUED</span></td></tr>'
     content = f"""
         <div class="page-header"><h2>Pending Tasks</h2><p>Tasks waiting for execution</p></div>
         <div class="detail-panel">
@@ -1411,7 +1491,7 @@ def execution_workers_page(workers, csrf_token=""):
     for w_id, worker in workers.items():
         state = worker.state.value if hasattr(worker.state, 'value') else str(worker.state)
         badge = 'badge-success' if state == 'SUCCEEDED' else ('badge-info' if state == 'RUNNING' else 'badge-muted')
-        rows += f'<tr><td class="mono">{w_id}</td><td>{worker.capability_id}</td><td>{worker.model_id}</td><td><span class="badge {badge}">{state}</span></td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(w_id)}</td><td>{_escape_html(worker.capability_id)}</td><td>{_escape_html(worker.model_id)}</td><td><span class="badge {badge}">{_escape_html(state)}</span></td></tr>'
     content = f"""
         <div class="page-header"><h2>Worker Topology</h2><p>Active and historical workers</p></div>
         <div class="detail-panel">
@@ -1433,7 +1513,7 @@ def intelligence_capabilities_page(caps, bindings, csrf_token=""):
             if b.capability_id == c_id and b.preferred:
                 pref_model = b.model_id
                 break
-        rows += f'<tr><td class="mono">{c_id}</td><td>{cap.name}</td><td class="mono">{pref_model}</td></tr>'
+        rows += f'<tr><td class="mono">{_escape_html(c_id)}</td><td>{_escape_html(cap.name)}</td><td class="mono">{_escape_html(pref_model)}</td></tr>'
     
     content = f"""
         <div class="page-header"><h2>Capability Map</h2><p>Registered capabilities and preferred models</p></div>
@@ -1446,43 +1526,89 @@ def intelligence_capabilities_page(caps, bindings, csrf_token=""):
     """
     return base_layout("Capabilities", content, "/intelligence/capabilities", csrf_token)
 
-def infrastructure_topology_page(gh_status, fabric_status, mcp_status, csrf_token=""):
+def infrastructure_topology_page(gh_status, fabric_status, mcp_status, runtime_state="UNKNOWN", runtime_health="UNKNOWN", csrf_token=""):
     gh_badge = 'badge-success' if gh_status else 'badge-danger'
     fab_badge = 'badge-success' if fabric_status else 'badge-danger'
+    rt = _escape_html(runtime_state or "UNKNOWN")
+    health = _escape_html(runtime_health or "UNKNOWN")
+    mcp = _escape_html(mcp_status or "UNKNOWN")
+    rt_badge = 'badge-success' if str(runtime_health).upper() == 'HEALTHY' else 'badge-warning' if str(runtime_health).upper() == 'DEGRADED' else 'badge-muted'
+    mcp_badge = 'badge-success' if str(mcp_status).upper() in {'ONLINE', 'VERIFIED'} else 'badge-muted'
     content = f"""
-        <div class="page-header"><h2>Infrastructure Topology</h2><p>System boundaries</p></div>
+        <div class="page-header"><h2>Infrastructure Topology</h2><p>System boundaries using available Runtime observations.</p></div>
         <div style="font-family: var(--font-mono); font-size: 14px; background: var(--bg-secondary); padding: 24px; border-radius: var(--radius-md); text-align:center; line-height:2;">
             <div>[ GitHub <span class="badge {gh_badge}">{"UP" if gh_status else "DOWN"}</span> ]</div>
             <div>│</div>
             <div>▼</div>
-            <div>[ ANNY-RUNTIME <span class="badge badge-success">UP</span> ]</div>
+            <div>[ ANNY-RUNTIME <span class="badge {rt_badge}">{rt}</span> ]</div>
+            <div>[ Runtime health <span class="badge {rt_badge}">{health}</span> ]</div>
             <div>│</div>
             <div style="display:flex; justify-content:center; gap: 40px;">
-                <div>▼<br>[ MCP <span class="badge badge-muted">0 Nodes</span> ]</div>
+                <div>▼<br>[ MCP <span class="badge {mcp_badge}">{mcp}</span> ]</div>
                 <div>▼<br>[ Workers ]</div>
                 <div>▼<br>[ Fabric <span class="badge {fab_badge}">{"UP" if fabric_status else "DOWN"}</span> ]</div>
             </div>
             <div style="display:flex; justify-content:center; gap: 40px;">
                 <div>▼<br>[ Tools ]</div>
                 <div>▼<br>[ Models ]</div>
-                <div>▼<br>[ Azure ]</div>
+                <div>▼<br>[ Azure — UNKNOWN ]</div>
             </div>
         </div>
     """
-    return base_layout("Infrastructure Topology", content, "/infrastructure/runtime", csrf_token)
+    return base_layout("Infrastructure Topology", content, "/infrastructure/runtime", csrf_token, "infrastructure.runtime")
+
+def continuity_timeline_page(events, csrf_token=""):
+    rows = ""
+    for event in events:
+        timestamp = getattr(event, "timestamp", "")
+        sequence = getattr(event, "sequence", 0)
+        mission_id = getattr(event, "mission_id", "UNKNOWN")
+        task_id = getattr(event, "task_id", "UNKNOWN")
+        event_type = getattr(getattr(event, "event_type", None), "value", getattr(event, "event_type", "UNKNOWN"))
+        status = getattr(event, "status", "UNKNOWN")
+        result = getattr(event, "result", "UNKNOWN")
+        evidence_count = len(getattr(event, "evidence_refs", []) or [])
+        rows += f"""
+        <tr>
+            <td class="mono">{_escape_html(sequence)}</td>
+            <td class="mono">{_escape_html(timestamp)}</td>
+            <td class="mono">{_escape_html(mission_id)}</td>
+            <td class="mono">{_escape_html(task_id)}</td>
+            <td>{_escape_html(event_type)}</td>
+            <td><span class="badge badge-info">{_escape_html(status)}</span></td>
+            <td>{_escape_html(result)}</td>
+            <td>{_escape_html(evidence_count)}</td>
+        </tr>
+        """
+    if not rows:
+        rows = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:32px;">No durable continuity events observed.</td></tr>'
+    return base_layout("Continuity Timeline", f"""
+        <div class="page-header">
+            <h2>Continuity Timeline</h2>
+            <p>Recent durable events reconstructed from the append-only Continuity Engine.</p>
+        </div>
+        <div class="detail-panel" style="padding:0;overflow-x:auto;">
+            <table class="data-table">
+                <thead><tr><th>Seq</th><th>Timestamp</th><th>Mission</th><th>Task</th><th>Event</th><th>Status</th><th>Result</th><th>Evidence</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    """, "/continuity/timeline", csrf_token, "continuity.status")
+
 
 def audit_events_page(events, csrf_token=""):
     rows = ""
     for ev in events:
         # Event fields: id, timestamp, level, category, module, event_type, status, message, data, instance_id, runtime_id
-        timestamp = ev[1]
+        timestamp = _escape_html(ev[1])
         cat = ev[3]
-        mod = ev[4]
-        typ = ev[5]
-        status = ev[6]
-        msg = ev[7]
-        badge = 'badge-success' if status == 'SUCCESS' else ('badge-danger' if status == 'ERROR' else 'badge-info')
-        rows += f'<tr><td>{timestamp}</td><td>{mod}</td><td>{typ}</td><td><span class="badge {badge}">{status}</span></td><td class="mono">{msg}</td></tr>'
+        mod = _escape_html(ev[4])
+        typ = _escape_html(ev[5])
+        status_raw = ev[6]
+        status = _escape_html(status_raw)
+        msg = _escape_html(ev[7])
+        badge = 'badge-success' if status_raw == 'SUCCESS' else ('badge-danger' if status_raw == 'ERROR' else 'badge-info')
+        rows += f'<tr><td>{_escape_html(timestamp)}</td><td>{_escape_html(mod)}</td><td>{_escape_html(typ)}</td><td><span class="badge {badge}">{_escape_html(status)}</span></td><td class="mono">{_escape_html(msg)}</td></tr>'
         
     content = f"""
         <div class="page-header"><h2>Audit Events</h2><p>Chronological system logs</p></div>
@@ -1495,90 +1621,97 @@ def audit_events_page(events, csrf_token=""):
     """
     return base_layout("Audit Events", content, "/audit/events", csrf_token)
 
+def audit_evidence_page(evidence_refs, csrf_token=""):
+    rows = ""
+    for ref in evidence_refs:
+        safe_ref = _escape_html(ref)
+        rows += f'<tr><td class="mono">{safe_ref}</td><td><span class="badge badge-info">OBSERVED_REFERENCE</span></td></tr>'
+    if not rows:
+        rows = '<tr><td colspan="2" style="text-align:center;color:var(--text-muted);padding:32px;">No evidence references observed in durable continuity state.</td></tr>'
+    return base_layout("Evidence", f"""
+        <div class="page-header">
+            <h2>Evidence Index</h2>
+            <p>Evidence references observed in durable Runtime continuity state and events.</p>
+        </div>
+        <div class="detail-panel" style="padding:0;overflow-x:auto;">
+            <table class="data-table">
+                <thead><tr><th>Reference</th><th>Observation</th></tr></thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+    """, "/audit/evidence", csrf_token, "evidence.index")
+
+
 def audit_provenance_page(prov_data, csrf_token=""):
     content = f"""
         <div class="page-header"><h2>Provenance & Evidence</h2><p>Cryptographic traces</p></div>
-        <pre style="background:var(--bg-secondary); padding: 16px; border-radius: var(--radius-sm); font-size:12px;">{prov_data if prov_data else 'No provenance data selected or available.'}</pre>
+        <pre style="background:var(--bg-secondary); padding: 16px; border-radius: var(--radius-sm); font-size:12px;">{_escape_html(prov_data if prov_data else 'No provenance data selected or available.')}</pre>
     """
     return base_layout("Provenance", content, "/audit/provenance", csrf_token)
 
 def search_page(query, csrf_token=""):
     content = f"""
-        <div class="page-header"><h2>Global Search</h2><p>Results for: {query}</p></div>
+        <div class="page-header"><h2>Global Search</h2><p>Results for: {_escape_html(query)}</p></div>
         {_render_empty_state('Search returned 0 results. Indexing is lazy.')}
     """
     return base_layout("Search", content, "/search", csrf_token)
 
 def generic_placeholder_page(title, path, csrf_token=""):
-    return base_layout(title, f'<div class="page-header"><h2>{title}</h2></div>{_render_empty_state("No instances found.")}', path, csrf_token)
+    safe_title = _escape_html(title)
+    safe_path = _safe_href(path)
+    return base_layout(
+        safe_title,
+        f'<div class="page-header"><h2>{safe_title}</h2></div>{_render_empty_state("No instances found.")}',
+        active_path=safe_path,
+        csrf_token=csrf_token,
+    )
 
 
 def telemetry_live_page(csrf_token=""):
+    """Render live telemetry using DOM text nodes for all remote event values."""
     return base_layout("Live Telemetry", f"""
         <div class="page-header">
             <h2>Live Telemetry Stream</h2>
-            <p>Real-time observability of ANNY Universe execution events.</p>
+            <p>Real-time observability of ANNY Runtime events.</p>
         </div>
-        
-        <div class="card" style="margin-bottom: 24px; padding: 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div id="connection-indicator" style="width: 12px; height: 12px; border-radius: 50%; background: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald);"></div>
-                    <span id="connection-status" style="font-weight: 600; font-size: 13px;">CONNECTED</span>
+        <div class="card" style="margin-bottom:24px;padding:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div id="connection-indicator" style="width:12px;height:12px;border-radius:50%;background:var(--accent-emerald);"></div>
+                    <span id="connection-status" style="font-weight:600;font-size:13px;">CONNECTING...</span>
                 </div>
-                <button id="clear-btn" class="btn btn-ghost" style="padding: 6px 12px; font-size: 12px;">Clear Output</button>
+                <button id="clear-btn" class="btn btn-ghost" style="padding:6px 12px;font-size:12px;">Clear Output</button>
             </div>
         </div>
-
-        <div id="telemetry-console" style="background: var(--bg-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius); padding: 16px; height: 600px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5;">
-            <!-- Events will be appended here -->
-        </div>
-
+        <div id="telemetry-console" style="background:var(--bg-primary);border:1px solid var(--border-subtle);border-radius:var(--radius);padding:16px;height:600px;overflow-y:auto;font-family:var(--font-mono);font-size:12px;line-height:1.5;"></div>
         <script>
             const consoleEl = document.getElementById('telemetry-console');
             const statusEl = document.getElementById('connection-status');
             const indicatorEl = document.getElementById('connection-indicator');
             const clearBtn = document.getElementById('clear-btn');
-            
             let eventSource = null;
 
-            function connect() {{
-                if (eventSource) {{
-                    eventSource.close();
-                }}
-                
-                statusEl.textContent = 'CONNECTING...';
-                indicatorEl.style.background = 'var(--accent-amber)';
-                indicatorEl.style.boxShadow = '0 0 8px var(--accent-amber)';
-
-                eventSource = new EventSource('/api/v1/telemetry/stream');
-                
-                eventSource.onopen = function() {{
-                    statusEl.textContent = 'CONNECTED';
-                    indicatorEl.style.background = 'var(--accent-emerald)';
-                    indicatorEl.style.boxShadow = '0 0 8px var(--accent-emerald)';
-                }};
-                
-                eventSource.onmessage = function(event) {{
-                    try {{
-                        const data = JSON.parse(event.data);
-                        appendEvent(data);
-                    }} catch (e) {{
-                        console.error("Error parsing event data", e);
-                    }}
-                }};
-                
-                eventSource.onerror = function() {{
-                    statusEl.textContent = 'DISCONNECTED - RECONNECTING...';
-                    indicatorEl.style.background = 'var(--accent-rose)';
-                    indicatorEl.style.boxShadow = '0 0 8px var(--accent-rose)';
-                }};
+            function setConnection(state, color) {{
+                statusEl.textContent = state;
+                indicatorEl.style.background = color;
             }}
-            
+
             function formatTime(isoString) {{
                 if (!isoString) return '';
                 const d = new Date(isoString);
-                return d.toLocaleTimeString('en-US', {{ hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit', fractionalSecondDigits: 3 }});
+                if (Number.isNaN(d.getTime())) return String(isoString);
+                return d.toLocaleTimeString('en-US', {{
+                    hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    fractionalSecondDigits: 3
+                }});
+            }}
+
+            function appendText(parent, value, className) {{
+                const node = document.createElement('span');
+                if (className) node.className = className;
+                node.textContent = value === null || value === undefined ? '' : String(value);
+                parent.appendChild(node);
+                return node;
             }}
 
             function appendEvent(env) {{
@@ -1586,34 +1719,43 @@ def telemetry_live_page(csrf_token=""):
                 el.style.borderBottom = '1px solid var(--border-subtle)';
                 el.style.padding = '8px 0';
                 el.style.display = 'flex';
+                el.style.flexWrap = 'wrap';
                 el.style.gap = '16px';
-                
-                // Timestamp
+
                 const tsEl = document.createElement('div');
                 tsEl.style.color = 'var(--text-muted)';
                 tsEl.style.minWidth = '110px';
                 tsEl.textContent = formatTime(env.timestamp);
-                
-                // Component & Source
+
                 const compEl = document.createElement('div');
                 compEl.style.minWidth = '150px';
-                compEl.innerHTML = `<span style="color: var(--accent-blue)">${{env.component}}</span><br><span style="color: var(--text-muted); font-size: 10px;">${{env.source || ''}}</span>`;
-                
-                // Event Type & Trace
-                const nameEl = document.createElement('div');
-                nameEl.style.flex = '1';
-                nameEl.innerHTML = `<span style="color: var(--text-primary); font-weight: 600;">${{env.event_type}}</span>`;
-                
+                const component = appendText(compEl, env.component, null);
+                component.style.color = 'var(--accent-blue)';
+                compEl.appendChild(document.createElement('br'));
+                const source = appendText(compEl, env.source || '', null);
+                source.style.color = 'var(--text-muted)';
+                source.style.fontSize = '10px';
+
+                const containerEl = document.createElement('div');
+                containerEl.style.flex = '2';
+                const name = appendText(containerEl, env.event_type, null);
+                name.style.color = 'var(--text-primary)';
+                name.style.fontWeight = '600';
+
                 if (env.trace_id) {{
-                    nameEl.innerHTML += `<br><span style="color: var(--text-muted); font-size: 10px;">Trace: ${{env.trace_id.substring(0,8)}} | Span: ${{(env.span_id || '').substring(0,8)}}</span>`;
+                    const traceLine = document.createElement('div');
+                    traceLine.style.color = 'var(--text-muted)';
+                    traceLine.style.fontSize = '10px';
+                    traceLine.textContent = 'Trace: ' + String(env.trace_id).substring(0, 8) +
+                        ' | Span: ' + String(env.span_id || '').substring(0, 8);
+                    containerEl.appendChild(traceLine);
                 }}
-                
+
                 el.appendChild(tsEl);
                 el.appendChild(compEl);
-                el.appendChild(nameEl);
-                
-                // Metadata preview (if any)
-                if (env.metadata && Object.keys(env.metadata).length > 0) {{
+                el.appendChild(containerEl);
+
+                if (env.metadata && Object.keys(env.metadata).length) {{
                     const dataEl = document.createElement('div');
                     dataEl.style.width = '100%';
                     dataEl.style.marginTop = '4px';
@@ -1622,35 +1764,41 @@ def telemetry_live_page(csrf_token=""):
                     dataEl.style.borderRadius = '4px';
                     dataEl.style.color = 'var(--accent-emerald)';
                     dataEl.textContent = JSON.stringify(env.metadata);
-                    
-                    const containerEl = document.createElement('div');
-                    containerEl.style.display = 'flex';
-                    containerEl.style.flexDirection = 'column';
-                    containerEl.style.flex = '2';
-                    containerEl.appendChild(nameEl);
-                    containerEl.appendChild(dataEl);
-                    el.replaceChild(containerEl, nameEl);
+                    el.appendChild(dataEl);
                 }}
-                
+
                 consoleEl.appendChild(el);
-                
-                // Auto scroll to bottom
                 consoleEl.scrollTop = consoleEl.scrollHeight;
-                
-                // Keep only last 500 events
-                while (consoleEl.children.length > 500) {{
-                    consoleEl.removeChild(consoleEl.firstChild);
-                }}
+                while (consoleEl.children.length > 500) consoleEl.removeChild(consoleEl.firstChild);
             }}
-            
-            clearBtn.addEventListener('click', () => {{
-                consoleEl.innerHTML = '';
+
+            function connect() {{
+                if (eventSource) eventSource.close();
+                setConnection('CONNECTING...', 'var(--accent-amber)');
+                eventSource = new EventSource('/api/v1/telemetry/stream');
+                eventSource.onopen = function() {{
+                    setConnection('CONNECTED', 'var(--accent-emerald)');
+                }};
+                eventSource.onmessage = function(event) {{
+                    try {{
+                        appendEvent(JSON.parse(event.data));
+                    }} catch (e) {{
+                        console.error('Telemetry event parse failed', e);
+                    }}
+                }};
+                eventSource.onerror = function() {{
+                    setConnection('DISCONNECTED - RECONNECTING...', 'var(--accent-rose)');
+                }};
+            }}
+
+            clearBtn.addEventListener('click', function() {{
+                consoleEl.replaceChildren();
             }});
-            
-            // Connect on load
             document.addEventListener('DOMContentLoaded', connect);
         </script>
-    """, "/telemetry/live", csrf_token)
+    """, "/telemetry/live", csrf_token, "telemetry.live")
+
+
 
 
 def telemetry_timeline_page(recent_events, csrf_token=""):
@@ -1660,134 +1808,120 @@ def telemetry_timeline_page(recent_events, csrf_token=""):
         comp = env.component if hasattr(env, 'component') else env.get("component", "")
         src = env.source if hasattr(env, 'source') else env.get("source", "")
         evt = env.event_type if hasattr(env, 'event_type') else env.get("event_type", "")
-        
         tid = (env.trace_id if hasattr(env, 'trace_id') else env.get("trace_id")) or ""
         sid = (env.span_id if hasattr(env, 'span_id') else env.get("span_id")) or ""
-        tid = tid[:8] if tid else ""
-        sid = sid[:8] if sid else ""
-        
         rows += f"""
         <tr>
-            <td class="mono">{ts}</td>
-            <td><span class="badge badge-info">{comp}</span></td>
-            <td>{src}</td>
-            <td style="font-weight: 600;">{evt}</td>
-            <td class="mono" style="color: var(--text-muted);">{tid}</td>
-            <td class="mono" style="color: var(--text-muted);">{sid}</td>
+            <td class="mono">{_escape_html(ts)}</td>
+            <td><span class="badge badge-info">{_escape_html(comp)}</span></td>
+            <td>{_escape_html(src)}</td>
+            <td style="font-weight:600;">{_escape_html(evt)}</td>
+            <td class="mono" style="color:var(--text-muted);">{_escape_html(tid[:8])}</td>
+            <td class="mono" style="color:var(--text-muted);">{_escape_html(sid[:8])}</td>
         </tr>
         """
+    if not rows:
+        rows = '<tr><td colspan="6" style="color:var(--text-secondary);text-align:center;">No telemetry events.</td></tr>'
 
-        
     return base_layout("Telemetry Timeline", f"""
         <div class="page-header">
             <h2>Telemetry Timeline</h2>
             <p>Historical view of recent execution events across the stack.</p>
         </div>
-        
-        <div class="card" style="padding: 0; overflow-x: auto;">
+        <div class="card" style="padding:0;overflow-x:auto;">
             <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Timestamp</th>
-                        <th>Component</th>
-                        <th>Source</th>
-                        <th>Event Type</th>
-                        <th>Trace ID</th>
-                        <th>Span ID</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows}
-                </tbody>
+                <thead><tr><th>Timestamp</th><th>Component</th><th>Source</th><th>Event Type</th><th>Trace ID</th><th>Span ID</th></tr></thead>
+                <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/telemetry/timeline", csrf_token)
+    """, "/telemetry/timeline", csrf_token, "telemetry.timeline")
+
+
+
 
 def browser_dashboard_page(sessions: list, csrf_token: str = "") -> str:
     rows = ""
     for s_tuple in sessions:
-        s = s_tuple[0]  # BrowserSession
+        s = s_tuple[0]
+        session_id = _escape_html(s.session_id[:8])
+        worker_id = _escape_html(s.worker_id[:8])
+        mode = _escape_html(s.mode.value)
+        state = _escape_html(s.status.value)
+        current_url_text = _escape_html(s.current_url or "N/A")
+        created_at = _escape_html(s.created_at.isoformat() if s.created_at else "N/A")
         status_color = "var(--accent-green)" if s.status.value == "RUNNING" else "var(--text-muted)"
         if s.status.value == "FAILED":
             status_color = "var(--accent-rose)"
         elif s.status.value == "PAUSED_FOR_HUMAN":
             status_color = "var(--accent-yellow)"
-            
         rows += f"""
         <tr>
-            <td><a href="/browser/{s.session_id}" style="color: var(--accent-blue)">{s.session_id[:8]}...</a></td>
-            <td><code>{s.worker_id[:8]}</code></td>
-            <td>{s.mode.value}</td>
-            <td><span style="color: {status_color}">{s.status.value}</span></td>
-            <td>{s.current_url or 'N/A'}</td>
-            <td>{s.created_at.isoformat() if s.created_at else 'N/A'}</td>
+            <td><a href="{_safe_href('/browser/' + str(s.session_id))}" style="color:var(--accent-blue)">{session_id}...</a></td>
+            <td><code>{worker_id}</code></td>
+            <td>{mode}</td>
+            <td><span style="color:{status_color}">{_escape_html(state)}</span></td>
+            <td>{current_url_text}</td>
+            <td>{created_at}</td>
         </tr>
         """
     if not rows:
-        rows = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted)">No active browser sessions</td></tr>'
-
-    return render_admin_page("Browser Integration", f"""
-        <div class="page-header">
-            <h2>Browser Integration</h2>
-            <p>Active and recent Playwright-driven ephemeral browser sessions.</p>
-        </div>
-        
-        <div class="card" style="padding: 0; overflow-x: auto;">
+        rows = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)">No active browser sessions</td></tr>'
+    return base_layout("Browser Integration", f"""
+        <div class="page-header"><h2>Browser Integration</h2><p>Active and recent managed browser sessions.</p></div>
+        <div class="card" style="padding:0;overflow-x:auto;">
             <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Session ID</th>
-                        <th>Worker ID</th>
-                        <th>Mode</th>
-                        <th>Status</th>
-                        <th>Current URL</th>
-                        <th>Started At</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {rows}
-                </tbody>
+                <thead><tr><th>Session ID</th><th>Worker ID</th><th>Mode</th><th>Status</th><th>Current URL</th><th>Started At</th></tr></thead>
+                <tbody>{rows}</tbody>
             </table>
         </div>
-    """, "/browser", csrf_token)
+    """, "/browser", csrf_token, "browser.dashboard")
 
 
 def browser_session_page(session, csrf_token: str = "") -> str:
-    import base64
-    
-    status_color = "var(--accent-green)" if session.status.value == "RUNNING" else "var(--text-muted)"
-    if session.status.value == "FAILED":
+    state_raw = session.status.value
+    status_color = "var(--accent-green)" if state_raw == "RUNNING" else "var(--text-muted)"
+    if state_raw == "FAILED":
         status_color = "var(--accent-rose)"
-    elif session.status.value == "PAUSED_FOR_HUMAN":
+    elif state_raw == "PAUSED_FOR_HUMAN":
         status_color = "var(--accent-yellow)"
-        
-    return render_admin_page(f"Browser Session {session.session_id[:8]}", f"""
+    sid = _escape_html(session.session_id[:8])
+    mode = _escape_html(session.mode.value)
+    state = _escape_html(state_raw)
+    current_url = session.current_url or ""
+    safe_current_url = _safe_href(current_url) if current_url else "#"
+    worker_id = _escape_html(session.worker_id)
+    task_id = _escape_html(session.task_id)
+    network_policy = _escape_html(session.policy.network_policy)
+    allowed_domains = _escape_html(", ".join(session.policy.allowed_domains) or "None")
+    timeout_ms = _escape_html(session.policy.timeout_ms)
+    human_assist = _escape_html("Yes" if session.policy.human_assistance_allowed else "No")
+    profile_path = _escape_html(session.profile_path or "N/A")
+    current_url_text = _escape_html(current_url or "N/A")
+    return base_layout(f"Browser Session {sid}", f"""
         <div class="page-header">
-            <h2>Session {session.session_id[:8]}</h2>
-            <p><a href="/browser" style="color: var(--accent-blue)">&larr; Back to Browser Dashboard</a></p>
+            <h2>Session {sid}</h2>
+            <p><a href="/browser" style="color:var(--accent-blue)">&larr; Back to Browser Dashboard</a></p>
         </div>
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;">
             <div class="card">
                 <h3>Session Status</h3>
                 <table class="data-table">
-                    <tr><td style="color: var(--text-muted); width: 30%">Mode</td><td>{session.mode.value}</td></tr>
-                    <tr><td style="color: var(--text-muted)">State</td><td><span style="color: {status_color}">{session.status.value}</span></td></tr>
-                    <tr><td style="color: var(--text-muted)">Current URL</td><td><a href="{session.current_url}" target="_blank" style="color: var(--accent-blue)">{session.current_url or 'N/A'}</a></td></tr>
-                    <tr><td style="color: var(--text-muted)">Worker ID</td><td><code>{session.worker_id}</code></td></tr>
-                    <tr><td style="color: var(--text-muted)">Task ID</td><td><code>{session.task_id}</code></td></tr>
+                    <tr><td style="color:var(--text-muted);width:30%">Mode</td><td>{mode}</td></tr>
+                    <tr><td style="color:var(--text-muted)">State</td><td><span style="color:{status_color}">{_escape_html(state)}</span></td></tr>
+                    <tr><td style="color:var(--text-muted)">Current URL</td><td><a href="{safe_current_url}" target="_blank" rel="noopener noreferrer" style="color:var(--accent-blue)">{current_url_text}</a></td></tr>
+                    <tr><td style="color:var(--text-muted)">Worker ID</td><td><code>{worker_id}</code></td></tr>
+                    <tr><td style="color:var(--text-muted)">Task ID</td><td><code>{task_id}</code></td></tr>
                 </table>
             </div>
-            
             <div class="card">
                 <h3>Policy & Constraints</h3>
                 <table class="data-table">
-                    <tr><td style="color: var(--text-muted); width: 30%">Network Policy</td><td>{session.policy.network_policy}</td></tr>
-                    <tr><td style="color: var(--text-muted)">Allowed Domains</td><td>{', '.join(session.policy.allowed_domains) or 'None'}</td></tr>
-                    <tr><td style="color: var(--text-muted)">Timeout</td><td>{session.policy.timeout_ms} ms</td></tr>
-                    <tr><td style="color: var(--text-muted)">Human Assist</td><td>{'Yes' if session.policy.human_assistance_allowed else 'No'}</td></tr>
-                    <tr><td style="color: var(--text-muted)">Profile Path</td><td><code>{session.profile_path or 'N/A'}</code></td></tr>
+                    <tr><td style="color:var(--text-muted);width:30%">Network Policy</td><td>{network_policy}</td></tr>
+                    <tr><td style="color:var(--text-muted)">Allowed Domains</td><td>{allowed_domains}</td></tr>
+                    <tr><td style="color:var(--text-muted)">Timeout</td><td>{timeout_ms} ms</td></tr>
+                    <tr><td style="color:var(--text-muted)">Human Assist</td><td>{human_assist}</td></tr>
+                    <tr><td style="color:var(--text-muted)">Profile Path</td><td><code>{profile_path}</code></td></tr>
                 </table>
             </div>
         </div>
-    """, "/browser", csrf_token)
+    """, "/browser", csrf_token, "browser.session_detail")
