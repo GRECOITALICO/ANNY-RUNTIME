@@ -863,6 +863,78 @@ def default_projection_registry() -> ProjectionRegistry:
 
         # Updater (runtime/updater/)
         _p("updater.manager_service", "Release bundle update supervisor service", "Distribution / Updates", priority="P1", source_authority="UPDATE_MANAGER", route_or_detail="/updater/manager-service", implementation_status="PLANNED", sort_order=707, tags=("updater", "manager", "bundle")),
+
+        # Batch 013: Identity & Attestation (runtime/identity/)
+        _p("identity.hardware_fingerprint", "Hardware platform machine fingerprint descriptor", "Runtime Identity", priority="P0", source_authority="RUNTIME_IDENTITY", route_or_detail="/identity/fingerprint", implementation_status="PLANNED", sort_order=708, tags=("identity", "hardware", "fingerprint")),
+        _p("identity.session_attestation", "Active identity session cryptographic attestation", "Runtime Identity", priority="P0", source_authority="RUNTIME_IDENTITY", route_or_detail="/identity/session-attestation", implementation_status="PLANNED", sort_order=709, tags=("identity", "session", "attestation")),
+
+        # Batch 013: Fabric & Node Health (runtime/fabric/)
+        _p("fabric.admission_validator", "Fabric admission token and authorization validator", "Repository Fabric", priority="P0", source_authority="FABRIC_LIVE_TRUTH", route_or_detail="/fabric/admission-validator", implementation_status="PLANNED", sort_order=710, tags=("fabric", "admission", "validator")),
+        _p("fabric.node_heartbeat", "Repository Fabric node live heartbeat monitor", "Repository Fabric", priority="P0", source_authority="FABRIC_LIVE_TRUTH", route_or_detail="/fabric/node-heartbeat", implementation_status="PLANNED", sort_order=711, tags=("fabric", "node", "heartbeat")),
+
+        # Batch 013: GitHub Integration (runtime/github/)
+        _p("github.rate_limit_monitor", "GitHub API rate limit and quota monitoring surface", "GitHub", priority="P0", source_authority="GITHUB_AUTH", route_or_detail="/github/rate-limits", implementation_status="PLANNED", sort_order=712, tags=("github", "rate-limits", "quota")),
+        _p("github.scope_attestation", "OAuth and installation token scope verification attestation", "GitHub", priority="P1", source_authority="GITHUB_AUTH", route_or_detail="/github/scopes", implementation_status="PLANNED", sort_order=713, tags=("github", "scopes", "attestation")),
+
+        # Batch 013: Core Engine & Subsystems (runtime/core/)
+        _p("core.lifecycle_controller", "Runtime core lifecycle phase controller", "Runtime Identity", priority="P0", source_authority="RUNTIME_ENGINE", route_or_detail="/core/lifecycle", implementation_status="PLANNED", sort_order=714, tags=("core", "lifecycle", "state")),
+        _p("core.subsystem_manifest", "Registered subsystem dependency manifest and status", "Runtime Identity", priority="P0", source_authority="RUNTIME_CONFIG", route_or_detail="/core/subsystem-manifest", implementation_status="PLANNED", sort_order=715, tags=("core", "subsystem", "manifest")),
+
+        # Batch 013: Execution & Workers (runtime/execution/)
+        _p("execution.worker_supervisor", "Supervised worker execution pool state and health", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/worker-supervisor", implementation_status="PLANNED", sort_order=716, tags=("execution", "worker", "supervisor")),
+        _p("execution.policy_enforcer", "Active runtime execution policy constraint enforcer", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/policy-enforcer", implementation_status="PLANNED", sort_order=717, tags=("execution", "policy", "enforcer")),
+        _p("execution.result_validator_service", "Model output validation and conformance evaluation service", "Execution", priority="P1", source_authority="MODEL_VALIDATOR", route_or_detail="/execution/result-validator-service", implementation_status="PLANNED", sort_order=718, tags=("execution", "validator", "conformance")),
+
+        # Batch 013: Capabilities & Intelligence (runtime/capability/, runtime/intelligence/)
+        _p("capability.gate_evaluator", "Dynamic capability gate policy evaluator service", "Intelligence", priority="P0", source_authority="CAPABILITY_GATE", route_or_detail="/capability/gate-evaluator", implementation_status="PLANNED", sort_order=719, tags=("capability", "gate", "evaluator")),
+        _p("intelligence.evaluation_pipeline", "Automated intelligence grading and evaluation pipeline", "Intelligence", priority="P1", source_authority="GRADING_ENGINE", route_or_detail="/intelligence/evaluation-pipeline", implementation_status="PLANNED", sort_order=720, tags=("intelligence", "grading", "evaluation")),
+        _p("intelligence.model_telemetry", "Inference and model latency telemetry tracking", "Intelligence", priority="P1", source_authority="INTELLIGENCE_TELEMETRY", route_or_detail="/intelligence/model-telemetry", implementation_status="PLANNED", sort_order=721, tags=("intelligence", "telemetry", "latency")),
+
+        # Batch 013: Accounts & Projects (runtime/accounts/, runtime/projects/)
+        _p("accounts.authorization_profile", "Account authorization role and security profile descriptor", "Accounts / Identities", priority="P0", source_authority="ACCOUNT_REGISTRY", route_or_detail="/accounts/auth-profile", implementation_status="PLANNED", sort_order=722, tags=("accounts", "auth", "profile")),
+        _p("projects.workspace_mapping", "Project to workspace filesystem binding mapping", "Projects / Workspaces", priority="P0", source_authority="PROJECT_REGISTRY", route_or_detail="/projects/workspace-mapping", implementation_status="PLANNED", sort_order=723, tags=("projects", "workspace", "mapping")),
+
+        # Batch 013: Telemetry & Events (runtime/telemetry/, runtime/events/)
+        _p("telemetry.trace_pipeline", "Distributed trace context propagation and span pipeline", "Telemetry", priority="P1", source_authority="TRACE_CONTEXT", route_or_detail="/telemetry/trace-pipeline", implementation_status="PLANNED", sort_order=724, tags=("telemetry", "trace", "spans")),
+        _p("telemetry.domain_router", "Domain-classified telemetry routing and filtering engine", "Telemetry", priority="P0", source_authority="TELEMETRY_ROUTER", route_or_detail="/telemetry/domain-router", implementation_status="PLANNED", sort_order=725, tags=("telemetry", "domain", "routing")),
+        _p("events.subscription_manager", "Event subscription topic and filter dispatcher", "Telemetry", priority="P0", source_authority="EVENT_BUS", route_or_detail="/events/subscription-manager", implementation_status="PLANNED", sort_order=726, tags=("events", "subscription", "dispatcher")),
+        _p("events.delivery_attestation", "Critical event delivery receipt and acknowledgement attestation", "Telemetry", priority="P0", source_authority="EVENT_BUS", route_or_detail="/events/delivery-attestation", implementation_status="PLANNED", sort_order=727, tags=("events", "delivery", "receipt")),
+
+        # Batch 013: Browser Automation (runtime/browser/)
+        _p("browser.submission_guard", "Managed browser submission authorization security guard", "Browser", priority="P0", source_authority="BROWSER_AUTH", route_or_detail="/browser/submission-guard", implementation_status="PLANNED", sort_order=728, tags=("browser", "authorization", "guard")),
+        _p("browser.broker_lifecycle", "Browser automation broker service lifecycle monitor", "Browser", priority="P0", source_authority="BROWSER_BROKER", route_or_detail="/browser/broker-lifecycle", implementation_status="PLANNED", sort_order=729, tags=("browser", "broker", "lifecycle")),
+
+        # Batch 013: Continuity & Journal (runtime/continuity/, runtime/journal/)
+        _p("continuity.reconciler_service", "Canonical continuity reconciler execution engine", "Continuity", priority="P0", source_authority="CONTINUITY_RECONCILER", route_or_detail="/continuity/reconciler-service", implementation_status="PLANNED", sort_order=730, tags=("continuity", "reconciler", "engine")),
+        _p("journal.integrity_verifier", "Cryptographic ledger hash-chain integrity verification service", "Evidence / Provenance", priority="P0", source_authority="OPERATION_JOURNAL", route_or_detail="/journal/integrity-verifier", implementation_status="PLANNED", sort_order=731, tags=("journal", "integrity", "crypto")),
+
+        # Batch 013: Security & Sandbox & Secrets (runtime/security/, runtime/sandbox/, runtime/secrets/)
+        _p("security.grant_lifecycle", "Security authorization grant lifecycle and expiration manager", "Security / Trust", priority="P0", source_authority="AUTHORIZATION_STORE", route_or_detail="/security/grant-lifecycle", implementation_status="PLANNED", sort_order=732, tags=("security", "grants", "lifecycle")),
+        _p("sandbox.execution_boundary", "Active process sandbox isolation boundary monitor", "Execution", priority="P0", source_authority="SANDBOX_MANAGER", route_or_detail="/sandbox/execution-boundary", implementation_status="PLANNED", sort_order=733, tags=("sandbox", "isolation", "boundary")),
+        _p("secrets.lease_manager", "Credential secret lease allocation and revocation supervisor", "Security / Trust", priority="P0", source_authority="SECRET_BROKER", route_or_detail="/secrets/lease-manager", implementation_status="PLANNED", sort_order=734, tags=("secrets", "lease", "revocation")),
+
+        # Batch 013: Sync & Updates (runtime/sync/, runtime/updater/)
+        _p("sync.state_evaluator", "Release sync candidate state and attestation evaluator", "Distribution / Updates", priority="P0", source_authority="SYNC_SERVICE", route_or_detail="/sync/state-evaluator", implementation_status="PLANNED", sort_order=735, tags=("sync", "state", "evaluator")),
+        _p("updater.channel_governor", "Release update channel policy governor and version fence", "Distribution / Updates", priority="P1", source_authority="UPDATE_MANAGER", route_or_detail="/updater/channel-governor", implementation_status="PLANNED", sort_order=736, tags=("updater", "channel", "policy")),
+
+        # Batch 013: MCP & Tools (runtime/mcp/, runtime/tools/)
+        _p("mcp.gateway_interceptor", "MCP capability gate execution policy interceptor service", "Infrastructure", priority="P0", source_authority="MCP_GATEWAY", route_or_detail="/mcp/gateway-interceptor", implementation_status="PLANNED", sort_order=737, tags=("mcp", "gateway", "interceptor")),
+        _p("tools.invocation_pipeline", "Tool invocation validation and execution pipeline", "Infrastructure", priority="P1", source_authority="TOOL_REGISTRY", route_or_detail="/tools/invocation-pipeline", implementation_status="PLANNED", sort_order=738, tags=("tools", "invocation", "pipeline")),
+
+        # Batch 013: Diagnostics & Bootstrap (runtime/diagnostics/, runtime/bootstrap/)
+        _p("diagnostics.health_evaluator", "Diagnostic system health assessment evaluator engine", "Security / Trust", priority="P0", source_authority="RUNTIME_DOCTOR", route_or_detail="/diagnostics/health-evaluator", implementation_status="PLANNED", sort_order=739, tags=("diagnostics", "health", "evaluator")),
+        _p("bootstrap.plane_validator", "Three-plane bootstrap dependency and readiness gate validator", "CONRRAD", priority="P0", source_authority="BOOTSTRAP_ENGINE", route_or_detail="/bootstrap/plane-validator", implementation_status="PLANNED", sort_order=740, tags=("bootstrap", "planes", "readiness")),
+
+        # Batch 013: Filesystem & Git & Process & Shell (runtime/filesystem/, runtime/git/, runtime/process/, runtime/shell/)
+        _p("filesystem.boundary_guard", "Filesystem sandbox path boundary enforcer service", "Infrastructure", priority="P0", source_authority="FILESYSTEM_SERVICE", route_or_detail="/filesystem/boundary-guard", implementation_status="PLANNED", sort_order=741, tags=("filesystem", "boundary", "sandbox")),
+        _p("git.working_tree_monitor", "Git repository working tree dirty state and index monitor", "Infrastructure", priority="P0", source_authority="GIT_SERVICE", route_or_detail="/git/working-tree-monitor", implementation_status="PLANNED", sort_order=742, tags=("git", "working-tree", "status")),
+        _p("process.supervisor_service", "Active process tree supervisor and resource monitor", "Execution", priority="P0", source_authority="PROCESS_MANAGER", route_or_detail="/process/supervisor-service", implementation_status="PLANNED", sort_order=743, tags=("process", "supervisor", "monitor")),
+        _p("shell.effect_guard", "Classified shell command execution side-effect guard", "Execution", priority="P0", source_authority="SHELL_EXECUTOR", route_or_detail="/shell/effect-guard", implementation_status="PLANNED", sort_order=744, tags=("shell", "effect", "guard")),
+
+        # Batch 013: Compute & Orchestration & Workspace (runtime/compute/, runtime/orchestration/, runtime/workspace/)
+        _p("compute.resource_monitor", "Remote and local compute hardware resource capacity monitor", "Infrastructure", priority="P1", source_authority="COMPUTE_DISCOVERY", route_or_detail="/compute/resource-monitor", implementation_status="PLANNED", sort_order=745, tags=("compute", "resource", "capacity")),
+        _p("orchestration.scheduler_engine", "Stepwise plan frontier task scheduler engine", "Execution", priority="P0", source_authority="ORCHESTRATION_KERNEL", route_or_detail="/orchestration/scheduler-engine", implementation_status="PLANNED", sort_order=746, tags=("orchestration", "scheduler", "frontier")),
+        _p("workspace.isolation_guard", "Active workspace directory isolation and sandbox guard", "Projects / Workspaces", priority="P0", source_authority="WORKSPACE_MANAGER", route_or_detail="/workspace/isolation-guard", implementation_status="PLANNED", sort_order=747, tags=("workspace", "isolation", "sandbox")),
     ]
     return ProjectionRegistry(items)
 
