@@ -113,102 +113,46 @@ class SyncService:
         return {"status": "started", "sync_state": SyncState.SYNCING.value, "sync_id": result.sync_id, "trace_id": result.trace_id}
 
     def stage(self) -> Dict[str, Any]:
+        """Fail closed until physical staging is implemented."""
         with self._lock:
-            if self._active is not None:
-                return {"status": "already_running", "sync_state": self._active.sync_state.value}
-            if self._latest is None or self._latest.sync_state != SyncState.VERIFIED:
-                return {"status": "blocked", "error": "Cannot stage without a VERIFIED candidate"}
-
-            result = self._latest
-            result.sync_state = SyncState.STAGING
-            result.stage = "STAGE"
-            self._active = result
-            self._persist(result)
-
-        def _run_stage():
-            try:
-                time.sleep(0.1) # Stub implementation
-                result.sync_state = SyncState.STAGED
-            except Exception as exc:
-                result.sync_state = SyncState.FAILED
-                result.error_classification = exc.__class__.__name__
-                result.details = {"message": str(exc)[:500]}
-            finally:
-                with self._lock:
-                    self._active = None
-                    self._persist(result)
-
-        self._active_thread = threading.Thread(target=_run_stage, daemon=True)
-        self._active_thread.start()
-
-        return {"status": "staging", "sync_state": SyncState.STAGING.value, "sync_id": result.sync_id}
+            trace_id = self._latest.trace_id if self._latest is not None else f"trace-{secrets.token_hex(12)}"
+            sync_id = self._latest.sync_id if self._latest is not None else None
+            return {
+                "status": "blocked",
+                "sync_state": SyncState.BLOCKED.value,
+                "sync_id": sync_id,
+                "trace_id": trace_id,
+                "error": "Physical staging is not implemented",
+                "error_classification": "STAGE_NOT_IMPLEMENTED",
+            }
 
     def activate(self) -> Dict[str, Any]:
+        """Fail closed: physical activation is not implemented or permitted by this service."""
         with self._lock:
-            if self._active is not None:
-                return {"status": "already_running", "sync_state": self._active.sync_state.value}
-            if self._latest is None or self._latest.sync_state != SyncState.STAGED:
-                return {"status": "blocked", "error": "Cannot activate without a STAGED candidate"}
-
-            result = self._latest
-            result.sync_state = SyncState.ACTIVATING
-            result.stage = "ACTIVATE"
-            self._active = result
-            self._persist(result)
-
-        def _run_activate():
-            try:
-                # Activation is not physically implemented yet.
-                # Must fail-closed and leave explicitly blocked to avoid faking state.
-                result.sync_state = SyncState.BLOCKED
-                result.error_classification = "ACTIVATION_NOT_IMPLEMENTED"
-            except Exception as exc:
-                result.sync_state = SyncState.FAILED
-                result.error_classification = exc.__class__.__name__
-                result.details = {"message": str(exc)[:500]}
-            finally:
-                with self._lock:
-                    self._active = None
-                    self._persist(result)
-
-        self._active_thread = threading.Thread(target=_run_activate, daemon=True)
-        self._active_thread.start()
-
-        return {"status": "activating", "sync_state": SyncState.ACTIVATING.value, "sync_id": result.sync_id}
+            trace_id = self._latest.trace_id if self._latest is not None else f"trace-{secrets.token_hex(12)}"
+            sync_id = self._latest.sync_id if self._latest is not None else None
+            return {
+                "status": "blocked",
+                "sync_state": SyncState.BLOCKED.value,
+                "sync_id": sync_id,
+                "trace_id": trace_id,
+                "error": "Physical activation is not implemented",
+                "error_classification": "ACTIVATION_NOT_IMPLEMENTED",
+            }
 
     def rollback(self) -> Dict[str, Any]:
+        """Fail closed: physical rollback is not implemented."""
         with self._lock:
-            if self._active is not None:
-                return {"status": "already_running", "sync_state": self._active.sync_state.value}
-            if self._latest is None or not self._latest.activation_performed:
-                return {"status": "blocked", "error": "Cannot rollback when not activated"}
-
-            result = self._latest
-            result.sync_state = SyncState.ROLLING_BACK
-            result.stage = "ROLLBACK"
-            self._active = result
-            self._persist(result)
-
-        def _run_rollback():
-            try:
-                time.sleep(0.1) # Stub implementation
-                result.sync_state = SyncState.ROLLED_BACK
-                result.activation_performed = False
-                if result.local_version:
-                    self.local_version = result.local_version
-            except Exception as exc:
-                result.sync_state = SyncState.FAILED
-                result.error_classification = exc.__class__.__name__
-                result.details = {"message": str(exc)[:500]}
-            finally:
-                with self._lock:
-                    self._active = None
-                    self._persist(result)
-
-        self._active_thread = threading.Thread(target=_run_rollback, daemon=True)
-        self._active_thread.start()
-
-        return {"status": "rolling_back", "sync_state": SyncState.ROLLING_BACK.value, "sync_id": result.sync_id}
+            trace_id = self._latest.trace_id if self._latest is not None else f"trace-{secrets.token_hex(12)}"
+            sync_id = self._latest.sync_id if self._latest is not None else None
+            return {
+                "status": "blocked",
+                "sync_state": SyncState.BLOCKED.value,
+                "sync_id": sync_id,
+                "trace_id": trace_id,
+                "error": "Physical rollback is not implemented",
+                "error_classification": "ROLLBACK_NOT_IMPLEMENTED",
+            }
 
     def _discover_compare_verify(self, result: SyncResult) -> None:
         result.stage = "DISCOVER"
