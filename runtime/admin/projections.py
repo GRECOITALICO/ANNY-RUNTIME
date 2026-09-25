@@ -99,6 +99,7 @@ class ProjectionRegistry:
         implementation_status: Optional[str] = None,
         truth_class: Optional[str] = None,
         freshness: Optional[str] = None,
+        source_authority: Optional[str] = None,
         tag: Optional[str] = None,
         q: Optional[str] = None,
         projection_id: Optional[str] = None,
@@ -120,6 +121,12 @@ class ProjectionRegistry:
             items = [item for item in items if item.truth_class == truth_class]
         if freshness:
             items = [item for item in items if item.freshness == freshness]
+        if source_authority:
+            normalized_authority = source_authority.strip().lower()
+            items = [
+                item for item in items
+                if item.source_authority.lower() == normalized_authority
+            ]
         if tag:
             normalized_tag = tag.strip().lower()
             items = [
@@ -157,15 +164,20 @@ class ProjectionRegistry:
         }
         by_section: Dict[str, int] = {}
         by_freshness: Dict[str, int] = {}
+        by_source_authority: Dict[str, int] = {}
         for item in items:
             by_section[item.section] = by_section.get(item.section, 0) + 1
             by_freshness[item.freshness] = by_freshness.get(item.freshness, 0) + 1
+            by_source_authority[item.source_authority] = (
+                by_source_authority.get(item.source_authority, 0) + 1
+            )
         return {
             "total_definitions": len(items),
             "by_priority": by_priority,
             "by_implementation_status": by_status,
             "by_section": dict(sorted(by_section.items())),
             "by_freshness": dict(sorted(by_freshness.items())),
+            "by_source_authority": dict(sorted(by_source_authority.items())),
             "initial_p0_viewport_target": INITIAL_P0_VIEWPORT_TARGET,
             "master_inventory_boundary": MASTER_INVENTORY_BOUNDARY,
             "inventory_limit": None,
@@ -179,6 +191,7 @@ class ProjectionRegistry:
         implementation_status: Optional[str] = None,
         truth_class: Optional[str] = None,
         freshness: Optional[str] = None,
+        source_authority: Optional[str] = None,
         tag: Optional[str] = None,
         q: Optional[str] = None,
         projection_id: Optional[str] = None,
@@ -195,6 +208,7 @@ class ProjectionRegistry:
             implementation_status=implementation_status,
             truth_class=truth_class,
             freshness=freshness,
+            source_authority=source_authority,
             tag=tag,
             q=q,
             projection_id=projection_id,
@@ -225,6 +239,7 @@ class ProjectionRegistry:
                 "implementation_status": implementation_status,
                 "truth_class": truth_class,
                 "freshness": freshness,
+                "source_authority": source_authority,
                 "tag": tag,
                 "q": q,
                 "projection_id": projection_id,
