@@ -26,7 +26,12 @@ from runtime.admin.dto import (
 from runtime.github.client import GitHubClient
 from runtime.github.discovery import OrganizationDiscoveryService
 from runtime.core.version import __version__
-from runtime.admin.projections import DEFAULT_PROJECTION_REGISTRY, VALID_PRIORITIES
+from runtime.admin.projections import (
+    DEFAULT_NAVIGATION_ITEMS,
+    DEFAULT_PROJECTION_REGISTRY,
+    VALID_PRIORITIES,
+    audit_navigation_contract,
+)
 from runtime.bootstrap.conrrad import project_dependency_matrix, registry_is_complete, REQUIRED_CONRRAD_SERVICES
 
 logger = logging.getLogger(__name__)
@@ -327,6 +332,10 @@ class AdminRouter:
                 projection_id=projection_id,
                 limit=limit,
                 offset=offset,
+            )
+            payload["navigation_contract"] = audit_navigation_contract(
+                DEFAULT_NAVIGATION_ITEMS,
+                self._get_routes,
             )
         except ValueError as exc:
             if priority and priority not in VALID_PRIORITIES:
@@ -1292,5 +1301,4 @@ class AdminRouter:
         from runtime.admin.templates import browser_session_page
         html = browser_session_page(session_data[0], self._get_csrf())
         self._send_html(handler, html)
-
 

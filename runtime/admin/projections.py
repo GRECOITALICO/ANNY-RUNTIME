@@ -1120,6 +1120,88 @@ def default_projection_registry() -> ProjectionRegistry:
 
         # Batch 015: Continuity Models (runtime/continuity/models.py)
         _p("continuity.event_model", "Continuity event classification and lifecycle transition record model", "Continuity", priority="P0", source_authority="CONTINUITY_MODEL", route_or_detail="/continuity/event-model", implementation_status="PLANNED", sort_order=836, tags=("continuity", "event", "model")),
+
+        # Batch 016: Core Runtime Engine State Machine (runtime/core/engine.py)
+        _p("core.runtime_state_machine", "Runtime lifecycle state machine transitions and readiness supervisor", "Infrastructure", priority="P0", source_authority="RUNTIME_ENGINE", route_or_detail="/core/state-machine", implementation_status="PLANNED", sort_order=837, tags=("core", "state", "machine")),
+
+        # Batch 016: Core Runtime Config (runtime/core/config.py)
+        _p("core.runtime_config", "Durable runtime configuration loader and validation service", "Infrastructure", priority="P0", source_authority="RUNTIME_CONFIG", route_or_detail="/core/config", implementation_status="PLANNED", sort_order=838, tags=("core", "config", "loader")),
+
+        # Batch 016: Core Inventory Discovery (runtime/core/inventory.py)
+        _p("core.inventory_discovery", "Subsystem component inventory discovery and registration service", "Infrastructure", priority="P0", source_authority="INVENTORY_DISCOVERY", route_or_detail="/core/inventory-discovery", implementation_status="PLANNED", sort_order=839, tags=("core", "inventory", "discovery")),
+
+        # Batch 016: Core Generation Identity (runtime/core/generation.py)
+        _p("core.generation_identity", "Runtime generation monotonic identity and stale-generation fence", "Runtime Identity", priority="P0", source_authority="RUNTIME_GENERATION", route_or_detail="/core/generation-identity", implementation_status="PLANNED", sort_order=840, tags=("core", "generation", "fence")),
+
+        # Batch 016: Execution Model Hierarchy (runtime/execution/models.py)
+        _p("execution.task_model", "Task lifecycle model with context, status, and failure classification", "Execution", priority="P0", source_authority="EXECUTION_MODELS", route_or_detail="/execution/task-model", implementation_status="PLANNED", sort_order=841, tags=("execution", "task", "model")),
+        _p("execution.execution_result_model", "Execution result and detail payload canonical data model", "Execution", priority="P0", source_authority="EXECUTION_MODELS", route_or_detail="/execution/result-model", implementation_status="PLANNED", sort_order=842, tags=("execution", "result", "model")),
+        _p("execution.execution_status_taxonomy", "Execution status and failure reason enumeration taxonomy", "Execution", priority="P0", source_authority="EXECUTION_MODELS", route_or_detail="/execution/status-taxonomy", implementation_status="PLANNED", sort_order=843, tags=("execution", "status", "taxonomy")),
+        _p("execution.model_definition", "Model definition schema with provider, context window, and cost metadata", "Execution", priority="P0", source_authority="EXECUTION_MODELS", route_or_detail="/execution/model-definition", implementation_status="PLANNED", sort_order=844, tags=("execution", "model", "definition")),
+        _p("execution.model_capability_binding", "Model-to-capability binding and eligibility resolution record", "Execution", priority="P0", source_authority="EXECUTION_MODELS", route_or_detail="/execution/model-capability-binding", implementation_status="PLANNED", sort_order=845, tags=("execution", "model", "binding")),
+        _p("execution.hardware_profile", "Execution hardware profile detection and resource constraint record", "Infrastructure", priority="P0", source_authority="EXECUTION_MODELS", route_or_detail="/execution/hardware-profile", implementation_status="PLANNED", sort_order=846, tags=("execution", "hardware", "profile")),
+        _p("execution.model_performance_profile", "Model performance profile with latency, throughput, and cost metrics", "Intelligence", priority="P0", source_authority="EXECUTION_MODELS", route_or_detail="/execution/model-performance", implementation_status="PLANNED", sort_order=847, tags=("execution", "performance", "metrics")),
+
+        # Batch 016: Execution Orchestrator (runtime/execution/executor.py)
+        _p("execution.tool_invocation_model", "Tool invocation request and result payload canonical model", "Execution", priority="P0", source_authority="EXECUTION_ORCHESTRATOR", route_or_detail="/execution/tool-invocation", implementation_status="PLANNED", sort_order=848, tags=("execution", "tool", "invocation")),
+
+        # Batch 016: Execution Capability Definition (runtime/execution/capability.py)
+        _p("execution.capability_definition", "Executor capability definition schema and tier classification", "Execution", priority="P0", source_authority="CAPABILITY_REGISTRY", route_or_detail="/execution/capability-definition", implementation_status="PLANNED", sort_order=849, tags=("execution", "capability", "schema")),
+
+        # Batch 016: Execution Model Registry (runtime/execution/registry.py)
+        _p("execution.model_registry_service", "Model registry lifecycle with recovery attestation and consistency gate", "Execution", priority="P0", source_authority="MODEL_REGISTRY", route_or_detail="/execution/model-registry-service", implementation_status="PLANNED", sort_order=850, tags=("execution", "model", "registry")),
+
+        # Batch 016: Security Authorization Store (runtime/security/authorization_store.py)
+        _p("security.grant_store", "Authorization grant persistence store and revocation lifecycle manager", "Security / Trust", priority="P0", source_authority="AUTH_STORE", route_or_detail="/security/grant-store", implementation_status="PLANNED", sort_order=851, tags=("security", "grants", "store")),
+        _p("security.grant_model", "Authorization grant record model with scope, expiry, and principal binding", "Security / Trust", priority="P0", source_authority="AUTH_STORE", route_or_detail="/security/grant-model", implementation_status="PLANNED", sort_order=852, tags=("security", "grant", "model")),
+
+        # Batch 016: Security Context Guard (runtime/security/context_guard.py)
+        _p("security.context_guard_engine", "Context access boundary enforcement and violation detection engine", "Security / Trust", priority="P0", source_authority="CONTEXT_GUARD", route_or_detail="/security/context-guard-engine", implementation_status="PLANNED", sort_order=853, tags=("security", "context", "guard")),
+
+        # Batch 016: Security Active Context (runtime/security/active_context.py)
+        _p("security.active_context_lifecycle", "Active security context lifecycle creation, scoping, and teardown manager", "Security / Trust", priority="P0", source_authority="ACTIVE_CONTEXT", route_or_detail="/security/active-context-lifecycle", implementation_status="PLANNED", sort_order=854, tags=("security", "context", "lifecycle")),
+
+        # Batch 016: Session Lease Model (runtime/session/lease.py)
+        _p("session.lease_model", "Session lease temporal model with TTL, renewal, and expiry tracking", "Communication", priority="P0", source_authority="SESSION_LEASE", route_or_detail="/session/lease-model", implementation_status="PLANNED", sort_order=855, tags=("session", "lease", "model")),
+        _p("session.status_taxonomy", "Session status enumeration taxonomy and lifecycle transition rules", "Communication", priority="P0", source_authority="SESSION_LEASE", route_or_detail="/session/status-taxonomy", implementation_status="PLANNED", sort_order=856, tags=("session", "status", "taxonomy")),
+
+        # Batch 016: Session Lifecycle Manager (runtime/session/manager.py)
+        _p("session.lifecycle_manager", "Session lifecycle orchestrator with create, renew, expire, and destroy", "Communication", priority="P0", source_authority="SESSION_MANAGER", route_or_detail="/session/lifecycle-manager", implementation_status="PLANNED", sort_order=857, tags=("session", "lifecycle", "manager")),
+
+        # Batch 016: Continuity Reconciler (runtime/continuity/reconciler.py)
+        _p("continuity.reconciler_engine", "Operational state reconciler and drift detection engine", "Continuity", priority="P0", source_authority="CONTINUITY_RECONCILER", route_or_detail="/continuity/reconciler-engine", implementation_status="PLANNED", sort_order=858, tags=("continuity", "reconciler", "drift")),
+
+        # Batch 016: Continuity Event Taxonomy (runtime/continuity/events.py)
+        _p("continuity.event_type_taxonomy", "Continuity event type classification enumeration and severity model", "Continuity", priority="P0", source_authority="CONTINUITY_EVENTS", route_or_detail="/continuity/event-taxonomy", implementation_status="PLANNED", sort_order=859, tags=("continuity", "events", "taxonomy")),
+
+        # Batch 016: Sync Service Engine (runtime/sync/service.py)
+        _p("sync.service_engine", "Distribution sync orchestration service with stage/verify/activate lifecycle", "Distribution / Updates", priority="P0", source_authority="SYNC_SERVICE", route_or_detail="/sync/service-engine", implementation_status="PLANNED", sort_order=860, tags=("sync", "service", "lifecycle")),
+
+        # Batch 016: Sync Models (runtime/sync/models.py)
+        _p("sync.candidate_identity_model", "Sync candidate identity fingerprint and provenance verification model", "Distribution / Updates", priority="P0", source_authority="SYNC_MODELS", route_or_detail="/sync/candidate-identity-model", implementation_status="PLANNED", sort_order=861, tags=("sync", "candidate", "identity")),
+        _p("sync.sync_state_machine", "Sync state machine with idle/staging/verifying/activating transitions", "Distribution / Updates", priority="P0", source_authority="SYNC_MODELS", route_or_detail="/sync/state-machine", implementation_status="PLANNED", sort_order=862, tags=("sync", "state", "machine")),
+        _p("sync.sync_result_model", "Sync operation result canonical model with success/failure/rollback classification", "Distribution / Updates", priority="P0", source_authority="SYNC_MODELS", route_or_detail="/sync/result-model", implementation_status="PLANNED", sort_order=863, tags=("sync", "result", "model")),
+
+        # Batch 016: Intelligence Capability Tier Taxonomy (runtime/intelligence/models.py)
+        _p("intelligence.capability_tier_taxonomy", "Local intelligence capability tier classification and routing taxonomy", "Intelligence", priority="P0", source_authority="INTELLIGENCE_MODELS", route_or_detail="/intelligence/capability-tier-taxonomy", implementation_status="PLANNED", sort_order=864, tags=("intelligence", "capability", "tier")),
+        _p("intelligence.delegation_decision_model", "Delegation decision model with local/remote/hybrid routing classification", "Intelligence", priority="P0", source_authority="INTELLIGENCE_MODELS", route_or_detail="/intelligence/delegation-decision", implementation_status="PLANNED", sort_order=865, tags=("intelligence", "delegation", "decision")),
+        _p("intelligence.certification_status_model", "Model certification status lifecycle and compliance record model", "Intelligence", priority="P0", source_authority="INTELLIGENCE_MODELS", route_or_detail="/intelligence/certification-status", implementation_status="PLANNED", sort_order=866, tags=("intelligence", "certification", "status")),
+        _p("intelligence.capability_assessment", "Capability assessment request/response protocol and scoring model", "Intelligence", priority="P0", source_authority="INTELLIGENCE_MODELS", route_or_detail="/intelligence/capability-assessment", implementation_status="PLANNED", sort_order=867, tags=("intelligence", "assessment", "protocol")),
+
+        # Batch 016: Intelligence Grading (runtime/intelligence/grading.py)
+        _p("intelligence.grading_result_model", "Model grading result record with score, confidence, and pass/fail determination", "Intelligence", priority="P0", source_authority="GRADING_ENGINE", route_or_detail="/intelligence/grading-result", implementation_status="PLANNED", sort_order=868, tags=("intelligence", "grading", "result")),
+
+        # Batch 016: Intelligence Benchmark Store (runtime/intelligence/benchmark_store.py)
+        _p("intelligence.benchmark_store_service", "Benchmark result persistence store and historical comparison service", "Intelligence", priority="P0", source_authority="BENCHMARK_STORE", route_or_detail="/intelligence/benchmark-store-service", implementation_status="PLANNED", sort_order=869, tags=("intelligence", "benchmark", "store")),
+
+        # Batch 016: Admin Sync UI (runtime/admin/sync_ui.py)
+        _p("admin.sync_ui_injector", "SYNC control surface injection and state-driven button rendering service", "Control Center", priority="P0", source_authority="SYNC_UI", route_or_detail="/admin/sync-ui-injector", implementation_status="PLANNED", sort_order=870, tags=("admin", "sync", "ui")),
+
+        # Batch 016: Core Access Verifier Detail (runtime/core/access_verifier.py)
+        _p("core.critical_access_report", "Critical access verification result and compliance summary report model", "Security / Trust", priority="P0", source_authority="ACCESS_VERIFIER", route_or_detail="/core/critical-access-report", implementation_status="PLANNED", sort_order=871, tags=("core", "access", "report")),
+
+        # Batch 016: Admin Audit Entry Model (runtime/admin/audit.py)
+        _p("admin.audit_persistence", "Admin audit log file persistence and rotation lifecycle manager", "Evidence / Provenance", priority="P0", source_authority="ADMIN_AUDIT", route_or_detail="/admin/audit-persistence", implementation_status="PLANNED", sort_order=872, tags=("admin", "audit", "persistence")),
     ]
     return ProjectionRegistry(items)
 
@@ -1193,3 +1275,71 @@ DEFAULT_NAVIGATION_ITEMS: Tuple[NavigationItem, ...] = (
     NavigationItem("AUDIT", "Changes", "📝", "/audit/changes", "evidence.provenance", "PLANNED"),
 )
 
+
+def audit_navigation_contract(
+    navigation_items: Iterable[NavigationItem],
+    get_routes: Iterable[str],
+    *,
+    registry: ProjectionRegistry = DEFAULT_PROJECTION_REGISTRY,
+) -> Dict[str, object]:
+    """Return a read-only navigation integrity observation.
+
+    The control-center registry intentionally contains PLANNED and BLOCKED
+    projections which are not operator destinations.  This audit therefore
+    checks only ACTIVE and ALIAS navigation entries for a registered projection
+    and a concrete GET handler.  It never upgrades a projection's truth or
+    implementation status; it merely exposes the currently wired contract.
+    """
+    items = tuple(navigation_items)
+    routes = set(get_routes)
+    active_items = tuple(
+        item for item in items if item.availability in {"ACTIVE", "ALIAS"}
+    )
+
+    invalid_projection_ids = sorted(
+        item.projection_id or item.label
+        for item in active_items
+        if not item.projection_id or registry.get(item.projection_id) is None
+    )
+    dead_links = sorted(item.path for item in active_items if item.path not in routes)
+    stale_aliases = sorted(
+        item.label
+        for item in active_items
+        if item.availability == "ALIAS"
+        and (
+            registry.get(item.projection_id or "") is None
+            or registry.get(item.projection_id or "").route_or_detail != item.path
+        )
+    )
+    duplicate_destinations = sorted(
+        path for path in {item.path for item in items}
+        if sum(item.path == path for item in items) > 1
+    )
+    false_online_declarations = sorted(
+        item.projection_id or item.label
+        for item in active_items
+        if (projection := registry.get(item.projection_id or ""))
+        and projection.current_status in {"ONLINE", "LIVE"}
+        and projection.truth_class != "FACT"
+    )
+
+    failures = (
+        invalid_projection_ids
+        + dead_links
+        + stale_aliases
+        + duplicate_destinations
+        + false_online_declarations
+    )
+    return {
+        "status": "VALID" if not failures else "INVALID",
+        "registered_projection_ids": {
+            "valid": len(active_items) - len(invalid_projection_ids),
+            "total": len(active_items),
+        },
+        "active_or_alias_destinations": len(active_items),
+        "planned_destinations": sum(item.availability == "PLANNED" for item in items),
+        "dead_links": dead_links,
+        "stale_aliases": stale_aliases,
+        "duplicate_destinations": duplicate_destinations,
+        "false_online_declarations": false_online_declarations,
+    }
