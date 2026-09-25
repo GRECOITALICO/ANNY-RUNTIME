@@ -699,6 +699,7 @@ async function fetchProjectionRegistry(resetOffset = false) {
         const meta = document.getElementById('projection-registry-meta');
         if (meta) {
             const s = d.summary || {};
+            const filtered = d.filtered_summary || {};
             const byPriority = s.by_priority || {};
             const bySection = s.by_section || {};
             const byFreshness = s.by_freshness || {};
@@ -750,6 +751,9 @@ async function fetchProjectionRegistry(resetOffset = false) {
                 ' · P0 VIEWPORT TARGET=' + String(d.initial_p0_viewport_target || '—') +
                 ' · REGISTERED=' + String(s.total_definitions || 0) +
                 ' · FILTERED=' + String((d.page || {}).total_filtered || 0) +
+                ' · FILTERED BOUND=' + String((filtered.by_implementation_status || {}).BOUND || 0) +
+                ' · FILTERED PLANNED=' + String((filtered.by_implementation_status || {}).PLANNED || 0) +
+                ' · FILTERED UNKNOWN=' + String((filtered.by_truth_class || {}).UNKNOWN || 0) +
                 ' · P0=' + String(byPriority.P0 || 0) +
                 ' · P1=' + String(byPriority.P1 || 0) +
                 ' · P2=' + String(byPriority.P2 || 0) +
