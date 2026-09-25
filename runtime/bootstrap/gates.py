@@ -15,6 +15,11 @@ class ReadinessGate(Enum):
     # Plane 1 - Local Runtime Identity
     RUNTIME_IDENTITY = auto()
 
+    # CONRRAD external authority boundary. These gates must run before GitHub.
+    CONRRAD_BOOTSTRAP_PREFLIGHT = auto()
+    CONRRAD_MANIFEST_AND_TRUST_VERIFIED = auto()
+    CONRRAD_DEPENDENCY_REGISTRY_LOADED = auto()
+
     # Plane 2 - GitHub Connectivity & Auth
     GITHUB_CONNECTED = auto()
     GITHUB_ORG_BOUND = auto()
@@ -60,6 +65,9 @@ class ReadinessGate(Enum):
 # Gates that are MANDATORY for ANNY_READY — all must pass.
 MANDATORY_GATES = frozenset({
     ReadinessGate.RUNTIME_IDENTITY,
+    ReadinessGate.CONRRAD_BOOTSTRAP_PREFLIGHT,
+    ReadinessGate.CONRRAD_MANIFEST_AND_TRUST_VERIFIED,
+    ReadinessGate.CONRRAD_DEPENDENCY_REGISTRY_LOADED,
     ReadinessGate.GITHUB_CONNECTED,
     ReadinessGate.GITHUB_ORG_BOUND,
     ReadinessGate.FABRIC_REACHABLE,
