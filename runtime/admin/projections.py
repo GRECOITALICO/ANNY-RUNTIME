@@ -736,6 +736,67 @@ def default_projection_registry() -> ProjectionRegistry:
 
         # Updater distribution manifest (runtime/updater/manager.py)
         _p("updater.manifest_info", "Release bundle distribution update manifest", "Distribution / Updates", priority="P1", source_authority="UPDATE_MANAGER", route_or_detail="/updater/info", implementation_status="PLANNED", sort_order=634, tags=("updater", "manifest", "bundle")),
+
+        # Batch 011: Master Inventory Expansion & Subsystem Grounding
+        # Repository Fabric & Git service depth (runtime/git/service.py)
+        _p("git.status", "Git repository working tree status", "Repository Fabric", priority="P0", source_authority="RUNTIME_GIT", route_or_detail="/git/status", implementation_status="PLANNED", sort_order=635, tags=("git", "status", "repository")),
+        _p("git.branch_info", "Git branch metadata and tracking reference", "Repository Fabric", priority="P0", source_authority="RUNTIME_GIT", route_or_detail="/git/branch-info", implementation_status="PLANNED", sort_order=636, tags=("git", "branch", "metadata")),
+        _p("git.diff_summary", "Git working tree diff summary", "Repository Fabric", priority="P1", source_authority="RUNTIME_GIT", route_or_detail="/git/diff-summary", implementation_status="PLANNED", sort_order=637, tags=("git", "diff", "working-tree")),
+
+        # Workspace & Projects lifecycle (runtime/workspace/, runtime/projects/)
+        _p("workspace.state", "Workspace lifecycle state machine", "Projects / Workspaces", priority="P0", source_authority="WORKSPACE_MANAGER", route_or_detail="/workspace/state", implementation_status="PLANNED", sort_order=638, tags=("workspace", "state", "lifecycle")),
+        _p("workspace.ephemeral_manager", "Ephemeral workspace allocation manager", "Projects / Workspaces", priority="P1", source_authority="WORKSPACE_MANAGER", route_or_detail="/workspace/ephemeral", implementation_status="PLANNED", sort_order=639, tags=("workspace", "ephemeral", "provisioner")),
+        _p("projects.project_status", "Project lifecycle status model", "Projects / Workspaces", priority="P1", source_authority="PROJECT_REGISTRY", route_or_detail="/projects/status-model", implementation_status="PLANNED", sort_order=640, tags=("projects", "status", "lifecycle")),
+
+        # Session & Communication coordination (runtime/session/, runtime/api/bridge.py)
+        _p("session.lease", "Session lease coordinator", "Communication", priority="P1", source_authority="SESSION_MANAGER", route_or_detail="/session/lease", implementation_status="PLANNED", sort_order=641, tags=("session", "lease", "coordinator")),
+        _p("api.bridge_router", "ChatGPT/Luna bridge API router", "Communication", priority="P1", source_authority="BRIDGE_ROUTER", route_or_detail="/api/v1/bridge", implementation_status="PLANNED", sort_order=642, tags=("bridge", "api", "router")),
+
+        # Sandbox & Isolation contracts (runtime/sandbox/)
+        _p("sandbox.restricted_backend", "Restricted process sandbox execution backend", "Execution", priority="P1", source_authority="SANDBOX_MANAGER", route_or_detail="/sandbox/restricted-backend", implementation_status="PLANNED", sort_order=643, tags=("sandbox", "restricted", "process")),
+        _p("sandbox.isolation_contract", "Sandbox isolation policy enforcement contract", "Execution", priority="P0", source_authority="SANDBOX_MANAGER", route_or_detail="/sandbox/isolation-contract", implementation_status="PLANNED", sort_order=644, tags=("sandbox", "isolation", "contract")),
+
+        # Remote Compute infrastructure & Colab transport (runtime/compute/)
+        _p("compute.colab_provider", "Colab compute execution provider", "Infrastructure", priority="P1", source_authority="COMPUTE_PROVIDER", route_or_detail="/compute/colab-provider", implementation_status="PLANNED", sort_order=645, tags=("compute", "colab", "provider")),
+        _p("compute.cli_transport", "CLI Colab transport bridge", "Infrastructure", priority="P1", source_authority="COMPUTE_TRANSPORT", route_or_detail="/compute/cli-transport", implementation_status="PLANNED", sort_order=646, tags=("compute", "colab", "cli")),
+        _p("compute.browser_transport", "Browser Colab transport bridge", "Infrastructure", priority="P1", source_authority="COMPUTE_TRANSPORT", route_or_detail="/compute/browser-transport", implementation_status="PLANNED", sort_order=647, tags=("compute", "colab", "browser")),
+        _p("compute.lease_model", "Remote compute lease allocation model", "Infrastructure", priority="P1", source_authority="COMPUTE_MODEL", route_or_detail="/compute/lease-model", implementation_status="PLANNED", sort_order=648, tags=("compute", "lease", "model")),
+        _p("compute.trust_profile_model", "Compute trust profile policy descriptor", "Infrastructure", priority="P0", source_authority="COMPUTE_POLICY", route_or_detail="/compute/trust-profile", implementation_status="PLANNED", sort_order=649, tags=("compute", "trust", "profile")),
+
+        # Capability gate decisions (runtime/capability/gate.py)
+        _p("capability.gate_engine", "Capability gate decision engine", "Execution", priority="P0", source_authority="CAPABILITY_GATE", route_or_detail="/capability/gate-engine", implementation_status="PLANNED", sort_order=650, tags=("capability", "gate", "decision")),
+        _p("capability.decision_model", "Capability evaluation decision model", "Execution", priority="P1", source_authority="CAPABILITY_GATE", route_or_detail="/capability/decision-model", implementation_status="PLANNED", sort_order=651, tags=("capability", "decision", "model")),
+
+        # Execution evaluation & models (runtime/execution/models.py)
+        _p("execution.evaluation_record", "Execution evaluation benchmark record model", "Execution", priority="P2", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/evaluation-record", implementation_status="PLANNED", sort_order=652, tags=("execution", "evaluation", "record")),
+
+        # Intelligence benchmark & layer depth (runtime/intelligence/)
+        _p("intelligence.benchmark_store", "Benchmark artifact repository store", "Intelligence", priority="P1", source_authority="BENCHMARK_STORE", route_or_detail="/intelligence/benchmark-store", implementation_status="PLANNED", sort_order=653, tags=("intelligence", "benchmark", "store")),
+        _p("intelligence.local_layer", "Local intelligence inference layer engine", "Intelligence", priority="P0", source_authority="LOCAL_INTELLIGENCE", route_or_detail="/intelligence/local-layer", implementation_status="PLANNED", sort_order=654, tags=("intelligence", "local", "layer")),
+        _p("intelligence.scorecard_model", "Benchmark scorecard assessment model", "Intelligence", priority="P1", source_authority="BENCHMARK_SCORECARD", route_or_detail="/intelligence/scorecard-model", implementation_status="PLANNED", sort_order=655, tags=("intelligence", "scorecard", "benchmark")),
+        _p("intelligence.candidate_profile", "Implementation candidate capability profile", "Intelligence", priority="P1", source_authority="MODEL_PROFILE", route_or_detail="/intelligence/candidate-profile", implementation_status="PLANNED", sort_order=656, tags=("intelligence", "candidate", "profile")),
+        _p("intelligence.assessment_request", "Capability assessment request model", "Intelligence", priority="P2", source_authority="INTELLIGENCE_MODEL", route_or_detail="/intelligence/assessment-request", implementation_status="PLANNED", sort_order=657, tags=("intelligence", "assessment", "request")),
+        _p("intelligence.assessment_response", "Capability assessment response model", "Intelligence", priority="P2", source_authority="INTELLIGENCE_MODEL", route_or_detail="/intelligence/assessment-response", implementation_status="PLANNED", sort_order=658, tags=("intelligence", "assessment", "response")),
+        _p("intelligence.grading_result", "Model evaluation grading result descriptor", "Intelligence", priority="P2", source_authority="GRADING_ENGINE", route_or_detail="/intelligence/grading-result", implementation_status="PLANNED", sort_order=659, tags=("intelligence", "grading", "result")),
+
+        # Security context & boundaries (runtime/security/)
+        _p("security.active_context_mgr", "Active security context boundary manager", "Security / Trust", priority="P0", source_authority="CONTEXT_MANAGER", route_or_detail="/security/active-context-mgr", implementation_status="PLANNED", sort_order=660, tags=("security", "context", "boundary")),
+        _p("security.execution_context_model", "Security execution context descriptor model", "Security / Trust", priority="P1", source_authority="SECURITY_MODEL", route_or_detail="/security/execution-context-model", implementation_status="PLANNED", sort_order=661, tags=("security", "execution", "context")),
+
+        # Continuity operational provider & records (runtime/continuity/)
+        _p("continuity.operational_provider", "Operational repository provider service", "Continuity", priority="P0", source_authority="OPERATIONAL_PROVIDER", route_or_detail="/continuity/operational-provider", implementation_status="PLANNED", sort_order=662, tags=("continuity", "operational", "provider")),
+        _p("continuity.event_record_model", "Continuity event history record model", "Continuity", priority="P1", source_authority="CONTINUITY_MODEL", route_or_detail="/continuity/event-record-model", implementation_status="PLANNED", sort_order=663, tags=("continuity", "event", "record")),
+
+        # Fabric admission, models & contracts (runtime/fabric/)
+        _p("fabric.admission_result", "Fabric node admission evaluation result model", "Infrastructure", priority="P1", source_authority="FABRIC_MODEL", route_or_detail="/fabric/admission-result", implementation_status="PLANNED", sort_order=664, tags=("fabric", "admission", "result")),
+        _p("fabric.provenance_model", "Fabric provenance entry audit model", "Infrastructure", priority="P0", source_authority="FABRIC_MODEL", route_or_detail="/fabric/provenance-model", implementation_status="PLANNED", sort_order=665, tags=("fabric", "provenance", "audit")),
+        _p("fabric.health_model", "Fabric cluster health assessment result model", "Infrastructure", priority="P0", source_authority="FABRIC_MODEL", route_or_detail="/fabric/health-model", implementation_status="PLANNED", sort_order=666, tags=("fabric", "health", "result")),
+        _p("fabric.policy_model", "Fabric governance policy descriptor model", "Infrastructure", priority="P1", source_authority="FABRIC_MODEL", route_or_detail="/fabric/policy-model", implementation_status="PLANNED", sort_order=667, tags=("fabric", "policy", "governance")),
+        _p("fabric.contract_model", "Fabric bilateral contract descriptor model", "Infrastructure", priority="P1", source_authority="FABRIC_MODEL", route_or_detail="/fabric/contract-model", implementation_status="PLANNED", sort_order=668, tags=("fabric", "contract", "descriptor")),
+
+        # Diagnostics & Updater depth (runtime/diagnostics/, runtime/updater/)
+        _p("diagnostics.diagnostic_check", "Diagnostic health check descriptor model", "Infrastructure", priority="P1", source_authority="RUNTIME_DOCTOR", route_or_detail="/diagnostics/check-model", implementation_status="PLANNED", sort_order=669, tags=("diagnostics", "health", "check")),
+        _p("updater.channel_state", "Update channel governance state model", "Distribution / Updates", priority="P1", source_authority="UPDATE_MANAGER", route_or_detail="/updater/channel-state", implementation_status="PLANNED", sort_order=670, tags=("updater", "channel", "governance")),
     ]
     return ProjectionRegistry(items)
 
