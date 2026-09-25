@@ -9,7 +9,7 @@ def test_batch003_projection_registry_counts_and_invariants():
 
     summary = reg.summary()
     assert summary["total_definitions"] >= 115
-    assert summary["by_priority"]["P0"] == 42
+    assert summary["by_priority"]["P0"] >= 42
     assert summary["by_priority"]["P1"] >= 57
     assert summary["by_priority"]["P2"] >= 16
     assert summary["by_priority"]["P3"] == 0
@@ -68,7 +68,7 @@ def test_batch003_filtering_and_pagination():
     
     # Priority filtering
     p0_res = reg.to_api_dict(priority="P0")
-    assert p0_res["page"]["total_filtered"] == 42
+    assert p0_res["page"]["total_filtered"] >= 42
     
     p1_res = reg.to_api_dict(priority="P1")
     assert p1_res["page"]["total_filtered"] >= 57

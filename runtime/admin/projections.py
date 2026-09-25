@@ -287,26 +287,26 @@ def default_projection_registry() -> ProjectionRegistry:
 
     items = [
         _p("onboarding.github_connect", "GitHub connection onboarding", "Onboarding", priority="P0", source_authority="GITHUB_AUTH", route_or_detail="/", implementation_status="BOUND", sort_order=5, tags=("onboarding", "github")),
-        _p("onboarding.device_flow", "GitHub Device Flow", "Onboarding", priority="P1", source_authority="GITHUB_AUTH", route_or_detail="/github/device/poll", implementation_status="BOUND", sort_order=6, tags=("onboarding", "device-flow")),
-        _p("onboarding.access_token", "GitHub access token fallback", "Onboarding", priority="P1", source_authority="GITHUB_AUTH", route_or_detail="/github/token", implementation_status="BOUND", sort_order=7, tags=("onboarding", "fallback")),
-        _p("onboarding.ready", "Ready state", "Onboarding", priority="P1", source_authority="RUNTIME", implementation_status="BOUND", route_or_detail="/", sort_order=8, tags=("ready",)),
-        _p("onboarding.failure", "Failure state", "Onboarding", priority="P1", source_authority="RUNTIME", implementation_status="BOUND", route_or_detail="/", sort_order=9, tags=("failure",)),
-        _p("fabric.setup", "Repository Fabric setup", "Repository Fabric", priority="P1", source_authority="FABRIC_LIVE_TRUTH", route_or_detail="/fabric/setup", implementation_status="BOUND", sort_order=72, tags=("fabric", "setup")),
+        _p("onboarding.device_flow", "GitHub Device Flow", "Onboarding", priority="P0", source_authority="GITHUB_AUTH", route_or_detail="/github/device/poll", implementation_status="BOUND", sort_order=6, tags=("onboarding", "device-flow")),
+        _p("onboarding.access_token", "GitHub access token fallback", "Onboarding", priority="P0", source_authority="GITHUB_AUTH", route_or_detail="/github/token", implementation_status="BOUND", sort_order=7, tags=("onboarding", "fallback")),
+        _p("onboarding.ready", "Ready state", "Onboarding", priority="P0", source_authority="RUNTIME", implementation_status="BOUND", route_or_detail="/", sort_order=8, tags=("ready",)),
+        _p("onboarding.failure", "Failure state", "Onboarding", priority="P0", source_authority="RUNTIME", implementation_status="BOUND", route_or_detail="/", sort_order=9, tags=("failure",)),
+        _p("fabric.setup", "Repository Fabric setup", "Repository Fabric", priority="P0", source_authority="FABRIC_LIVE_TRUTH", route_or_detail="/fabric/setup", implementation_status="BOUND", sort_order=72, tags=("fabric", "setup")),
         _p("runtime.reconnect", "Runtime reconnect", "Runtime Identity", priority="P1", source_authority="RUNTIME", implementation_status="BOUND", tags=("reconnect",)),
         _p("admin.operations", "Operations", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/operations", implementation_status="PARTIAL", failure_reason="No canonical Runtime operation registry is exposed to the admin renderer.", sort_order=205, tags=("operations",)),
         _p("admin.receipts", "Receipts", "Evidence / Provenance", priority="P1", source_authority="RECEIPT_STORE", route_or_detail="/receipts", implementation_status="PARTIAL", failure_reason="No canonical Runtime receipt registry is exposed to the admin renderer.", sort_order=185, tags=("receipts",)),
-        _p("admin.doctor", "Runtime doctor", "Security / Trust", priority="P1", source_authority="RUNTIME", route_or_detail="/doctor", implementation_status="BOUND", sort_order=325, tags=("doctor", "diagnostics")),
-        _p("admin.policies", "Policies", "Security / Trust", priority="P1", source_authority="POLICY_ENGINE", route_or_detail="/policies", implementation_status="BOUND", sort_order=326, tags=("policy",)),
+        _p("admin.doctor", "Runtime doctor", "Security / Trust", priority="P0", source_authority="RUNTIME", route_or_detail="/doctor", implementation_status="BOUND", sort_order=325, tags=("doctor", "diagnostics")),
+        _p("admin.policies", "Policies", "Security / Trust", priority="P0", source_authority="POLICY_ENGINE", route_or_detail="/policies", implementation_status="BOUND", sort_order=326, tags=("policy",)),
         _p("admin.diagnostics", "Admin diagnostics", "Security / Trust", priority="P1", source_authority="RUNTIME", route_or_detail="/admin/diagnostics", implementation_status="BOUND", sort_order=327, tags=("diagnostics",)),
         _p("admin.update_check", "Admin update check", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", route_or_detail="/admin/update-check", implementation_status="BOUND", sort_order=375, tags=("updates", "check")),
-        _p("universe.accounts", "Accounts", "Universe", priority="P1", source_authority="ACCOUNT_REGISTRY", route_or_detail="/universe/accounts", implementation_status="BOUND", sort_order=15, tags=("universe", "accounts")),
+        _p("universe.accounts", "Accounts", "Universe", priority="P0", source_authority="ACCOUNT_REGISTRY", route_or_detail="/universe/accounts", implementation_status="BOUND", sort_order=15, tags=("universe", "accounts")),
         _p("universe.account_detail", "Account detail", "Universe", priority="P2", source_authority="ACCOUNT_REGISTRY", route_or_detail="/universe/accounts/{account_id}", implementation_status="PLANNED", tags=("universe", "accounts", "detail")),
         _p("universe.organization", "Organization", "Universe", priority="P0", source_authority="CANONICAL_STATE", route_or_detail="/universe/organization", implementation_status="BOUND", sort_order=20, tags=("universe", "organization")),
         _p("universe.projects", "Projects", "Universe", priority="P0", source_authority="PROJECT_REGISTRY", route_or_detail="/universe/projects", implementation_status="PARTIAL", sort_order=25, tags=("universe", "projects")),
         _p("universe.repositories", "Repositories", "Universe", priority="P0", source_authority="GITHUB_AUTH", route_or_detail="/universe/repositories", implementation_status="BOUND", sort_order=30, tags=("universe", "repositories")),
-        _p("universe.resources", "Resources", "Universe", priority="P1", source_authority="RESOURCE_REGISTRY", route_or_detail="/universe/resources", implementation_status="BOUND", sort_order=35, tags=("universe", "resources")),
+        _p("universe.resources", "Resources", "Universe", priority="P0", source_authority="RESOURCE_REGISTRY", route_or_detail="/universe/resources", implementation_status="BOUND", sort_order=35, tags=("universe", "resources")),
         _p("execution.missions", "Missions", "Execution", priority="P0", source_authority="CANONICAL_STATE", route_or_detail="/execution/missions", implementation_status="BOUND", sort_order=196, tags=("execution", "missions")),
-        _p("execution.execution_runs", "Executions", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/executions", implementation_status="BOUND", sort_order=197, tags=("execution", "runs")),
+        _p("execution.execution_runs", "Executions", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/executions", implementation_status="BOUND", sort_order=197, tags=("execution", "runs")),
         _p("execution.workspaces", "Workspaces", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/workspaces", implementation_status="PLANNED", sort_order=198, tags=("execution", "workspace")),
         _p("intelligence.executors_view", "Executors view", "Intelligence", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/executors", implementation_status="PARTIAL", failure_reason="Current executor view remains a static compatibility surface; no canonical executor inventory is exposed.", sort_order=255, tags=("intelligence", "executors")),
         _p("browser.session_detail", "Managed browser session detail", "Browser", priority="P2", source_authority="BROWSER_RUNTIME", route_or_detail="/browser/{session_id}", implementation_status="BOUND", sort_order=365, tags=("browser", "detail")),
@@ -345,8 +345,8 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("continuity.status", "Continuity timeline", "Continuity", source_authority="CONTINUITY_ENGINE", implementation_status="BOUND", route_or_detail="/continuity/timeline", sort_order=150, tags=("continuity", "timeline")),
         _p("continuity.recovery", "Continuity recovery", "Continuity", priority="P1", source_authority="CANONICAL_STATE", implementation_status="PLANNED", route_or_detail="/continuity/recovery", sort_order=160, tags=("recovery",)),
         _p("evidence.freshness", "Evidence freshness", "Evidence / Provenance", priority="P0", source_authority="EVIDENCE_REGISTRY", implementation_status="PLANNED", sort_order=170, tags=("evidence", "freshness")),
-        _p("evidence.index", "Evidence index", "Evidence / Provenance", priority="P1", source_authority="CONTINUITY_ENGINE", route_or_detail="/audit/evidence", implementation_status="BOUND", sort_order=171, tags=("evidence", "index")),
-        _p("audit.events", "Audit events", "Evidence / Provenance", priority="P1", source_authority="AUDIT_STORE", route_or_detail="/audit/events", implementation_status="BOUND", sort_order=181, tags=("audit", "events")),
+        _p("evidence.index", "Evidence index", "Evidence / Provenance", priority="P0", source_authority="CONTINUITY_ENGINE", route_or_detail="/audit/evidence", implementation_status="BOUND", sort_order=171, tags=("evidence", "index")),
+        _p("audit.events", "Audit events", "Evidence / Provenance", priority="P0", source_authority="AUDIT_STORE", route_or_detail="/audit/events", implementation_status="BOUND", sort_order=181, tags=("audit", "events")),
         
         _p("evidence.provenance", "Evidence provenance", "Evidence / Provenance", priority="P1", source_authority="EVIDENCE_REGISTRY", implementation_status="PARTIAL", route_or_detail="/audit/provenance", sort_order=180, tags=("provenance",)),
         _p("execution.processing_matrix", "Processing matrix", "Execution", source_authority="TELEMETRY_AGGREGATOR", route_or_detail="/api/processing/matrix", sort_order=190, tags=("execution", "telemetry")),
@@ -354,21 +354,21 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("execution.workers", "Execution workers", "Execution", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/workers", implementation_status="BOUND", sort_order=210, tags=("workers",)),
         _p("execution.worker_detail", "Execution worker detail", "Execution", priority="P2", source_authority="RUNTIME_EXECUTION", route_or_detail="/workers/{worker_id}", implementation_status="BOUND", sort_order=211, tags=("workers", "detail")),
         _p("execution.results", "Execution results", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/results", implementation_status="PLANNED", sort_order=220, tags=("results",)),
-        _p("intelligence.capabilities", "Intelligence capabilities", "Intelligence", priority="P1", route_or_detail="/intelligence/capabilities", sort_order=230, tags=("capabilities",)),
+        _p("intelligence.capabilities", "Intelligence capabilities", "Intelligence", priority="P0", route_or_detail="/intelligence/capabilities", sort_order=230, tags=("capabilities",)),
         _p("intelligence.models", "Intelligence models", "Intelligence", priority="P1", route_or_detail="/models", implementation_status="PARTIAL", sort_order=240, tags=("models",)),
         _p("intelligence.model_detail", "Intelligence model detail", "Intelligence", priority="P2", source_authority="RUNTIME_MODEL_REGISTRY", route_or_detail="/models/{model_id}", implementation_status="BOUND", sort_order=241, tags=("models", "detail")),
         _p("intelligence.executors", "Intelligence executors", "Intelligence", priority="P1", route_or_detail="/intelligence/executors", implementation_status="PLANNED", sort_order=250, tags=("executors",)),
         _p("intelligence.performance", "Intelligence performance", "Intelligence", priority="P2", route_or_detail="/intelligence/performance", implementation_status="PLANNED", sort_order=260, tags=("performance",)),
-        _p("infrastructure.runtime", "Runtime topology", "Infrastructure", priority="P1", route_or_detail="/infrastructure/runtime", sort_order=270, tags=("topology",)),
+        _p("infrastructure.runtime", "Runtime topology", "Infrastructure", priority="P0", route_or_detail="/infrastructure/runtime", sort_order=270, tags=("topology",)),
         _p("infrastructure.github", "GitHub infrastructure", "Infrastructure", priority="P1", source_authority="GITHUB_AUTH", route_or_detail="/infrastructure/github", implementation_status="PLANNED", sort_order=280, tags=("github", "infrastructure")),
         _p("infrastructure.fabric", "Fabric infrastructure", "Infrastructure", priority="P1", source_authority="FABRIC_LIVE_TRUTH", route_or_detail="/infrastructure/fabric", implementation_status="PLANNED", sort_order=290, tags=("fabric", "infrastructure")),
         _p("infrastructure.mcp", "MCP infrastructure", "Infrastructure", priority="P2", source_authority="RUNTIME_MCP", route_or_detail="/infrastructure/mcp", implementation_status="PLANNED", sort_order=300, tags=("mcp",)),
         _p("infrastructure.azure", "Azure infrastructure", "Infrastructure", priority="P2", source_authority="AZURE_LIVE_TRUTH", route_or_detail="/infrastructure/azure", implementation_status="PLANNED", sort_order=310, tags=("azure",)),
         _p("security.trust", "Security and trust posture", "Security / Trust", source_authority="RUNTIME_SECURITY", priority="P0", implementation_status="PARTIAL", sort_order=320, tags=("security", "trust")),
-        _p("communication.sessions", "Admin sessions", "Communication", priority="P1", source_authority="RUNTIME_AUTH", route_or_detail="/sessions", sort_order=330, tags=("sessions",)),
-        _p("telemetry.live", "Live telemetry", "Telemetry", priority="P1", source_authority="TELEMETRY_STREAM", route_or_detail="/telemetry/live", sort_order=340, tags=("sse", "live")),
-        _p("telemetry.timeline", "Telemetry timeline", "Telemetry", priority="P1", source_authority="TELEMETRY_STORE", route_or_detail="/telemetry/timeline", sort_order=350, tags=("timeline",)),
-        _p("browser.dashboard", "Managed browser dashboard", "Browser", priority="P1", source_authority="BROWSER_RUNTIME", route_or_detail="/browser", sort_order=360, tags=("browser",)),
+        _p("communication.sessions", "Admin sessions", "Communication", priority="P0", source_authority="RUNTIME_AUTH", route_or_detail="/sessions", sort_order=330, tags=("sessions",)),
+        _p("telemetry.live", "Live telemetry", "Telemetry", priority="P0", source_authority="TELEMETRY_STREAM", route_or_detail="/telemetry/live", sort_order=340, tags=("sse", "live")),
+        _p("telemetry.timeline", "Telemetry timeline", "Telemetry", priority="P0", source_authority="TELEMETRY_STORE", route_or_detail="/telemetry/timeline", sort_order=350, tags=("timeline",)),
+        _p("browser.dashboard", "Managed browser dashboard", "Browser", priority="P0", source_authority="BROWSER_RUNTIME", route_or_detail="/browser", sort_order=360, tags=("browser",)),
         _p("distribution.sync", "Governed SYNC state", "Distribution / Updates", priority="P0", source_authority="SYNC_SERVICE", implementation_status="BOUND", sort_order=370, tags=("sync", "updates")),
         _p("distribution.sync_stage", "SYNC stage capability", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", implementation_status="BLOCKED", failure_reason="Physical staging is not implemented; the backend now fails closed without mutating the verified candidate.", sort_order=380, tags=("sync", "stage")),
         _p("distribution.activation", "Activation capability", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", implementation_status="BLOCKED", failure_reason="Activation is intentionally fail-closed and not physically implemented.", sort_order=390, tags=("activation", "safe-fail-closed")),
@@ -409,7 +409,7 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("filesystem.workspace_service", "Scoped workspace filesystem service", "Infrastructure", priority="P2", source_authority="RUNTIME_FILESYSTEM", route_or_detail="/filesystem/workspace", implementation_status="PLANNED", sort_order=429, tags=("filesystem", "workspace")),
 
         # Batch 004: Real Endpoint Binding & Grounded Inventory Expansion
-        _p("admin.restart", "Runtime restart action", "Security / Trust", priority="P1", source_authority="RUNTIME_ADMIN", route_or_detail="/admin/restart", implementation_status="BOUND", sort_order=329, tags=("admin", "lifecycle", "restart")),
+        _p("admin.restart", "Runtime restart action", "Security / Trust", priority="P0", source_authority="RUNTIME_ADMIN", route_or_detail="/admin/restart", implementation_status="BOUND", sort_order=329, tags=("admin", "lifecycle", "restart")),
         _p("intelligence.scorecards", "Benchmark certification scorecards", "Intelligence", priority="P1", source_authority="RUNTIME_BENCHMARK_STORE", route_or_detail="/intelligence/scorecards", implementation_status="PLANNED", sort_order=430, tags=("benchmarks", "scorecards", "intelligence")),
         _p("intelligence.benchmark_cases", "Benchmark test cases", "Intelligence", priority="P1", source_authority="RUNTIME_INTELLIGENCE", route_or_detail="/intelligence/benchmarks/cases", implementation_status="PLANNED", sort_order=431, tags=("benchmarks", "cases", "intelligence")),
         _p("intelligence.failure_records", "Capability execution failure records", "Intelligence", priority="P1", source_authority="RUNTIME_INTELLIGENCE", route_or_detail="/intelligence/failures", implementation_status="PLANNED", sort_order=432, tags=("failures", "intelligence", "diagnostics")),
@@ -422,9 +422,9 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("shell.executor", "Classified shell command executor", "Execution", priority="P2", source_authority="RUNTIME_SHELL", route_or_detail="/shell/executor", implementation_status="PLANNED", sort_order=439, tags=("shell", "execution", "effects")),
 
         # Batch 005: Control Center Live API Endpoint Binding & Grounded Subsystem Expansion
-        _p("api.status", "Runtime operational status API", "Control Center", priority="P1", source_authority="RUNTIME_ROUTER", route_or_detail="/api/status", implementation_status="BOUND", sort_order=440, tags=("api", "status", "health")),
+        _p("api.status", "Runtime operational status API", "Control Center", priority="P0", source_authority="RUNTIME_ROUTER", route_or_detail="/api/status", implementation_status="BOUND", sort_order=440, tags=("api", "status", "health")),
         _p("continuity.bootstrap_api", "Continuity bootstrap API", "Continuity", priority="P1", source_authority="CONTINUITY_ENGINE", route_or_detail="/api/v1/continuity/bootstrap", implementation_status="BOUND", sort_order=441, tags=("api", "continuity", "bootstrap")),
-        _p("control.projections_api", "Control Center projection registry API", "Control Center", priority="P1", source_authority="PROJECTION_REGISTRY", route_or_detail="/api/control-center/projections", implementation_status="BOUND", sort_order=442, tags=("api", "projections", "control_center")),
+        _p("control.projections_api", "Control Center projection registry API", "Control Center", priority="P0", source_authority="PROJECTION_REGISTRY", route_or_detail="/api/control-center/projections", implementation_status="BOUND", sort_order=442, tags=("api", "projections", "control_center")),
         _p("telemetry.stream_api", "Telemetry event stream API", "Telemetry", priority="P1", source_authority="TELEMETRY_STREAM", route_or_detail="/api/v1/telemetry/stream", implementation_status="BOUND", sort_order=443, tags=("api", "telemetry", "stream", "sse")),
         _p("projects.registry", "Persistent project registry", "Projects / Workspaces", priority="P1", source_authority="PROJECT_REGISTRY", route_or_detail="/projects/registry", implementation_status="PLANNED", sort_order=444, tags=("projects", "registry", "storage")),
         _p("accounts.registry", "Persistent account registry", "Accounts / Identities", priority="P1", source_authority="ACCOUNT_REGISTRY", route_or_detail="/accounts/registry", implementation_status="PLANNED", sort_order=445, tags=("accounts", "registry", "github_principal")),
@@ -449,9 +449,9 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("api.bridge_tasks", "ChatGPT/Luna external bridge task creation", "Control Center", priority="P1", source_authority="BRIDGE_ROUTER", route_or_detail="/api/v1/bridge/tasks", implementation_status="BOUND", sort_order=462, tags=("api", "bridge", "tasks")),
         _p("api.bridge_task_query", "External bridge task status query", "Control Center", priority="P1", source_authority="BRIDGE_ROUTER", route_or_detail="/api/v1/bridge/tasks/{task_id}", implementation_status="BOUND", sort_order=463, tags=("api", "bridge", "tasks", "query")),
         _p("api.bridge_execution_query", "External bridge execution result query", "Control Center", priority="P1", source_authority="BRIDGE_ROUTER", route_or_detail="/api/v1/bridge/executions/{execution_id}", implementation_status="BOUND", sort_order=464, tags=("api", "bridge", "executions", "query")),
-        _p("admin.logout", "Admin session termination", "Security / Trust", priority="P1", source_authority="RUNTIME_ADMIN", route_or_detail="/logout", implementation_status="BOUND", sort_order=465, tags=("admin", "auth", "session", "logout")),
-        _p("github.disconnect", "GitHub principal disconnect action", "GitHub", priority="P1", source_authority="GITHUB_AUTH", route_or_detail="/github/disconnect", implementation_status="BOUND", sort_order=466, tags=("github", "auth", "disconnect")),
-        _p("github.device_init", "GitHub OAuth device code flow initialization", "GitHub", priority="P1", source_authority="GITHUB_AUTH", route_or_detail="/github/device/init", implementation_status="BOUND", sort_order=467, tags=("github", "auth", "device_flow", "init")),
+        _p("admin.logout", "Admin session termination", "Security / Trust", priority="P0", source_authority="RUNTIME_ADMIN", route_or_detail="/logout", implementation_status="BOUND", sort_order=465, tags=("admin", "auth", "session", "logout")),
+        _p("github.disconnect", "GitHub principal disconnect action", "GitHub", priority="P0", source_authority="GITHUB_AUTH", route_or_detail="/github/disconnect", implementation_status="BOUND", sort_order=466, tags=("github", "auth", "disconnect")),
+        _p("github.device_init", "GitHub OAuth device code flow initialization", "GitHub", priority="P0", source_authority="GITHUB_AUTH", route_or_detail="/github/device/init", implementation_status="BOUND", sort_order=467, tags=("github", "auth", "device_flow", "init")),
         _p("git.service", "Local repository git operations service", "Infrastructure", priority="P1", source_authority="GIT_SERVICE", route_or_detail="/git/service", implementation_status="PLANNED", sort_order=468, tags=("git", "service", "vcs")),
         _p("diagnostics.doctor", "Runtime diagnostic doctor service", "Control Center", priority="P1", source_authority="RUNTIME_DOCTOR", route_or_detail="/diagnostics/doctor", implementation_status="PLANNED", sort_order=469, tags=("diagnostics", "doctor", "health")),
         _p("platform.manager", "OS and runtime host platform manager", "Infrastructure", priority="P2", source_authority="PLATFORM_MANAGER", route_or_detail="/platform/manager", implementation_status="PLANNED", sort_order=470, tags=("platform", "os", "linux", "wsl2")),
@@ -533,6 +533,75 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("admin.csrf", "CSRF token validation middleware", "Security / Trust", priority="P1", source_authority="ADMIN_CSRF", route_or_detail="/admin/csrf", implementation_status="PLANNED", sort_order=518, tags=("admin", "csrf", "security")),
         _p("admin.middleware", "Admin request authentication middleware", "Security / Trust", priority="P1", source_authority="ADMIN_MIDDLEWARE", route_or_detail="/admin/middleware", implementation_status="PLANNED", sort_order=519, tags=("admin", "middleware", "auth")),
         _p("admin.audit", "Admin operation audit trail", "Evidence / Provenance", priority="P1", source_authority="ADMIN_AUDIT", route_or_detail="/admin/audit", implementation_status="PLANNED", sort_order=520, tags=("admin", "audit", "operations")),
+
+        # Batch 008: Master Inventory P0 Coverage & Operational Depth
+        # Execution subsystem depth (runtime/execution/)
+        _p("execution.deterministic_executor", "Deterministic tool executor", "Execution", priority="P1", source_authority="DETERMINISTIC_EXECUTOR", route_or_detail="/execution/deterministic-executor", implementation_status="PLANNED", sort_order=521, tags=("execution", "deterministic", "sandbox")),
+        _p("execution.orchestrator", "Multi-step tool execution orchestrator", "Execution", priority="P1", source_authority="EXECUTION_ORCHESTRATOR", route_or_detail="/execution/orchestrator", implementation_status="PLANNED", sort_order=522, tags=("execution", "orchestrator", "tools")),
+        _p("execution.task_context", "Task execution context manager", "Execution", priority="P2", source_authority="TASK_CONTEXT_MANAGER", route_or_detail="/execution/task-context", implementation_status="PLANNED", sort_order=523, tags=("execution", "context", "tasks")),
+        _p("execution.capability_registry", "Executor capability registry", "Intelligence", priority="P1", source_authority="CAPABILITY_REGISTRY", route_or_detail="/execution/capability-registry", implementation_status="PLANNED", sort_order=524, tags=("execution", "capabilities", "registry")),
+
+        # Capability gate subsystem depth (runtime/capability/)
+        _p("capability.gate", "Runtime capability gate evaluator", "Security / Trust", priority="P1", source_authority="CAPABILITY_GATE", route_or_detail="/capability/gate", implementation_status="PLANNED", sort_order=525, tags=("capability", "gate", "security")),
+        _p("capability.decision_log", "Capability authorization decision log", "Evidence / Provenance", priority="P2", source_authority="CAPABILITY_GATE", route_or_detail="/capability/decisions", implementation_status="PLANNED", sort_order=526, tags=("capability", "decisions", "audit")),
+
+        # Continuity subsystem depth (runtime/continuity/)
+        _p("continuity.reconciler", "Canonical runtime reconciler", "Continuity", priority="P1", source_authority="CONTINUITY_RECONCILER", route_or_detail="/continuity/reconciler", implementation_status="PLANNED", sort_order=527, tags=("continuity", "reconciliation", "canonical")),
+        _p("continuity.operational_repo", "Operational repository provider", "Continuity", priority="P1", source_authority="OPERATIONAL_REPO_PROVIDER", route_or_detail="/continuity/operational-repo", implementation_status="PLANNED", sort_order=528, tags=("continuity", "operational", "git")),
+        _p("continuity.event_stream", "Continuity event stream classifier", "Continuity", priority="P2", source_authority="CONTINUITY_EVENTS", route_or_detail="/continuity/event-stream", implementation_status="PLANNED", sort_order=529, tags=("continuity", "events", "stream")),
+        _p("continuity.mutation_contract_engine", "Repository mutation continuity contract engine", "Continuity", priority="P1", source_authority="MUTATION_CONTRACT", route_or_detail="/continuity/mutation-contract", implementation_status="PLANNED", sort_order=530, tags=("continuity", "mutation", "contract")),
+
+        # Core subsystem depth (runtime/core/)
+        _p("core.runtime_engine", "Core runtime execution engine", "Control Center", priority="P1", source_authority="CORE_ENGINE", route_or_detail="/core/engine", implementation_status="PLANNED", sort_order=531, tags=("core", "engine", "runtime")),
+        _p("core.runtime_state", "Runtime state lifecycle machine", "Runtime Identity", priority="P1", source_authority="CORE_ENGINE", route_or_detail="/core/state", implementation_status="PLANNED", sort_order=532, tags=("core", "state", "lifecycle")),
+        _p("core.bootstrap_inventory", "Bootstrap component discovery inventory", "Control Center", priority="P2", source_authority="CORE_INVENTORY", route_or_detail="/core/bootstrap-inventory", implementation_status="PLANNED", sort_order=533, tags=("core", "inventory", "bootstrap")),
+
+        # Repository Fabric subsystem depth (runtime/fabric/)
+        _p("fabric.tenant", "Repository Fabric tenant configuration", "Repository Fabric", priority="P2", source_authority="FABRIC_ADAPTER", route_or_detail="/fabric/tenant", implementation_status="PLANNED", sort_order=534, tags=("fabric", "tenant", "config")),
+        _p("fabric.project", "Repository Fabric project binding", "Repository Fabric", priority="P2", source_authority="FABRIC_ADAPTER", route_or_detail="/fabric/project", implementation_status="PLANNED", sort_order=535, tags=("fabric", "project", "binding")),
+        _p("fabric.trust_token", "Repository Fabric cryptographic trust token", "Repository Fabric", priority="P1", source_authority="FABRIC_ADAPTER", route_or_detail="/fabric/trust-token", implementation_status="PLANNED", sort_order=536, tags=("fabric", "trust", "token")),
+        _p("fabric.health_probe", "Repository Fabric connectivity health probe", "Repository Fabric", priority="P1", source_authority="FABRIC_ADAPTER", route_or_detail="/fabric/health-probe", implementation_status="PLANNED", sort_order=537, tags=("fabric", "health", "probe")),
+        _p("fabric.provenance_store", "Fabric operation provenance store", "Evidence / Provenance", priority="P1", source_authority="FABRIC_ADAPTER", route_or_detail="/fabric/provenance/store", implementation_status="PLANNED", sort_order=538, tags=("fabric", "provenance", "store")),
+
+        # GitHub subsystem depth (runtime/github/)
+        _p("github.client", "GitHub REST API authenticated client", "GitHub", priority="P1", source_authority="GITHUB_CLIENT", route_or_detail="/github/client", implementation_status="PLANNED", sort_order=539, tags=("github", "client", "api")),
+        _p("github.discovery_service", "GitHub organization and repository discovery service", "GitHub", priority="P1", source_authority="GITHUB_DISCOVERY", route_or_detail="/github/discovery", implementation_status="PLANNED", sort_order=540, tags=("github", "discovery", "repos")),
+
+        # Platform adapter subsystem depth (runtime/platform/)
+        _p("platform.linux_adapter", "Linux OS host abstraction adapter", "Infrastructure", priority="P2", source_authority="PLATFORM_ADAPTER", route_or_detail="/platform/linux", implementation_status="PLANNED", sort_order=541, tags=("platform", "linux", "os")),
+        _p("platform.wsl2_adapter", "WSL2 environment host adapter", "Infrastructure", priority="P2", source_authority="PLATFORM_ADAPTER", route_or_detail="/platform/wsl2", implementation_status="PLANNED", sort_order=542, tags=("platform", "wsl2", "windows")),
+
+        # Sandbox subsystem depth (runtime/sandbox/)
+        _p("sandbox.isolation_policy", "Process isolation policy evaluator", "Infrastructure", priority="P1", source_authority="SANDBOX_POLICY", route_or_detail="/sandbox/isolation-policy", implementation_status="PLANNED", sort_order=543, tags=("sandbox", "isolation", "policy")),
+        _p("sandbox.isolation_level", "Sandbox execution isolation level classifier", "Infrastructure", priority="P2", source_authority="SANDBOX_POLICY", route_or_detail="/sandbox/isolation-level", implementation_status="PLANNED", sort_order=544, tags=("sandbox", "isolation", "levels")),
+        _p("sandbox.workspace_backend", "Workspace directory filesystem sandbox backend", "Infrastructure", priority="P2", source_authority="SANDBOX_BACKEND", route_or_detail="/sandbox/workspace-backend", implementation_status="PLANNED", sort_order=545, tags=("sandbox", "workspace", "filesystem")),
+        _p("sandbox.restricted_process", "Restricted process bubblewrap execution backend", "Infrastructure", priority="P2", source_authority="SANDBOX_BACKEND", route_or_detail="/sandbox/restricted-process", implementation_status="PLANNED", sort_order=546, tags=("sandbox", "process", "bwrap")),
+
+        # Workspace subsystem depth (runtime/workspace/)
+        _p("workspace.manager", "Persistent workspace lifecycle manager", "Execution", priority="P1", source_authority="WORKSPACE_MANAGER", route_or_detail="/workspace/manager", implementation_status="PLANNED", sort_order=547, tags=("workspace", "manager", "lifecycle")),
+        _p("workspace.lifecycle_state", "Workspace operational state tracker", "Execution", priority="P2", source_authority="WORKSPACE_MANAGER", route_or_detail="/workspace/state", implementation_status="PLANNED", sort_order=548, tags=("workspace", "state", "lifecycle")),
+
+        # Tool registry subsystem depth (runtime/tools/)
+        _p("tools.registry_service", "Built-in tool capability gate registry", "Execution", priority="P1", source_authority="TOOL_REGISTRY", route_or_detail="/tools/registry-service", implementation_status="PLANNED", sort_order=549, tags=("tools", "registry", "builtins")),
+        _p("tools.manifest_store", "Tool manifest descriptor store", "Execution", priority="P2", source_authority="TOOL_REGISTRY", route_or_detail="/tools/manifest-store", implementation_status="PLANNED", sort_order=550, tags=("tools", "manifests", "descriptors")),
+
+        # Diagnostics subsystem depth (runtime/diagnostics/)
+        _p("diagnostics.runtime_doctor", "Runtime diagnostic doctor engine", "Control Center", priority="P1", source_authority="RUNTIME_DOCTOR", route_or_detail="/diagnostics/runtime-doctor", implementation_status="PLANNED", sort_order=551, tags=("diagnostics", "doctor", "checks")),
+        _p("diagnostics.check_suite", "Subsystem diagnostic check suite", "Control Center", priority="P2", source_authority="RUNTIME_DOCTOR", route_or_detail="/diagnostics/check-suite", implementation_status="PLANNED", sort_order=552, tags=("diagnostics", "checks", "subsystems")),
+
+        # Journal subsystem depth (runtime/journal/)
+        _p("journal.append_stream", "Operation journal append stream", "Evidence / Provenance", priority="P1", source_authority="OPERATION_JOURNAL", route_or_detail="/journal/append-stream", implementation_status="PLANNED", sort_order=553, tags=("journal", "append", "stream")),
+        _p("journal.mission_log", "Mission history journal ledger", "Project State", priority="P1", source_authority="MISSION_JOURNAL", route_or_detail="/journal/mission-log", implementation_status="PLANNED", sort_order=554, tags=("journal", "missions", "ledger")),
+
+        # Security subsystem depth (runtime/security/)
+        _p("security.active_context_manager", "Active security context state manager", "Security / Trust", priority="P1", source_authority="SECURITY_CONTEXT", route_or_detail="/security/active-context-manager", implementation_status="PLANNED", sort_order=555, tags=("security", "context", "active")),
+        _p("security.authority_validator_service", "Cross-subsystem authority validation service", "Security / Trust", priority="P1", source_authority="AUTHORITY_VALIDATOR", route_or_detail="/security/authority-validator-service", implementation_status="PLANNED", sort_order=556, tags=("security", "authority", "validation")),
+
+        # Compute subsystem depth (runtime/compute/)
+        _p("compute.resource_discovery_service", "Compute hardware resource discovery service", "Infrastructure", priority="P1", source_authority="COMPUTE_DISCOVERY", route_or_detail="/compute/resource-discovery", implementation_status="PLANNED", sort_order=557, tags=("compute", "hardware", "discovery")),
+
+        # Intelligence subsystem depth (runtime/intelligence/)
+        _p("intelligence.grading_service", "Benchmark scoring and grading engine service", "Intelligence", priority="P1", source_authority="GRADING_ENGINE", route_or_detail="/intelligence/grading-service", implementation_status="PLANNED", sort_order=558, tags=("intelligence", "grading", "scoring")),
     ]
     return ProjectionRegistry(items)
 
