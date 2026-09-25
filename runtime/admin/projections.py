@@ -797,6 +797,72 @@ def default_projection_registry() -> ProjectionRegistry:
         # Diagnostics & Updater depth (runtime/diagnostics/, runtime/updater/)
         _p("diagnostics.diagnostic_check", "Diagnostic health check descriptor model", "Infrastructure", priority="P1", source_authority="RUNTIME_DOCTOR", route_or_detail="/diagnostics/check-model", implementation_status="PLANNED", sort_order=669, tags=("diagnostics", "health", "check")),
         _p("updater.channel_state", "Update channel governance state model", "Distribution / Updates", priority="P1", source_authority="UPDATE_MANAGER", route_or_detail="/updater/channel-state", implementation_status="PLANNED", sort_order=670, tags=("updater", "channel", "governance")),
+
+        # Batch 012: Master Inventory Expansion & Subsystem Grounding
+        # Fabric & Tenancy models (runtime/fabric/models.py)
+        _p("fabric.tenant_model", "Fabric tenant identity and governance model", "Infrastructure", priority="P1", source_authority="FABRIC_MODEL", route_or_detail="/fabric/tenant-model", implementation_status="PLANNED", sort_order=671, tags=("fabric", "tenant", "governance")),
+        _p("fabric.project_model", "Fabric project workspace model", "Infrastructure", priority="P1", source_authority="FABRIC_MODEL", route_or_detail="/fabric/project-model", implementation_status="PLANNED", sort_order=672, tags=("fabric", "project", "workspace")),
+        _p("fabric.trust_token_model", "Fabric bilateral trust token model", "Infrastructure", priority="P0", source_authority="FABRIC_MODEL", route_or_detail="/fabric/trust-token", implementation_status="PLANNED", sort_order=673, tags=("fabric", "trust", "token")),
+        _p("fabric.node_status_model", "Fabric node cluster status descriptor", "Infrastructure", priority="P0", source_authority="FABRIC_MODEL", route_or_detail="/fabric/node-status", implementation_status="PLANNED", sort_order=674, tags=("fabric", "node", "status")),
+
+        # Events & Messaging broker (runtime/events/bus.py)
+        _p("events.event_bus_service", "Runtime central event bus broker service", "Telemetry", priority="P0", source_authority="EVENT_BUS", route_or_detail="/events/bus-service", implementation_status="PLANNED", sort_order=675, tags=("events", "bus", "broker")),
+        _p("events.event_listener_registry", "Event subscription and listener registry", "Telemetry", priority="P1", source_authority="EVENT_BUS", route_or_detail="/events/listeners", implementation_status="PLANNED", sort_order=676, tags=("events", "listeners", "registry")),
+
+        # Identity & Enrollment lifecycle (runtime/identity/)
+        _p("identity.enrollment_manager", "Machine enrollment lifecycle supervisor", "Runtime Identity", priority="P0", source_authority="ENROLLMENT_MANAGER", route_or_detail="/identity/enrollment-manager", implementation_status="PLANNED", sort_order=677, tags=("identity", "enrollment", "supervisor")),
+        _p("identity.key_attestation", "Cryptographic identity key attestation provider", "Runtime Identity", priority="P0", source_authority="RUNTIME_IDENTITY", route_or_detail="/identity/key-attestation", implementation_status="PLANNED", sort_order=678, tags=("identity", "crypto", "attestation")),
+
+        # Core Generation & Engine state (runtime/core/)
+        _p("core.runtime_generation", "Runtime generational epoch state coordinator", "Runtime Identity", priority="P0", source_authority="RUNTIME_ENGINE", route_or_detail="/core/generation", implementation_status="PLANNED", sort_order=679, tags=("core", "generation", "epoch")),
+        _p("core.runtime_config_model", "Runtime configuration schema descriptor", "Runtime Identity", priority="P1", source_authority="RUNTIME_CONFIG", route_or_detail="/core/config-model", implementation_status="PLANNED", sort_order=680, tags=("core", "config", "schema")),
+        _p("core.runtime_engine_state", "Runtime execution engine state machine", "Runtime Identity", priority="P0", source_authority="RUNTIME_ENGINE", route_or_detail="/core/engine-state", implementation_status="PLANNED", sort_order=681, tags=("core", "engine", "state")),
+
+        # Execution deterministic & models (runtime/execution/)
+        _p("execution.deterministic_engine", "Deterministic tool execution supervisor engine", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/deterministic-engine", implementation_status="PLANNED", sort_order=682, tags=("execution", "deterministic", "engine")),
+        _p("execution.task_context_model", "Task execution contextual descriptor", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/task-context", implementation_status="PLANNED", sort_order=683, tags=("execution", "task", "context")),
+        _p("execution.qwen_model_executor", "Qwen localized model execution driver", "Execution", priority="P1", source_authority="MODEL_EXECUTOR", route_or_detail="/execution/qwen-executor", implementation_status="PLANNED", sort_order=684, tags=("execution", "model", "qwen")),
+        _p("execution.executor_selector", "Dynamic executor capability selector", "Execution", priority="P1", source_authority="EXECUTOR_SELECTOR", route_or_detail="/execution/executor-selector", implementation_status="PLANNED", sort_order=685, tags=("execution", "selector", "capability")),
+        _p("execution.recovery_attestation", "Model registry recovery attestation model", "Execution", priority="P1", source_authority="MODEL_REGISTRY", route_or_detail="/execution/recovery-attestation", implementation_status="PLANNED", sort_order=686, tags=("execution", "recovery", "attestation")),
+
+        # Intelligence & Evaluation depth (runtime/intelligence/)
+        _p("intelligence.implementation_profile", "Model implementation capability profile schema", "Intelligence", priority="P1", source_authority="MODEL_PROFILE", route_or_detail="/intelligence/implementation-profile", implementation_status="PLANNED", sort_order=687, tags=("intelligence", "profile", "model")),
+        _p("intelligence.repeatability_stats", "Benchmark execution repeatability statistics", "Intelligence", priority="P2", source_authority="BENCHMARK_STORE", route_or_detail="/intelligence/repeatability-stats", implementation_status="PLANNED", sort_order=688, tags=("intelligence", "benchmark", "stats")),
+        _p("intelligence.failure_record_model", "Intelligence execution failure record schema", "Intelligence", priority="P2", source_authority="INTELLIGENCE_LAYER", route_or_detail="/intelligence/failure-record", implementation_status="PLANNED", sort_order=689, tags=("intelligence", "failure", "record")),
+        _p("intelligence.hardware_profile_model", "Intelligence hardware compute profile descriptor", "Intelligence", priority="P1", source_authority="HARDWARE_PROFILE", route_or_detail="/intelligence/hardware-profile", implementation_status="PLANNED", sort_order=690, tags=("intelligence", "hardware", "profile")),
+
+        # Journal & Ledger services (runtime/journal/)
+        _p("journal.operation_journal", "Cryptographic operation journal ledger service", "Evidence / Provenance", priority="P0", source_authority="OPERATION_JOURNAL", route_or_detail="/journal/operation-service", implementation_status="PLANNED", sort_order=691, tags=("journal", "operation", "crypto")),
+        _p("journal.mission_journal", "Mission lifecycle audit journal service", "Project State", priority="P0", source_authority="MISSION_JOURNAL", route_or_detail="/journal/mission-service", implementation_status="PLANNED", sort_order=692, tags=("journal", "mission", "audit")),
+
+        # MCP Gateway & Tools (runtime/mcp/)
+        _p("mcp.tool_registry_service", "MCP registered tool catalog service", "Infrastructure", priority="P0", source_authority="MCP_REGISTRY", route_or_detail="/mcp/tool-registry-service", implementation_status="PLANNED", sort_order=693, tags=("mcp", "tools", "registry")),
+        _p("mcp.policy_violation_handler", "MCP capability policy violation trap handler", "Infrastructure", priority="P1", source_authority="MCP_GATEWAY", route_or_detail="/mcp/policy-violation", implementation_status="PLANNED", sort_order=694, tags=("mcp", "policy", "violation")),
+
+        # Sandbox & Process Isolation (runtime/sandbox/)
+        _p("sandbox.manager_service", "Sandbox execution lifecycle manager service", "Execution", priority="P0", source_authority="SANDBOX_MANAGER", route_or_detail="/sandbox/manager-service", implementation_status="PLANNED", sort_order=695, tags=("sandbox", "manager", "isolation")),
+        _p("sandbox.isolation_level_taxonomy", "Sandbox isolation level taxonomy model", "Execution", priority="P1", source_authority="SANDBOX_MANAGER", route_or_detail="/sandbox/isolation-levels", implementation_status="PLANNED", sort_order=696, tags=("sandbox", "isolation", "taxonomy")),
+
+        # Secrets & Cryptographic Broker (runtime/secrets/)
+        _p("secrets.secret_handle_model", "Lease-bound secret reference handle model", "Security / Trust", priority="P1", source_authority="SECRET_BROKER", route_or_detail="/secrets/secret-handle", implementation_status="PLANNED", sort_order=697, tags=("secrets", "handle", "lease")),
+        _p("secrets.credential_broker", "Account credential lease broker service", "Security / Trust", priority="P0", source_authority="SECRET_BROKER", route_or_detail="/secrets/credential-broker", implementation_status="PLANNED", sort_order=698, tags=("secrets", "credential", "broker")),
+
+        # Security & Context Enforcement (runtime/security/)
+        _p("security.authority_validator_engine", "Authority validation rules engine", "Security / Trust", priority="P0", source_authority="AUTHORITY_VALIDATOR", route_or_detail="/security/authority-validator", implementation_status="PLANNED", sort_order=699, tags=("security", "authority", "validator")),
+        _p("security.context_guard_service", "Context boundary guard inspection service", "Security / Trust", priority="P0", source_authority="CONTEXT_GUARD", route_or_detail="/security/context-guard", implementation_status="PLANNED", sort_order=700, tags=("security", "context", "guard")),
+        _p("security.generation_fence_engine", "Generational boundary fence enforcer", "Security / Trust", priority="P0", source_authority="GENERATION_FENCE", route_or_detail="/security/generation-fence", implementation_status="PLANNED", sort_order=701, tags=("security", "generation", "fence")),
+        _p("security.tool_manifest_model", "Secure tool manifest policy descriptor model", "Security / Trust", priority="P1", source_authority="SECURE_TOOLS", route_or_detail="/security/tool-manifest", implementation_status="PLANNED", sort_order=702, tags=("security", "tools", "manifest")),
+
+        # Sync & Verification (runtime/sync/)
+        _p("sync.github_source_provider", "GitHub release distribution source provider", "Distribution / Updates", priority="P1", source_authority="SYNC_SERVICE", route_or_detail="/sync/github-source", implementation_status="PLANNED", sort_order=703, tags=("sync", "github", "source")),
+        _p("sync.candidate_verifier_engine", "Sync release candidate cryptographic verifier", "Distribution / Updates", priority="P0", source_authority="SYNC_VERIFIER", route_or_detail="/sync/candidate-verifier", implementation_status="PLANNED", sort_order=704, tags=("sync", "verifier", "crypto")),
+
+        # Telemetry & Trace (runtime/telemetry/)
+        _p("telemetry.aggregator_service", "Telemetry metrics aggregation pipeline", "Telemetry", priority="P1", source_authority="TELEMETRY_AGGREGATOR", route_or_detail="/telemetry/aggregator-service", implementation_status="PLANNED", sort_order=705, tags=("telemetry", "aggregator", "metrics")),
+        _p("telemetry.collector_service", "Real-time telemetry event collector service", "Telemetry", priority="P1", source_authority="TELEMETRY_COLLECTOR", route_or_detail="/telemetry/collector-service", implementation_status="PLANNED", sort_order=706, tags=("telemetry", "collector", "events")),
+
+        # Updater (runtime/updater/)
+        _p("updater.manager_service", "Release bundle update supervisor service", "Distribution / Updates", priority="P1", source_authority="UPDATE_MANAGER", route_or_detail="/updater/manager-service", implementation_status="PLANNED", sort_order=707, tags=("updater", "manager", "bundle")),
     ]
     return ProjectionRegistry(items)
 
