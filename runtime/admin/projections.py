@@ -935,6 +935,85 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("compute.resource_monitor", "Remote and local compute hardware resource capacity monitor", "Infrastructure", priority="P1", source_authority="COMPUTE_DISCOVERY", route_or_detail="/compute/resource-monitor", implementation_status="PLANNED", sort_order=745, tags=("compute", "resource", "capacity")),
         _p("orchestration.scheduler_engine", "Stepwise plan frontier task scheduler engine", "Execution", priority="P0", source_authority="ORCHESTRATION_KERNEL", route_or_detail="/orchestration/scheduler-engine", implementation_status="PLANNED", sort_order=746, tags=("orchestration", "scheduler", "frontier")),
         _p("workspace.isolation_guard", "Active workspace directory isolation and sandbox guard", "Projects / Workspaces", priority="P0", source_authority="WORKSPACE_MANAGER", route_or_detail="/workspace/isolation-guard", implementation_status="PLANNED", sort_order=747, tags=("workspace", "isolation", "sandbox")),
+
+        # Batch 014: Identity & Attestation (runtime/identity/)
+        _p("identity.enrollment_audit", "Machine enrollment audit trail and attestation log", "Runtime Identity", priority="P0", source_authority="ENROLLMENT_MANAGER", route_or_detail="/identity/enrollment-audit", implementation_status="PLANNED", sort_order=748, tags=("identity", "enrollment", "audit")),
+        _p("identity.key_rotation", "Runtime asymmetric key pair rotation lifecycle", "Runtime Identity", priority="P0", source_authority="RUNTIME_IDENTITY", route_or_detail="/identity/key-rotation", implementation_status="PLANNED", sort_order=749, tags=("identity", "key", "rotation")),
+
+        # Batch 014: Fabric & Mesh (runtime/fabric/)
+        _p("fabric.topology_discovery", "Dynamic repository fabric topology discovery service", "Repository Fabric", priority="P0", source_authority="FABRIC_LIVE_TRUTH", route_or_detail="/fabric/topology-discovery", implementation_status="PLANNED", sort_order=750, tags=("fabric", "topology", "discovery")),
+        _p("fabric.cross_repo_mesh", "Multi-repository fabric synchronization mesh monitor", "Repository Fabric", priority="P0", source_authority="FABRIC_LIVE_TRUTH", route_or_detail="/fabric/cross-repo-mesh", implementation_status="PLANNED", sort_order=751, tags=("fabric", "mesh", "sync")),
+
+        # Batch 014: GitHub Integration (runtime/github/)
+        _p("github.app_installation", "GitHub App installation state and repository access tokens", "GitHub", priority="P0", source_authority="GITHUB_AUTH", route_or_detail="/github/installations", implementation_status="PLANNED", sort_order=752, tags=("github", "app", "installation")),
+        _p("github.webhook_receiver", "GitHub event webhook receiver and signature verifier", "GitHub", priority="P1", source_authority="GITHUB_AUTH", route_or_detail="/github/webhook-receiver", implementation_status="PLANNED", sort_order=753, tags=("github", "webhook", "verifier")),
+
+        # Batch 014: Core Engine & Recovery (runtime/core/)
+        _p("core.crash_recovery_supervisor", "Automated core crash recovery supervisor and report generator", "Runtime Identity", priority="P0", source_authority="RECOVERY_MANAGER", route_or_detail="/core/crash-recovery", implementation_status="PLANNED", sort_order=754, tags=("core", "recovery", "crash")),
+        _p("core.access_audit_matrix", "Critical filesystem and network access verification matrix", "Runtime Identity", priority="P0", source_authority="ACCESS_VERIFIER", route_or_detail="/core/access-matrix", implementation_status="PLANNED", sort_order=755, tags=("core", "access", "verifier")),
+
+        # Batch 014: Execution & Limits (runtime/execution/)
+        _p("execution.limits_guard", "Deterministic executor resource and execution limits guard", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/limits-guard", implementation_status="PLANNED", sort_order=756, tags=("execution", "limits", "guard")),
+        _p("execution.context_packager", "Model execution context package assembler and serializer", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/context-packager", implementation_status="PLANNED", sort_order=757, tags=("execution", "context", "packager")),
+        _p("execution.worker_health_monitor", "Real-time worker thread and process health monitor", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/worker-health", implementation_status="PLANNED", sort_order=758, tags=("execution", "worker", "health")),
+
+        # Batch 014: Capabilities & Intelligence (runtime/capability/, runtime/intelligence/)
+        _p("capability.tier_routing_engine", "Model capability tier evaluation and workload routing engine", "Intelligence", priority="P0", source_authority="CAPABILITY_GATE", route_or_detail="/capability/tier-routing", implementation_status="PLANNED", sort_order=759, tags=("capability", "tier", "routing")),
+        _p("intelligence.benchmark_runner_service", "Automated model capability benchmark execution runner service", "Intelligence", priority="P0", source_authority="BENCHMARK_RUNNER", route_or_detail="/intelligence/benchmark-runner-service", implementation_status="PLANNED", sort_order=760, tags=("intelligence", "benchmark", "runner")),
+        _p("intelligence.delegation_arbiter", "Subagent and model delegation decision arbiter", "Intelligence", priority="P0", source_authority="DELEGATION_ARBITER", route_or_detail="/intelligence/delegation-arbiter", implementation_status="PLANNED", sort_order=761, tags=("intelligence", "delegation", "arbiter")),
+
+        # Batch 014: Accounts & Projects (runtime/accounts/, runtime/projects/)
+        _p("accounts.credential_linkage", "Multi-account identity credential binding and linkage monitor", "Accounts / Identities", priority="P0", source_authority="ACCOUNT_REGISTRY", route_or_detail="/accounts/credential-linkage", implementation_status="PLANNED", sort_order=762, tags=("accounts", "credentials", "linkage")),
+        _p("projects.lifecycle_supervisor", "Project creation, activation, and archiving lifecycle supervisor", "Projects / Workspaces", priority="P0", source_authority="PROJECT_REGISTRY", route_or_detail="/projects/lifecycle-supervisor", implementation_status="PLANNED", sort_order=763, tags=("projects", "lifecycle", "supervisor")),
+
+        # Batch 014: Workspace & Quotas (runtime/workspace/)
+        _p("workspace.quota_enforcer", "Workspace disk space quota and file count boundary enforcer", "Projects / Workspaces", priority="P0", source_authority="WORKSPACE_MANAGER", route_or_detail="/workspace/quota-enforcer", implementation_status="PLANNED", sort_order=764, tags=("workspace", "quota", "limits")),
+        _p("workspace.ephemeral_cleaner", "Ephemeral workspace automated TTL cleanup and teardown service", "Projects / Workspaces", priority="P0", source_authority="WORKSPACE_MANAGER", route_or_detail="/workspace/ephemeral-cleaner", implementation_status="PLANNED", sort_order=765, tags=("workspace", "ephemeral", "cleanup")),
+
+        # Batch 014: Browser Automation (runtime/browser/)
+        _p("browser.traffic_interceptor", "Managed browser network request and response security interceptor", "Browser", priority="P0", source_authority="BROWSER_INTERCEPTOR", route_or_detail="/browser/traffic-interceptor", implementation_status="PLANNED", sort_order=766, tags=("browser", "network", "interceptor")),
+        _p("browser.session_pool_manager", "Browser instance lifecycle pooling and resource manager", "Browser", priority="P0", source_authority="BROWSER_MANAGER", route_or_detail="/browser/session-pool", implementation_status="PLANNED", sort_order=767, tags=("browser", "session", "pool")),
+
+        # Batch 014: Telemetry & Events (runtime/telemetry/, runtime/events/)
+        _p("telemetry.redaction_scrubber", "Sensitive token and secret PII telemetry redaction scrubber", "Telemetry", priority="P0", source_authority="TELEMETRY_SCRUBBER", route_or_detail="/telemetry/redaction-scrubber", implementation_status="PLANNED", sort_order=768, tags=("telemetry", "redaction", "pii")),
+        _p("telemetry.live_stream_broker", "Real-time websocket telemetry streaming broadcast broker", "Telemetry", priority="P0", source_authority="TELEMETRY_STREAM", route_or_detail="/telemetry/live-stream-broker", implementation_status="PLANNED", sort_order=769, tags=("telemetry", "stream", "websocket")),
+        _p("events.dead_letter_queue", "Undelivered event dead-letter queue and retry supervisor", "Telemetry", priority="P0", source_authority="EVENT_BUS", route_or_detail="/events/dead-letter-queue", implementation_status="PLANNED", sort_order=770, tags=("events", "dlq", "retry")),
+
+        # Batch 014: Continuity & Journal & Audit (runtime/continuity/, runtime/journal/)
+        _p("continuity.corruption_detector", "Continuity state corruption severity analyzer and recovery trigger", "Continuity", priority="P0", source_authority="CONTINUITY_ENGINE", route_or_detail="/continuity/corruption-detector", implementation_status="PLANNED", sort_order=771, tags=("continuity", "corruption", "detector")),
+        _p("continuity.mutation_guard", "Repository mutation contract violation enforcement guard", "Continuity", priority="P0", source_authority="CONTINUITY_MUTATION", route_or_detail="/continuity/mutation-guard", implementation_status="PLANNED", sort_order=772, tags=("continuity", "mutation", "guard")),
+        _p("journal.mission_ledger_service", "Durable mission lifecycle transition ledger and audit service", "Project State", priority="P0", source_authority="MISSION_JOURNAL", route_or_detail="/journal/mission-ledger", implementation_status="PLANNED", sort_order=773, tags=("journal", "mission", "ledger")),
+        _p("audit.tamper_evident_seal", "Cryptographic evidence seal and hash-chain verification anchor", "Evidence / Provenance", priority="P0", source_authority="AUDIT_STORE", route_or_detail="/audit/tamper-seal", implementation_status="PLANNED", sort_order=774, tags=("audit", "evidence", "crypto")),
+
+        # Batch 014: Security & Sandbox & Secrets (runtime/security/, runtime/sandbox/, runtime/secrets/)
+        _p("security.pipeline_orchestrator", "10-step authorized execution pipeline orchestrator and enforcer", "Security / Trust", priority="P0", source_authority="AUTHORIZED_PIPELINE", route_or_detail="/security/pipeline-orchestrator", implementation_status="PLANNED", sort_order=775, tags=("security", "pipeline", "orchestrator")),
+        _p("security.tool_registry_enforcer", "ExecutionContext-enforced tool execution registry validator", "Security / Trust", priority="P0", source_authority="SECURE_TOOLS", route_or_detail="/security/tool-registry-enforcer", implementation_status="PLANNED", sort_order=776, tags=("security", "tools", "validator")),
+        _p("sandbox.restricted_process_backend", "Bubblewrap restricted subprocess containment backend supervisor", "Execution", priority="P0", source_authority="SANDBOX_MANAGER", route_or_detail="/sandbox/restricted-backend", implementation_status="PLANNED", sort_order=777, tags=("sandbox", "process", "bubblewrap")),
+        _p("secrets.crypto_key_store", "Encrypted master key and credential storage backend", "Security / Trust", priority="P0", source_authority="SECRET_BACKEND", route_or_detail="/secrets/crypto-store", implementation_status="PLANNED", sort_order=778, tags=("secrets", "crypto", "store")),
+
+        # Batch 014: Sync & Updates (runtime/sync/, runtime/updater/)
+        _p("sync.verification_gate", "Cryptographic release signature and hash verification gate", "Distribution / Updates", priority="P0", source_authority="SYNC_VERIFIER", route_or_detail="/sync/verification-gate", implementation_status="PLANNED", sort_order=779, tags=("sync", "verification", "gate")),
+        _p("updater.bundle_extractor", "Release distribution bundle unpacking and checksum verifier", "Distribution / Updates", priority="P0", source_authority="UPDATE_MANAGER", route_or_detail="/updater/bundle-extractor", implementation_status="PLANNED", sort_order=780, tags=("updater", "bundle", "checksum")),
+
+        # Batch 014: MCP & Tools (runtime/mcp/, runtime/tools/)
+        _p("mcp.authorization_gate", "MCP tool capability authorization and access decision gate", "Infrastructure", priority="P0", source_authority="MCP_GATEWAY", route_or_detail="/mcp/authorization-gate", implementation_status="PLANNED", sort_order=781, tags=("mcp", "authorization", "gate")),
+        _p("tools.capability_sandbox", "Runtime tool execution isolation and privilege boundary sandbox", "Infrastructure", priority="P0", source_authority="TOOL_REGISTRY", route_or_detail="/tools/capability-sandbox", implementation_status="PLANNED", sort_order=782, tags=("tools", "sandbox", "isolation")),
+
+        # Batch 014: Diagnostics & Bootstrap (runtime/diagnostics/, runtime/bootstrap/)
+        _p("diagnostics.system_triage", "Automated subsystem failure triage and repair recommendation engine", "Security / Trust", priority="P0", source_authority="RUNTIME_DOCTOR", route_or_detail="/diagnostics/system-triage", implementation_status="PLANNED", sort_order=783, tags=("diagnostics", "triage", "repair")),
+        _p("bootstrap.gate_evaluator", "Bootstrap readiness gate dependency evaluation and report service", "CONRRAD", priority="P0", source_authority="BOOTSTRAP_ENGINE", route_or_detail="/bootstrap/gate-evaluator", implementation_status="PLANNED", sort_order=784, tags=("bootstrap", "readiness", "gates")),
+
+        # Batch 014: Filesystem & Git & Process & Shell (runtime/filesystem/, runtime/git/, runtime/process/, runtime/shell/)
+        _p("filesystem.path_sanitizer", "Filesystem path traversal prevention and path canonicalization service", "Infrastructure", priority="P0", source_authority="FILESYSTEM_SERVICE", route_or_detail="/filesystem/path-sanitizer", implementation_status="PLANNED", sort_order=785, tags=("filesystem", "sanitizer", "security")),
+        _p("git.repo_integrity_checker", "Local git repository object database and reference integrity checker", "Infrastructure", priority="P0", source_authority="GIT_SERVICE", route_or_detail="/git/repo-integrity", implementation_status="PLANNED", sort_order=786, tags=("git", "integrity", "fsck")),
+        _p("process.signal_dispatcher", "Subprocess POSIX signal dispatch and graceful termination coordinator", "Execution", priority="P0", source_authority="PROCESS_MANAGER", route_or_detail="/process/signal-dispatcher", implementation_status="PLANNED", sort_order=787, tags=("process", "signals", "termination")),
+        _p("shell.command_sanitizer", "Shell invocation argument validation and injection prevention service", "Execution", priority="P0", source_authority="SHELL_EXECUTOR", route_or_detail="/shell/command-sanitizer", implementation_status="PLANNED", sort_order=788, tags=("shell", "sanitizer", "injection")),
+
+        # Batch 014: Compute & Orchestration & Platform (runtime/compute/, runtime/orchestration/, runtime/platform/)
+        _p("compute.remote_session_pool", "Remote compute provider session pool allocation supervisor", "Infrastructure", priority="P0", source_authority="COMPUTE_MANAGER", route_or_detail="/compute/remote-session-pool", implementation_status="PLANNED", sort_order=789, tags=("compute", "session", "pool")),
+        _p("orchestration.frontier_scheduler", "Dynamic task dependency frontier schedule and concurrency limiter", "Execution", priority="P0", source_authority="ORCHESTRATION_KERNEL", route_or_detail="/orchestration/frontier-scheduler", implementation_status="PLANNED", sort_order=790, tags=("orchestration", "frontier", "scheduler")),
+        _p("platform.wsl2_bridge", "WSL2 environment interoperability and filesystem bridge", "Infrastructure", priority="P1", source_authority="PLATFORM_ADAPTER", route_or_detail="/platform/wsl2-bridge", implementation_status="PLANNED", sort_order=791, tags=("platform", "wsl2", "bridge")),
+        _p("platform.linux_kernel_monitor", "Linux OS cgroup, namespace, and resource boundary monitor", "Infrastructure", priority="P0", source_authority="PLATFORM_ADAPTER", route_or_detail="/platform/linux-kernel-monitor", implementation_status="PLANNED", sort_order=792, tags=("platform", "linux", "cgroups")),
     ]
     return ProjectionRegistry(items)
 
