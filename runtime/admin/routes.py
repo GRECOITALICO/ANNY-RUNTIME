@@ -12,9 +12,9 @@ from runtime.admin.templates import (
     models_page, model_detail_page,
     universe_accounts_page, universe_account_detail_page,
     universe_organization_page, universe_projects_page, universe_repositories_page,
-    universe_resources_page, execution_tasks_page, execution_workers_page,
+    universe_resources_page, execution_missions_page, execution_tasks_page, execution_workers_page,
     intelligence_capabilities_page, infrastructure_topology_page, audit_events_page,
-    audit_provenance_page, search_page, generic_placeholder_page,
+    audit_evidence_page, audit_provenance_page, search_page, generic_placeholder_page,
     telemetry_live_page, telemetry_timeline_page
 )
 from runtime.admin.dto import (
@@ -26,6 +26,8 @@ from runtime.admin.dto import (
 from runtime.github.client import GitHubClient
 from runtime.github.discovery import OrganizationDiscoveryService
 from runtime.core.version import __version__
+from runtime.admin.projections import DEFAULT_PROJECTION_REGISTRY, VALID_PRIORITIES
+from runtime.bootstrap.conrrad import project_dependency_matrix, registry_is_complete, REQUIRED_CONRRAD_SERVICES
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,7 @@ class AdminRouter:
             '/audit/evidence': self.handle_audit_evidence,
             '/search': self.handle_search,
             '/api/status': self.handle_api_status,
+            '/api/control-center/projections': self.handle_control_center_projections,
             '/api/v1/continuity/bootstrap': self.handle_bootstrap_api,
             '/telemetry/live': self.handle_telemetry_live,
             '/telemetry/timeline': self.handle_telemetry_timeline,
@@ -248,7 +251,7 @@ class AdminRouter:
     def _set_security_headers(self, handler: BaseHTTPRequestHandler) -> None:
         handler.send_header('X-Content-Type-Options', 'nosniff')
         handler.send_header('X-Frame-Options', 'DENY')
-        handler.send_header('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'unsafe-inline'; connect-src 'self';")
+        handler.send_header('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline'; font-src 'self'; script-src 'unsafe-inline'; connect-src 'self';")
 
 
     def handle_bootstrap_api(self, handler: BaseHTTPRequestHandler) -> None:
@@ -287,106 +290,222 @@ class AdminRouter:
         self.context['direct_json_response'] = events
         return '/'
 
+    def handle_control_center_projections(self, parsed) -> str:
+        """Return the canonical, read-only Control Center projection registry."""
+        query = urllib.parse.parse_qs(parsed.query)
+        priority = query.get('priority', [None])[0]
+        section = query.get('section', [None])[0]
+        implementation_status = query.get('implementation_status', [None])[0]
+        truth_class = query.get('truth_class', [None])[0]
+        freshness = query.get('freshness', [None])[0]
+        tag = query.get('tag', [None])[0]
+        q = query.get('q', [None])[0]
+        projection_id = query.get('projection_id', [None])[0]
+
+        def _int_query(name, default):
+            raw = query.get(name, [None])[0]
+            if raw in (None, ''):
+                return default
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                raise ValueError(f"{name} must be an integer")
+
+        try:
+            limit = _int_query('limit', 100)
+            offset = _int_query('offset', 0)
+            if priority and priority not in VALID_PRIORITIES:
+                raise ValueError("invalid priority")
+            payload = DEFAULT_PROJECTION_REGISTRY.to_api_dict(
+                priority=priority,
+                section=section,
+                implementation_status=implementation_status,
+                truth_class=truth_class,
+                freshness=freshness,
+                tag=tag,
+                q=q,
+                projection_id=projection_id,
+                limit=limit,
+                offset=offset,
+            )
+        except ValueError as exc:
+            if priority and priority not in VALID_PRIORITIES:
+                self.context['direct_json_response'] = {
+                    "error": "INVALID_PRIORITY",
+                    "status": "BLOCKED",
+                }
+            else:
+                self.context['direct_json_response'] = {
+                    "error": "INVALID_PROJECTION_QUERY",
+                    "status": "BLOCKED",
+                    "detail": str(exc),
+                }
+            return '/'
+        self.context['direct_json_response'] = payload
+        return '/'
+
+
     def handle_api_status(self, parsed) -> str:
-        """Returns the live status of the runtime and bootstrap sequence."""
+        """Project Runtime status without manufacturing external authority."""
         engine = self.context.get('runtime_engine')
         if not engine:
             self.context['direct_json_response'] = {
-                "anny_ready": False,
-                "runtime_state": "STOPPED",
-                "error": "No runtime engine"
+                "anny_ready": False, "bootstrap_state": "BLOCKED", "runtime_state": "STOPPED",
+                "runtime_health": "NOT_HEALTHY", "github_status": "UNAUTHORIZED",
+                "fabric_status": "NOT_CONFIGURED", "conrrad_gate_status": "BLOCKED",
+                "conrrad_required_service_count": len(REQUIRED_CONRRAD_SERVICES),
+                "conrrad_observed_service_count": 0, "conrrad_online_verified_count": 0,
+                "conrrad_trust_verified_count": 0, "conrrad_dependencies": project_dependency_matrix(None),
+                "admission_status": "BLOCKED", "reconciliation_status": "BLOCKED",
+                "timestamp": None, "runtime_id": "UNKNOWN", "runtime_version": __version__,
+                "configured_endpoint": None,
+                "truth_sources": {
+                    "runtime_state": "NO_RUNTIME_ENGINE",
+                    "runtime_health": "NO_RUNTIME_ENGINE",
+                    "runtime_id": "UNKNOWN",
+                    "runtime_version": "runtime.core.version.__version__",
+                    "timestamp": "UNKNOWN",
+                    "conrrad": "NOT_CONFIGURED",
+                    "fabric": "UNKNOWN",
+                },
+                "main_execution_verified": False,
+                "github_org": "UNKNOWN", "fabric_org": None, "fabric_repo": None,
+                "fabric_node": "UNKNOWN", "tenant": "UNKNOWN", "policy_revision": "UNKNOWN",
+                "contract_revision": "UNKNOWN", "gates": [], "capabilities": "UNKNOWN",
+                "health": {"engine": "STOPPED", "github": "UNAUTHORIZED"},
+                "access": "UNKNOWN", "tools": "UNKNOWN", "models": "UNKNOWN",
+                "workers": "UNKNOWN", "connectors": "UNKNOWN",
+                "continuity": {"mission": "UNKNOWN", "task": "UNKNOWN", "step": "UNKNOWN",
+                               "action": "UNKNOWN", "blockers": "BLOCKED", "status": "BLOCKED"},
+                "error": "No runtime engine",
             }
             return '/'
 
-        state_name = getattr(engine.state, 'name', str(engine.state))
-        
-        # Fabric
-        fabric_org = getattr(engine.config, 'fabric_org', None) if engine.config else None
-        fabric_repo = getattr(engine.config, 'fabric_repo', None) if engine.config else None
-        
-        # GitHub
+        state_name = getattr(getattr(engine, 'state', None), 'name', str(getattr(engine, 'state', 'UNKNOWN')))
+        config = getattr(engine, 'config', None)
         gh_mgr = self.context.get('github_manager')
-        gh_status = gh_mgr.get_status().auth_status if gh_mgr else "UNAUTHORIZED"
-        
-        # Identity/Health
+        try:
+            gh_status = gh_mgr.get_status().auth_status if gh_mgr else 'UNAUTHORIZED'
+        except Exception:
+            gh_status = 'UNKNOWN'
         auth_mgr = self.context.get('auth_manager')
-        runtime_id = getattr(auth_mgr, 'runtime_id', "UNKNOWN") if auth_mgr else "UNKNOWN"
-        
+        runtime_id = getattr(auth_mgr, 'runtime_id', 'UNKNOWN') if auth_mgr else 'UNKNOWN'
         report = getattr(engine, 'bootstrap_report', None)
-        anny_ready = getattr(report, 'anny_ready', False) if report else False
-        
+        dependency_matrix = project_dependency_matrix(report)
+        conrrad_complete = registry_is_complete(dependency_matrix)
+        conrrad_observed = sum(1 for item in dependency_matrix
+                               if str(item.get("online_status", "UNKNOWN")).upper() != "NOT_CONFIGURED")
+        online_verified = sum(1 for item in dependency_matrix
+                              if str(item.get("online_status", "UNKNOWN")).upper() == "ONLINE_VERIFIED")
+        trust_verified = sum(1 for item in dependency_matrix
+                            if str(item.get("trust_status", "UNKNOWN")).upper() == "VERIFIED")
+        reported_ready = bool(getattr(report, 'anny_ready', False)) if report else False
+        bootstrap_state = getattr(report, 'bootstrap_state', 'UNKNOWN') if report else 'UNKNOWN'
+        if bootstrap_state not in {'READY', 'BLOCKED', 'UNKNOWN'}:
+            bootstrap_state = 'UNKNOWN'
+        anny_ready = reported_ready and bootstrap_state == 'READY' and conrrad_complete
+
+        health_status = 'UNKNOWN'
+        health_check = getattr(engine, 'health_check', None)
+        if callable(health_check):
+            try:
+                observed_health = health_check()
+                health_status = str(observed_health.get('status', 'UNKNOWN')).upper()
+            except Exception:
+                health_status = 'UNKNOWN'
         if state_name in ('ERROR', 'STOPPED'):
-            runtime_health = "NOT_HEALTHY"
+            runtime_health = 'NOT_HEALTHY'
+        elif health_status == 'OK':
+            runtime_health = 'HEALTHY' if anny_ready else 'DEGRADED'
         elif state_name in ('STARTING', 'VERIFYING', 'ADMIN_MODE', 'DRAINING'):
-            runtime_health = "DEGRADED"
+            runtime_health = 'DEGRADED'
         elif state_name in ('READY', 'WAITING_FOR_SESSION'):
-            runtime_health = "HEALTHY" if anny_ready else "DEGRADED"
+            runtime_health = 'HEALTHY' if anny_ready else 'DEGRADED'
         else:
-            runtime_health = "UNKNOWN"
-        
-        report = getattr(engine, 'bootstrap_report', None)
+            runtime_health = 'UNKNOWN'
+
         gates_list = []
-        fabric_node = "UNKNOWN"
         timestamp = None
+        fabric_node = 'UNKNOWN'
         if report:
-            fabric_node = getattr(report, 'fabric_node', "UNKNOWN")
-            timestamp = getattr(report, 'timestamp', None)
-            
-            for g in getattr(report, 'gates', []):
-                name = getattr(g.gate, 'name', str(g.gate)) if hasattr(g, 'gate') else 'UNKNOWN'
-                passed = getattr(g, 'passed', False)
-                evidence = getattr(g, 'evidence', '')
-                status_str = "PASS" if passed else ("BLOCKED" if evidence == 'STUB' else "FAIL")
-                
-                gates_list.append({
-                    "phase": name.split('_')[0] if '_' in name else 'CORE',
-                    "gate": name,
-                    "status": status_str,
-                    "detail": getattr(g, 'detail', ''),
-                    "evidence": evidence
-                })
-            
-        data = {
-            "anny_ready": anny_ready,
-            "runtime_state": state_name,
-            "runtime_health": runtime_health,
-            "github_status": gh_status,
-            "fabric_status": "CONNECTED" if fabric_node and fabric_node != "UNKNOWN" else "NOT_CONFIGURED",
-            "admission_status": "ADMITTED" if anny_ready else "PENDING",
-            "reconciliation_status": "COHERENT" if anny_ready else "PENDING",
-            "timestamp": timestamp,
-            
-            "runtime_id": runtime_id,
-            "runtime_version": __version__,
-            "github_org": gh_status, 
-            "fabric_org": fabric_org,
-            "fabric_repo": fabric_repo,
-            "fabric_node": fabric_node,
-            "tenant": "N/A",
-            "policy_revision": "N/A",
-            "contract_revision": "N/A",
-            
-            "gates": gates_list,
-            "capabilities": [], 
-            "health": {"engine": state_name, "github": gh_status},
-            "access": [],
-            "tools": [],
-            "models": [],
-            "workers": [],
-            "connectors": [],
-            "continuity": {
-                "mission": "N/A",
-                "task": "N/A",
-                "step": "N/A",
-                "action": "N/A",
-                "blockers": "0",
-                "status": state_name
-            }
+            fabric_node = getattr(report, 'fabric_node', 'UNKNOWN') or 'UNKNOWN'
+            timestamp = getattr(report, 'completed_at', None) or getattr(report, 'started_at', None)
+            for gate_result in getattr(report, 'gates', []):
+                gate_obj = getattr(gate_result, 'gate', None)
+                name = getattr(gate_obj, 'name', str(gate_obj)) if gate_obj is not None else 'UNKNOWN'
+                passed = bool(getattr(gate_result, 'passed', False))
+                evidence = getattr(gate_result, 'evidence', '')
+                status_str = 'PASS' if passed else ('BLOCKED' if evidence == 'STUB' else 'FAIL')
+                gates_list.append({'phase': name.split('_')[0] if '_' in name else 'CORE',
+                                   'gate': name, 'status': status_str,
+                                   'detail': getattr(gate_result, 'detail', ''), 'evidence': evidence})
+
+        def _report_status(attribute: str, allowed: set[str]) -> str:
+            value = getattr(report, attribute, None) if report else None
+            if isinstance(value, str) and value in allowed and value != 'UNKNOWN':
+                return value
+            return 'BLOCKED' if bootstrap_state == 'BLOCKED' else 'UNKNOWN'
+
+        def _inventory(attribute: str):
+            inventory = getattr(report, attribute, None) if report else None
+            declared = getattr(inventory, 'declared', None)
+            return declared if isinstance(declared, list) and declared else 'UNKNOWN'
+
+        repository_fabric = next((item for item in dependency_matrix
+                                 if item.get("service_name") == "CONRRAD.REPOSITORY_FABRIC"), None)
+        fabric_status = str(repository_fabric.get('online_status', 'UNKNOWN')) if repository_fabric else 'UNKNOWN'
+
+        truth_sources = {
+            'runtime_state': 'runtime_engine.state',
+            'runtime_health': 'runtime_engine.health_check' if health_check is not None else 'UNKNOWN',
+            'runtime_id': 'auth_manager.runtime_id' if runtime_id != 'UNKNOWN' else 'UNKNOWN',
+            'runtime_version': 'runtime.core.version.__version__',
+            'timestamp': 'bootstrap_report.completed_at' if report and getattr(report, 'completed_at', None) else (
+                'bootstrap_report.started_at' if report and getattr(report, 'started_at', None) else 'UNKNOWN'
+            ),
+            'conrrad': 'bootstrap_report.conrrad_dependencies' if report and getattr(report, 'conrrad_dependencies', None) else 'NOT_CONFIGURED',
+            'fabric': 'bootstrap_report.fabric_node' if report and getattr(report, 'fabric_node', None) else 'UNKNOWN',
         }
-        
+        configured_endpoint = None
+        configured_host = getattr(config, 'host', None) if config else None
+        configured_port = getattr(config, 'port', None) if config else None
+        if configured_host and configured_port:
+            configured_endpoint = f"http://{configured_host}:{configured_port}"
+
+        data = {
+            'anny_ready': anny_ready, 'bootstrap_state': bootstrap_state,
+            'runtime_state': state_name, 'runtime_health': runtime_health,
+            'github_status': gh_status, 'fabric_status': fabric_status,
+            'conrrad_gate_status': 'ONLINE_VERIFIED' if conrrad_complete else 'BLOCKED',
+            'conrrad_required_service_count': len(REQUIRED_CONRRAD_SERVICES),
+            'conrrad_observed_service_count': conrrad_observed,
+            'conrrad_online_verified_count': online_verified,
+            'conrrad_trust_verified_count': trust_verified,
+            'conrrad_dependencies': dependency_matrix,
+            'admission_status': _report_status('admission_status', {'ADMITTED', 'BLOCKED', 'UNKNOWN'}),
+            'reconciliation_status': _report_status('reconciliation_status', {'COHERENT', 'INCOHERENT', 'BLOCKED', 'UNKNOWN'}),
+            'timestamp': timestamp,
+            'runtime_id': runtime_id, 'runtime_version': __version__, 'github_org': 'UNKNOWN',
+            'configured_endpoint': configured_endpoint,
+            'truth_sources': truth_sources,
+            'main_execution_verified': False,
+            'fabric_org': getattr(config, 'fabric_org', None) if config else None,
+            'fabric_repo': getattr(config, 'fabric_repo', None) if config else None,
+            'fabric_node': fabric_node, 'tenant': 'UNKNOWN',
+            'policy_revision': getattr(report, 'policy_revision', 'UNKNOWN') if report else 'UNKNOWN',
+            'contract_revision': 'UNKNOWN', 'gates': gates_list,
+            'capabilities': _inventory('capabilities'),
+            'health': {'engine': state_name, 'runtime': runtime_health, 'github': gh_status,
+                       'conrrad_dependencies': dependency_matrix},
+            'access': 'UNKNOWN', 'tools': _inventory('tools'), 'models': _inventory('models'),
+            'workers': _inventory('workers'), 'connectors': _inventory('connectors'),
+            'continuity': {'mission': 'UNKNOWN', 'task': 'UNKNOWN', 'step': 'UNKNOWN',
+                           'action': 'UNKNOWN',
+                           'blockers': 'BLOCKED' if bootstrap_state == 'BLOCKED' else 'UNKNOWN',
+                           'status': 'BLOCKED' if bootstrap_state == 'BLOCKED' else 'UNKNOWN'},
+        }
         self.context['direct_json_response'] = data
         return '/'
-
 
     def _get_fabric_client(self):
         """Build a GitHubFabricAdapter using dynamic config — not hardcoded constants."""
@@ -444,7 +563,14 @@ class AdminRouter:
         if isinstance(result, ThreePlaneReport):
             # Three-plane bootstrap result
             status_val = "READY" if result.anny_ready else "BLOCKED"
-            recon_status = "COHERENT" if result.anny_ready else "INCOHERENT"
+            reported_reconciliation = getattr(result, "reconciliation_status", "UNKNOWN")
+            recon_status = (
+                reported_reconciliation
+                if reported_reconciliation in {"COHERENT", "INCOHERENT", "BLOCKED"}
+                else "BLOCKED"
+                if getattr(result, "bootstrap_state", None) == "BLOCKED"
+                else "UNKNOWN"
+            )
             fabric_node = result.fabric_node
 
             engine = self.context.get('runtime_engine')
@@ -517,7 +643,7 @@ class AdminRouter:
             fabric_status="CONNECTED" if fabric_node else "NOT_CONFIGURED",
             organizations=[],
             repositories=repo_dtos,
-            blockers=[],
+            blockers=blockers,
             l2_worker_summary=L2WorkerSummaryDTO(count=0, registered_workers=[])
         )
 
@@ -590,12 +716,32 @@ class AdminRouter:
             return fabric_page(status, self._get_csrf())
 
     def handle_sessions(self, parsed) -> str:
-        return sessions_page([], self._get_csrf())
+        sessions = []
+        auth_mgr = self.context.get('auth_manager')
+        if auth_mgr:
+            try:
+                sessions = [
+                    {
+                        "session_id": s.admin_session_id,
+                        "provider": "LOCAL_ADMIN",
+                        "principal": s.principal,
+                        "tenant": "LOCAL",
+                        "created_at": s.issued_at,
+                        "expires_at": s.expires_at,
+                        "status": "ACTIVE",
+                    }
+                    for s in getattr(auth_mgr, "_sessions", {}).values()
+                ]
+            except Exception:
+                sessions = []
+        return sessions_page(sessions, self._get_csrf())
 
     def handle_operations(self, parsed) -> str:
+        # No canonical operation registry is currently exposed by Runtime.
         return operations_page([], self._get_csrf())
 
     def handle_receipts(self, parsed) -> str:
+        # No canonical receipt registry is currently exposed by Runtime.
         return receipts_page([], self._get_csrf())
         
     def handle_executions(self, parsed) -> str:
@@ -666,8 +812,36 @@ class AdminRouter:
         return policies_page(policy, self._get_csrf())
 
     def handle_doctor(self, parsed) -> str:
-        diagnostics = {'checks': [{'name': 'Core', 'status': 'OK'}]}
-        return doctor_page(diagnostics, self._get_csrf())
+        checks = []
+        engine = self.context.get('runtime_engine')
+        if engine and callable(getattr(engine, 'health_check', None)):
+            try:
+                health = engine.health_check()
+                checks.append({"name": "Runtime health", "status": str(health.get("status", "UNKNOWN")).upper()})
+                subsystems = health.get("subsystems", {})
+                for name, status in subsystems.items():
+                    checks.append({"name": f"Runtime / {name}", "status": str(status).upper()})
+            except Exception:
+                checks.append({"name": "Runtime health", "status": "UNKNOWN"})
+        else:
+            checks.append({"name": "Runtime health", "status": "NOT_CONFIGURED"})
+
+        gh_mgr = self.context.get('github_manager')
+        if gh_mgr:
+            try:
+                checks.append({"name": "GitHub authentication", "status": str(gh_mgr.get_status().auth_status).upper()})
+            except Exception:
+                checks.append({"name": "GitHub authentication", "status": "UNKNOWN"})
+        else:
+            checks.append({"name": "GitHub authentication", "status": "UNKNOWN"})
+
+        report = getattr(engine, 'bootstrap_report', None) if engine else None
+        dependency_matrix = project_dependency_matrix(report)
+        checks.append({
+            "name": "CONRRAD mandatory services",
+            "status": "ONLINE_VERIFIED" if registry_is_complete(dependency_matrix) else "BLOCKED",
+        })
+        return doctor_page({"checks": checks}, self._get_csrf())
 
     # --- POST Handlers (Action) ---
 
@@ -947,7 +1121,7 @@ class AdminRouter:
         return universe_resources_page(resources, self._get_csrf())
 
     def handle_execution_missions(self, parsed) -> str:
-        return generic_placeholder_page("Missions", "/execution/missions", self._get_csrf())
+        return execution_missions_page(self._get_continuity_dto(), self._get_csrf())
 
     def handle_execution_tasks(self, parsed) -> str:
         tasks = {}
@@ -964,7 +1138,9 @@ class AdminRouter:
         return execution_workers_page(workers, self._get_csrf())
 
     def handle_execution_executions(self, parsed) -> str:
-        return generic_placeholder_page("Executions", "/execution/executions", self._get_csrf())
+        exec_mgr = self.context.get('execution_manager')
+        executions = exec_mgr.get_all_executions() if exec_mgr else []
+        return executions_page(executions, self._get_csrf())
 
     def handle_execution_workspaces(self, parsed) -> str:
         return generic_placeholder_page("Workspaces", "/execution/workspaces", self._get_csrf())
@@ -988,7 +1164,7 @@ class AdminRouter:
     def handle_infrastructure_topology(self, parsed) -> str:
         gh_mgr = self.context.get('github_manager')
         gh_up = gh_mgr.get_status().connected if gh_mgr else False
-        
+
         fab_up = False
         if hasattr(self, '_get_fabric_client'):
             fc = self._get_fabric_client()
@@ -998,10 +1174,35 @@ class AdminRouter:
                     fab_up = True
                 except Exception:
                     pass
-        return infrastructure_topology_page(gh_up, fab_up, False, self._get_csrf())
+
+        engine = self.context.get('runtime_engine')
+        runtime_state = getattr(getattr(engine, 'state', None), 'name', 'UNKNOWN') if engine else 'UNKNOWN'
+        runtime_health = 'UNKNOWN'
+        if engine and callable(getattr(engine, 'health_check', None)):
+            try:
+                runtime_health = str(engine.health_check().get('status', 'UNKNOWN')).upper()
+                if runtime_health == 'OK':
+                    runtime_health = 'HEALTHY'
+            except Exception:
+                runtime_health = 'UNKNOWN'
+
+        return infrastructure_topology_page(
+            gh_up, fab_up, None,
+            runtime_state=runtime_state,
+            runtime_health=runtime_health,
+            csrf_token=self._get_csrf(),
+        )
 
     def handle_continuity_timeline(self, parsed) -> str:
-        return generic_placeholder_page("Continuity Timeline", "/continuity/timeline", self._get_csrf())
+        engine = self.context.get('runtime_engine')
+        continuity = getattr(engine, 'continuity_engine', None) if engine else None
+        events = []
+        if continuity and hasattr(continuity, 'get_recent_events'):
+            try:
+                events = continuity.get_recent_events(limit=100)
+            except Exception:
+                events = []
+        return continuity_timeline_page(events, self._get_csrf())
 
     def handle_audit_events(self, parsed) -> str:
         events = []
@@ -1036,7 +1237,15 @@ class AdminRouter:
         return audit_provenance_page(prov_data, self._get_csrf())
 
     def handle_audit_evidence(self, parsed) -> str:
-        return generic_placeholder_page("Evidence", "/audit/evidence", self._get_csrf())
+        engine = self.context.get('runtime_engine')
+        continuity = getattr(engine, 'continuity_engine', None) if engine else None
+        refs = []
+        if continuity and hasattr(continuity, 'get_recent_evidence_refs'):
+            try:
+                refs = continuity.get_recent_evidence_refs(limit=200)
+            except Exception:
+                refs = []
+        return audit_evidence_page(refs, self._get_csrf())
 
     def handle_search(self, parsed) -> str:
         query_params = urllib.parse.parse_qs(parsed.query)

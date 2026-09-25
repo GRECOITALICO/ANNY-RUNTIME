@@ -1,0 +1,36 @@
+name: Control Center browser E2E
+
+on:
+  pull_request:
+    paths:
+      - "runtime/admin/**"
+      - "runtime/sync/**"
+      - "runtime/continuity/**"
+      - "tests/test_control_center_http_surface.py"
+      - "tests/test_control_center_browser_e2e.py"
+      - ".github/workflows/control-center-browser-e2e.yml"
+  workflow_dispatch:
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PYTHONPATH: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest playwright PyYAML cryptography psutil azure-identity httpx mcp websocket-client python-dateutil
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run Control Center browser E2E
+        run: pytest -q tests/test_control_center_browser_e2e.py
