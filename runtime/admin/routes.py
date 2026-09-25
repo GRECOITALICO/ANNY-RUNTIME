@@ -36,6 +36,24 @@ from runtime.bootstrap.conrrad import project_dependency_matrix, registry_is_com
 
 logger = logging.getLogger(__name__)
 
+
+def _json_safe_control_value(value: Any) -> Any:
+    """Retain only JSON-native status values at the admin API boundary.
+
+    Control Center status is observational.  Unexpected runtime objects must
+    not turn a status read into a 500 response, and must not be stringified
+    into an implied operational claim.  They are therefore represented as
+    ``UNKNOWN`` while dictionaries and sequences are traversed recursively.
+    """
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe_control_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_control_value(item) for item in value]
+    return "UNKNOWN"
+
+
 class AdminRouter:
     """Simple path-based router for admin requests."""
     
@@ -513,7 +531,7 @@ class AdminRouter:
                            'blockers': 'BLOCKED' if bootstrap_state == 'BLOCKED' else 'UNKNOWN',
                            'status': 'BLOCKED' if bootstrap_state == 'BLOCKED' else 'UNKNOWN'},
         }
-        self.context['direct_json_response'] = data
+        self.context['direct_json_response'] = _json_safe_control_value(data)
         return '/'
 
     def _get_fabric_client(self):
@@ -1301,4 +1319,3 @@ class AdminRouter:
         from runtime.admin.templates import browser_session_page
         html = browser_session_page(session_data[0], self._get_csrf())
         self._send_html(handler, html)
-
