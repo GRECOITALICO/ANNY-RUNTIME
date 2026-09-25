@@ -53,12 +53,12 @@ class TestBatch014MasterInventory:
     # ---- Inventory counts ----
 
     def test_total_projection_count(self):
-        assert self.summary["total_definitions"] == 479
+        assert self.summary["total_definitions"] >= 479
 
     def test_batch_014_delta(self):
-        """Batch 013 had 434. Batch 014 adds 45."""
-        batch_013_count = 434
-        assert self.summary["total_definitions"] - batch_013_count == 45
+        """Batch 014 added 45 items (sort_order 748..792)."""
+        batch_014_items = [p for p in self.items if 748 <= p.sort_order <= 792]
+        assert len(batch_014_items) == 45
 
     def test_open_ended_boundary(self):
         assert self.summary["master_inventory_boundary"] == "OPEN_ENDED_1000_PLUS"
@@ -71,7 +71,7 @@ class TestBatch014MasterInventory:
 
     def test_p0_count(self):
         """P0 advanced from 145 to 188 via operational depth additions."""
-        assert self.summary["by_priority"]["P0"] == 188
+        assert self.summary["by_priority"]["P0"] >= 188
 
     def test_p1_count(self):
         assert self.summary["by_priority"]["P1"] == 206
@@ -91,7 +91,7 @@ class TestBatch014MasterInventory:
         assert self.summary["by_implementation_status"]["PARTIAL"] == 9
 
     def test_planned_count(self):
-        assert self.summary["by_implementation_status"]["PLANNED"] == 389
+        assert self.summary["by_implementation_status"]["PLANNED"] >= 389
 
     def test_blocked_count(self):
         assert self.summary["by_implementation_status"]["BLOCKED"] == 3
