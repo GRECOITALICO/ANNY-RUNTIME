@@ -302,7 +302,7 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("universe.accounts", "Accounts", "Universe", priority="P0", source_authority="ACCOUNT_REGISTRY", route_or_detail="/universe/accounts", implementation_status="BOUND", sort_order=15, tags=("universe", "accounts")),
         _p("universe.account_detail", "Account detail", "Universe", priority="P0", source_authority="ACCOUNT_REGISTRY", route_or_detail="/universe/accounts/{account_id}", implementation_status="BOUND", tags=("universe", "accounts", "detail")),
         _p("universe.organization", "Organization", "Universe", priority="P0", source_authority="CANONICAL_STATE", route_or_detail="/universe/organization", implementation_status="BOUND", sort_order=20, tags=("universe", "organization")),
-        _p("universe.projects", "Projects", "Universe", priority="P0", source_authority="PROJECT_REGISTRY", route_or_detail="/universe/projects", implementation_status="PARTIAL", sort_order=25, tags=("universe", "projects")),
+        _p("universe.projects", "Projects", "Universe", priority="P0", source_authority="PROJECT_REGISTRY", route_or_detail="/universe/projects", implementation_status="BOUND", sort_order=25, tags=("universe", "projects")),
         _p("universe.repositories", "Repositories", "Universe", priority="P0", source_authority="GITHUB_AUTH", route_or_detail="/universe/repositories", implementation_status="BOUND", sort_order=30, tags=("universe", "repositories")),
         _p("universe.resources", "Resources", "Universe", priority="P0", source_authority="RESOURCE_REGISTRY", route_or_detail="/universe/resources", implementation_status="BOUND", sort_order=35, tags=("universe", "resources")),
         _p("execution.missions", "Missions", "Execution", priority="P0", source_authority="CANONICAL_STATE", route_or_detail="/execution/missions", implementation_status="BOUND", sort_order=196, tags=("execution", "missions")),
@@ -310,7 +310,7 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("execution.workspaces", "Workspaces", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/workspaces", implementation_status="PLANNED", sort_order=198, tags=("execution", "workspace")),
         _p("intelligence.executors_view", "Executors view", "Intelligence", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/executors", implementation_status="PARTIAL", failure_reason="Current executor view remains a static compatibility surface; no canonical executor inventory is exposed.", sort_order=255, tags=("intelligence", "executors")),
         _p("browser.session_detail", "Managed browser session detail", "Browser", priority="P0", source_authority="BROWSER_RUNTIME", route_or_detail="/browser/{session_id}", implementation_status="BOUND", sort_order=365, tags=("browser", "detail")),
-        _p("audit.search", "Audit/search discovery", "Evidence / Provenance", priority="P1", source_authority="AUDIT_STORE", route_or_detail="/search", implementation_status="PARTIAL", sort_order=182, tags=("audit", "search")),
+        _p("audit.search", "Audit/search discovery", "Evidence / Provenance", priority="P0", source_authority="AUDIT_STORE", route_or_detail="/search", implementation_status="BOUND", sort_order=182, tags=("audit", "search")),
         _p("runtime.identity.state", "ANNY runtime state", "Runtime Identity", sort_order=10, tags=("header", "state")),
         _p("control.top_level_state", "Top-Level State panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=1, tags=("panel", "shell")),
         _p("control.operational_snapshot", "Operational Snapshot panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=2, tags=("panel",)),
@@ -348,14 +348,14 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("evidence.index", "Evidence index", "Evidence / Provenance", priority="P0", source_authority="CONTINUITY_ENGINE", route_or_detail="/audit/evidence", implementation_status="BOUND", sort_order=171, tags=("evidence", "index")),
         _p("audit.events", "Audit events", "Evidence / Provenance", priority="P0", source_authority="AUDIT_STORE", route_or_detail="/audit/events", implementation_status="BOUND", sort_order=181, tags=("audit", "events")),
         
-        _p("evidence.provenance", "Evidence provenance", "Evidence / Provenance", priority="P1", source_authority="EVIDENCE_REGISTRY", implementation_status="PARTIAL", route_or_detail="/audit/provenance", sort_order=180, tags=("provenance",)),
+        _p("evidence.provenance", "Evidence provenance", "Evidence / Provenance", priority="P0", source_authority="EVIDENCE_REGISTRY", implementation_status="BOUND", route_or_detail="/audit/provenance", sort_order=180, tags=("provenance",)),
         _p("execution.processing_matrix", "Processing matrix", "Execution", source_authority="TELEMETRY_AGGREGATOR", route_or_detail="/api/processing/matrix", sort_order=190, tags=("execution", "telemetry")),
         _p("execution.tasks", "Execution tasks", "Execution", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/tasks", implementation_status="BOUND", sort_order=200, tags=("tasks",)),
         _p("execution.workers", "Execution workers", "Execution", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/workers", implementation_status="BOUND", sort_order=210, tags=("workers",)),
         _p("execution.worker_detail", "Execution worker detail", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/workers/{worker_id}", implementation_status="BOUND", sort_order=211, tags=("workers", "detail")),
         _p("execution.results", "Execution results", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/results", implementation_status="PLANNED", sort_order=220, tags=("results",)),
         _p("intelligence.capabilities", "Intelligence capabilities", "Intelligence", priority="P0", route_or_detail="/intelligence/capabilities", sort_order=230, tags=("capabilities",)),
-        _p("intelligence.models", "Intelligence models", "Intelligence", priority="P1", route_or_detail="/models", implementation_status="PARTIAL", sort_order=240, tags=("models",)),
+        _p("intelligence.models", "Intelligence models", "Intelligence", priority="P0", route_or_detail="/models", implementation_status="BOUND", sort_order=240, tags=("models",)),
         _p("intelligence.model_detail", "Intelligence model detail", "Intelligence", priority="P0", source_authority="RUNTIME_MODEL_REGISTRY", route_or_detail="/models/{model_id}", implementation_status="BOUND", sort_order=241, tags=("models", "detail")),
         _p("intelligence.executors", "Intelligence executors", "Intelligence", priority="P1", route_or_detail="/intelligence/executors", implementation_status="PLANNED", sort_order=250, tags=("executors",)),
         _p("intelligence.performance", "Intelligence performance", "Intelligence", priority="P2", route_or_detail="/intelligence/performance", implementation_status="PLANNED", sort_order=260, tags=("performance",)),
@@ -669,6 +669,73 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("sync.verification_state", "Sync candidate verification state machine", "Distribution / Updates", priority="P1", source_authority="SYNC_MODELS", route_or_detail="/sync/verification-state", implementation_status="PLANNED", sort_order=594, tags=("sync", "verification", "state")),
         _p("sync.sync_state", "Governed sync state machine status", "Distribution / Updates", priority="P1", source_authority="SYNC_MODELS", route_or_detail="/sync/state-status", implementation_status="PLANNED", sort_order=595, tags=("sync", "state", "governance")),
         _p("sync.result_model", "Governed sync execution result record", "Distribution / Updates", priority="P1", source_authority="SYNC_MODELS", route_or_detail="/sync/result-record", implementation_status="PLANNED", sort_order=596, tags=("sync", "result", "record")),
+
+        # Batch 010: Master Inventory Expansion & Subsystem Grounding
+        # Core subsystem depth (runtime/core/)
+        _p("core.access_test_result", "Access verification test result schema", "Security / Trust", priority="P2", source_authority="CORE_ACCESS_VERIFIER", route_or_detail="/core/access-tests", implementation_status="PLANNED", sort_order=597, tags=("core", "access", "schema")),
+        _p("core.critical_access_verifier", "Critical access path verification engine", "Security / Trust", priority="P1", source_authority="CORE_ACCESS_VERIFIER", route_or_detail="/core/critical-access", implementation_status="PLANNED", sort_order=598, tags=("core", "access", "verifier")),
+        _p("core.component_inventory_model", "Component inventory descriptor schema", "Control Center", priority="P2", source_authority="CORE_INVENTORY", route_or_detail="/core/component-inventory", implementation_status="PLANNED", sort_order=599, tags=("core", "inventory", "components")),
+        _p("core.inventory_discovery_service", "Runtime component inventory discovery scanner", "Control Center", priority="P1", source_authority="CORE_INVENTORY", route_or_detail="/core/inventory-discovery", implementation_status="PLANNED", sort_order=600, tags=("core", "discovery", "scanner")),
+        _p("core.recovery_report", "Runtime crash recovery report descriptor", "Runtime Identity", priority="P2", source_authority="CORE_RECOVERY", route_or_detail="/core/recovery-report", implementation_status="PLANNED", sort_order=601, tags=("core", "recovery", "report")),
+        _p("core.recovery_manager_service", "Runtime crash recovery lifecycle supervisor", "Runtime Identity", priority="P1", source_authority="CORE_RECOVERY", route_or_detail="/core/recovery-service", implementation_status="PLANNED", sort_order=602, tags=("core", "recovery", "manager")),
+
+        # Event bus taxonomy & envelopes (runtime/events/bus.py)
+        _p("events.event_type_taxonomy", "Runtime event taxonomy classifier", "Telemetry", priority="P2", source_authority="EVENT_BUS", route_or_detail="/events/types", implementation_status="PLANNED", sort_order=603, tags=("events", "taxonomy", "types")),
+        _p("events.event_envelope", "Canonical runtime event envelope record", "Telemetry", priority="P2", source_authority="EVENT_BUS", route_or_detail="/events/envelope", implementation_status="PLANNED", sort_order=604, tags=("events", "envelope", "record")),
+
+        # Execution tool invocation & receipts (runtime/execution/)
+        _p("execution.tool_invocation", "Deterministic tool invocation descriptor", "Execution", priority="P2", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/tool-invocation", implementation_status="PLANNED", sort_order=605, tags=("execution", "tools", "invocation")),
+        _p("execution.tool_result", "Deterministic tool execution result payload", "Execution", priority="P2", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/tool-result", implementation_status="PLANNED", sort_order=606, tags=("execution", "tools", "result")),
+        _p("execution.receipt_store_service", "Execution receipt persistent ledger store", "Evidence / Provenance", priority="P1", source_authority="RECEIPT_STORE", route_or_detail="/execution/receipts/store-service", implementation_status="PLANNED", sort_order=607, tags=("execution", "receipts", "store")),
+        _p("execution.status_state", "Task execution status state machine", "Execution", priority="P2", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/status-state", implementation_status="PLANNED", sort_order=608, tags=("execution", "status", "lifecycle")),
+        _p("execution.worker_state", "Worker operational state tracker", "Execution", priority="P2", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/worker-state", implementation_status="PLANNED", sort_order=609, tags=("execution", "workers", "state")),
+        _p("execution.worker_definition", "Worker capability and profile definition schema", "Execution", priority="P2", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/worker-definition", implementation_status="PLANNED", sort_order=610, tags=("execution", "workers", "schema")),
+
+        # GitHub discovery topology (runtime/github/discovery.py)
+        _p("github.discovered_principal", "GitHub authenticated principal identity record", "GitHub", priority="P2", source_authority="GITHUB_DISCOVERY", route_or_detail="/github/discovered-principal", implementation_status="PLANNED", sort_order=611, tags=("github", "principal", "discovery")),
+        _p("github.discovered_organization", "GitHub organization topology descriptor", "GitHub", priority="P2", source_authority="GITHUB_DISCOVERY", route_or_detail="/github/discovered-organization", implementation_status="PLANNED", sort_order=612, tags=("github", "organization", "discovery")),
+        _p("github.discovered_repository", "GitHub repository resource descriptor", "GitHub", priority="P2", source_authority="GITHUB_DISCOVERY", route_or_detail="/github/discovered-repository", implementation_status="PLANNED", sort_order=613, tags=("github", "repository", "discovery")),
+
+        # Machine enrollment protocols (runtime/identity/enrollment.py)
+        _p("identity.enrollment_state", "Machine enrollment state machine", "Runtime Identity", priority="P2", source_authority="ENROLLMENT_MANAGER", route_or_detail="/identity/enrollment-state", implementation_status="PLANNED", sort_order=614, tags=("identity", "enrollment", "state")),
+        _p("identity.challenge_response", "Cryptographic machine enrollment challenge protocol", "Runtime Identity", priority="P1", source_authority="ENROLLMENT_MANAGER", route_or_detail="/identity/challenge-response", implementation_status="PLANNED", sort_order=615, tags=("identity", "challenge", "crypto")),
+
+        # Intelligence models & certification (runtime/intelligence/models.py)
+        _p("intelligence.capability_tier", "Intelligence capability tier taxonomy", "Intelligence", priority="P2", source_authority="INTELLIGENCE_LAYER", route_or_detail="/intelligence/capability-tier", implementation_status="PLANNED", sort_order=616, tags=("intelligence", "tier", "taxonomy")),
+        _p("intelligence.delegation_decision", "Model delegation decision record", "Intelligence", priority="P2", source_authority="INTELLIGENCE_LAYER", route_or_detail="/intelligence/delegation-decision", implementation_status="PLANNED", sort_order=617, tags=("intelligence", "delegation", "routing")),
+        _p("intelligence.execution_mode", "Intelligence execution mode classifier", "Intelligence", priority="P2", source_authority="INTELLIGENCE_LAYER", route_or_detail="/intelligence/execution-mode", implementation_status="PLANNED", sort_order=618, tags=("intelligence", "mode", "classifier")),
+        _p("intelligence.certification_status", "Benchmark certification status state machine", "Intelligence", priority="P1", source_authority="BENCHMARK_STORE", route_or_detail="/intelligence/certification-status", implementation_status="PLANNED", sort_order=619, tags=("intelligence", "certification", "status")),
+        _p("intelligence.resource_fit", "Model hardware resource compatibility fit", "Intelligence", priority="P2", source_authority="INTELLIGENCE_LAYER", route_or_detail="/intelligence/resource-fit", implementation_status="PLANNED", sort_order=620, tags=("intelligence", "hardware", "compatibility")),
+        _p("intelligence.benchmark_case_model", "Benchmark evaluation case specification", "Intelligence", priority="P2", source_authority="BENCHMARK_STORE", route_or_detail="/intelligence/benchmark-case-model", implementation_status="PLANNED", sort_order=621, tags=("intelligence", "benchmarks", "case")),
+        _p("intelligence.benchmark_result_model", "Benchmark evaluation execution result record", "Intelligence", priority="P2", source_authority="BENCHMARK_STORE", route_or_detail="/intelligence/benchmark-result-model", implementation_status="PLANNED", sort_order=622, tags=("intelligence", "benchmarks", "result")),
+
+        # Journal ledger entry models (runtime/journal/)
+        _p("journal.entry_record", "Cryptographic operation journal entry record", "Evidence / Provenance", priority="P2", source_authority="OPERATION_JOURNAL", route_or_detail="/journal/entry-record", implementation_status="PLANNED", sort_order=623, tags=("journal", "entry", "crypto")),
+        _p("journal.mission_entry_record", "Mission journal ledger entry record", "Project State", priority="P2", source_authority="MISSION_JOURNAL", route_or_detail="/journal/mission-entry-record", implementation_status="PLANNED", sort_order=624, tags=("journal", "mission", "entry")),
+
+        # MCP gateway service (runtime/mcp/gateway.py)
+        _p("mcp.gateway_service", "Capability-validated MCP tool execution gateway service", "Infrastructure", priority="P1", source_authority="MCP_GATEWAY", route_or_detail="/mcp/gateway-service", implementation_status="PLANNED", sort_order=625, tags=("mcp", "gateway", "tools")),
+
+        # Process management records (runtime/process/manager.py)
+        _p("process.state_lifecycle", "Subprocess state machine lifecycle tracker", "Execution", priority="P2", source_authority="PROCESS_MANAGER", route_or_detail="/process/state-lifecycle", implementation_status="PLANNED", sort_order=626, tags=("process", "state", "lifecycle")),
+        _p("process.execution_record", "Supervised subprocess execution record", "Execution", priority="P2", source_authority="PROCESS_MANAGER", route_or_detail="/process/execution-record", implementation_status="PLANNED", sort_order=627, tags=("process", "record", "pid")),
+
+        # Secrets backend & broker (runtime/secrets/backend.py)
+        _p("secrets.file_backend", "Local encrypted file secret store backend", "Security / Trust", priority="P1", source_authority="SECRET_BACKEND", route_or_detail="/secrets/file-backend", implementation_status="PLANNED", sort_order=628, tags=("secrets", "encryption", "backend")),
+        _p("secrets.secure_broker", "Lease-scoped credential broker service", "Security / Trust", priority="P1", source_authority="SECRET_BROKER", route_or_detail="/secrets/secure-broker", implementation_status="PLANNED", sort_order=629, tags=("secrets", "broker", "leases")),
+
+        # Shell command classification (runtime/shell/executor.py)
+        _p("shell.result_payload", "Classified shell command output result payload", "Execution", priority="P2", source_authority="RUNTIME_SHELL", route_or_detail="/shell/result-payload", implementation_status="PLANNED", sort_order=630, tags=("shell", "result", "payload")),
+        _p("shell.effect_classifier", "Shell execution side-effect classifier", "Execution", priority="P1", source_authority="RUNTIME_SHELL", route_or_detail="/shell/effect-classifier", implementation_status="PLANNED", sort_order=631, tags=("shell", "effect", "classifier")),
+
+        # Sync verification result (runtime/sync/verifier.py)
+        _p("sync.verification_result", "Cryptographic sync package verification result record", "Distribution / Updates", priority="P1", source_authority="SYNC_VERIFIER", route_or_detail="/sync/verification-result", implementation_status="PLANNED", sort_order=632, tags=("sync", "verifier", "sha256")),
+
+        # Telemetry trace context (runtime/telemetry/context.py)
+        _p("telemetry.trace_context", "Distributed telemetry trace context propagator", "Telemetry", priority="P2", source_authority="TELEMETRY_CONTEXT", route_or_detail="/telemetry/trace-context", implementation_status="PLANNED", sort_order=633, tags=("telemetry", "tracing", "context")),
+
+        # Updater distribution manifest (runtime/updater/manager.py)
+        _p("updater.manifest_info", "Release bundle distribution update manifest", "Distribution / Updates", priority="P1", source_authority="UPDATE_MANAGER", route_or_detail="/updater/info", implementation_status="PLANNED", sort_order=634, tags=("updater", "manifest", "bundle")),
     ]
     return ProjectionRegistry(items)
 

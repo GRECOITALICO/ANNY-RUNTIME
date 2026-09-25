@@ -15,7 +15,7 @@ def test_batch006_projection_registry_counts_and_invariants():
     assert summary["by_priority"]["P3"] == 0
 
     assert summary["by_implementation_status"]["BOUND"] >= 70
-    assert summary["by_implementation_status"]["PARTIAL"] >= 13
+    assert summary["by_implementation_status"]["PARTIAL"] >= 9
     assert summary["by_implementation_status"]["BLOCKED"] >= 3
     assert summary["by_implementation_status"]["PLANNED"] >= 86
 
