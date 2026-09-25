@@ -14,7 +14,7 @@ import logging
 import urllib.request
 import urllib.error
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Callable, List
 
 from runtime.identity.runtime_identity import RuntimeIdentity
 from runtime.github.client import GitHubClient, GitHubAuthError
@@ -26,6 +26,12 @@ from runtime.core.access_verifier import CriticalAccessVerifier
 
 from .gates import ReadinessGate, GateResult, MANDATORY_GATES
 from .report import BootstrapReport, ComponentInventory
+from .conrrad import (
+    REQUIRED_CONRRAD_SERVICES,
+    normalize_dependency_registry,
+    not_configured_dependency_matrix,
+    registry_is_complete,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +55,8 @@ class ThreePlaneBootstrap:
         tool_registry=None,
         model_registry=None,
         worker_manager=None,
+        conrrad_client=None,
+        event_sink: Optional[Callable[[str], None]] = None,
     ):
         self.data_dir = data_dir
         self.github = github_client
@@ -69,11 +77,21 @@ class ThreePlaneBootstrap:
         self._tool_registry = tool_registry
         self._model_registry = model_registry
         self._worker_manager = worker_manager
+        # Injected external authority boundary; absent client fails closed before GitHub.
+        self.conrrad = conrrad_client
+        self.event_log: List[str] = []
+        self._event_sink = event_sink
 
     def _admin_url(self, path: str) -> str:
         """Return the configured local admin URL used by Runtime probes."""
         clean_path = path if path.startswith("/") else "/" + path
         return f"http://{self.admin_host}:{self.admin_port}{clean_path}"
+    def _record_event(self, event: str) -> None:
+        """Expose causal order to bounded tests without treating it as live evidence."""
+        self.event_log.append(event)
+        if self._event_sink:
+            self._event_sink(event)
+
     def resolve(self) -> BootstrapReport:
         """Executes the full bootstrap sequence. Returns a BootstrapReport.
 
@@ -89,9 +107,23 @@ class ThreePlaneBootstrap:
             report.runtime_id = identity.runtime_id
 
         # ---------------------------------------------------------
-        # PLANE 2: GitHub Connectivity & Auth
+        # PLANE 2: CONRRAD external authority (must precede GitHub)
         # ---------------------------------------------------------
-        gh_connected = self._gate_github_connected(report)
+        conrrad_preflight = self._gate_conrrad_bootstrap_preflight(report, identity)
+        conrrad_trust = self._gate_conrrad_manifest_and_trust(report, identity, conrrad_preflight)
+        conrrad_registry = self._gate_conrrad_dependency_registry(report, conrrad_trust)
+
+        # ---------------------------------------------------------
+        # PLANE 3: GitHub Connectivity & Auth. It is unreachable from this
+        # source path until every required CONRRAD precondition passes.
+        # ---------------------------------------------------------
+        can_connect_github = bool(identity and conrrad_preflight and conrrad_trust and conrrad_registry)
+        gh_connected = self._gate_github_connected(report) if can_connect_github else False
+        if not can_connect_github:
+            report.add_result(GateResult(
+                ReadinessGate.GITHUB_CONNECTED, False,
+                "CONRRAD preflight, manifest/trust, or dependency registry is not ready",
+            ))
         gh_bound = self._gate_github_org_bound(report, gh_connected)
 
         # ---------------------------------------------------------
@@ -194,6 +226,89 @@ class ThreePlaneBootstrap:
 
     # --- Gate Implementations ---
 
+    def _gate_conrrad_bootstrap_preflight(
+        self, report: BootstrapReport, ident: Optional[RuntimeIdentity]
+    ) -> bool:
+        self._record_event("CONRRAD_BOOTSTRAP_PREFLIGHT")
+        if not ident:
+            report.conrrad_dependencies = not_configured_dependency_matrix("Runtime identity unavailable")
+            report.add_result(GateResult(ReadinessGate.CONRRAD_BOOTSTRAP_PREFLIGHT, False, "Runtime identity unavailable"))
+            return False
+        if not self.conrrad:
+            report.conrrad_dependencies = not_configured_dependency_matrix("External CONRRAD bootstrap is not configured")
+            report.add_result(GateResult(
+                ReadinessGate.CONRRAD_BOOTSTRAP_PREFLIGHT, False,
+                "External CONRRAD bootstrap is not configured",
+            ))
+            return False
+        try:
+            response = self.conrrad.bootstrap_preflight(ident.runtime_id)
+            status = str(response.get("status", response.get("online_status", "UNKNOWN"))).upper() if isinstance(response, dict) else "UNKNOWN"
+            if status == "ONLINE_VERIFIED":
+                report.add_result(GateResult(ReadinessGate.CONRRAD_BOOTSTRAP_PREFLIGHT, True, "External CONRRAD preflight passed"))
+                return True
+            report.conrrad_dependencies = not_configured_dependency_matrix(f"CONRRAD bootstrap preflight: {status}")
+            report.add_result(GateResult(ReadinessGate.CONRRAD_BOOTSTRAP_PREFLIGHT, False, f"CONRRAD bootstrap preflight: {status}"))
+            return False
+        except Exception as exc:
+            report.conrrad_dependencies = not_configured_dependency_matrix("CONRRAD bootstrap preflight unavailable")
+            report.add_result(GateResult(ReadinessGate.CONRRAD_BOOTSTRAP_PREFLIGHT, False, f"CONRRAD bootstrap preflight unavailable: {type(exc).__name__}"))
+            return False
+
+    def _gate_conrrad_manifest_and_trust(
+        self, report: BootstrapReport, ident: Optional[RuntimeIdentity], preflight_passed: bool
+    ) -> bool:
+        if not preflight_passed or not ident or not self.conrrad:
+            report.add_result(GateResult(ReadinessGate.CONRRAD_MANIFEST_AND_TRUST_VERIFIED, False, "CONRRAD bootstrap preflight not passed"))
+            return False
+        self._record_event("VERIFY_CONRRAD_MANIFEST_AND_TRUST")
+        try:
+            response = self.conrrad.verify_manifest_and_trust(ident.runtime_id)
+            trust_status = str(response.get("trust_status", "UNKNOWN")).upper() if isinstance(response, dict) else "UNKNOWN"
+            manifest_status = str(response.get("manifest_status", "UNKNOWN")).upper() if isinstance(response, dict) else "UNKNOWN"
+            if trust_status == "VERIFIED" and manifest_status == "VERIFIED":
+                report.add_result(GateResult(ReadinessGate.CONRRAD_MANIFEST_AND_TRUST_VERIFIED, True, "External manifest and trust verified"))
+                return True
+            report.add_result(GateResult(
+                ReadinessGate.CONRRAD_MANIFEST_AND_TRUST_VERIFIED, False,
+                f"CONRRAD manifest/trust not verified: manifest={manifest_status}, trust={trust_status}",
+            ))
+            return False
+        except Exception as exc:
+            report.add_result(GateResult(ReadinessGate.CONRRAD_MANIFEST_AND_TRUST_VERIFIED, False, f"CONRRAD manifest/trust unavailable: {type(exc).__name__}"))
+            return False
+
+    def _gate_conrrad_dependency_registry(self, report: BootstrapReport, trust_passed: bool) -> bool:
+        if not trust_passed or not self.conrrad:
+            if not report.conrrad_dependencies:
+                report.conrrad_dependencies = not_configured_dependency_matrix("CONRRAD manifest/trust is not verified")
+            report.add_result(GateResult(ReadinessGate.CONRRAD_DEPENDENCY_REGISTRY_LOADED, False, "CONRRAD manifest/trust not verified"))
+            return False
+        self._record_event("LOAD_REQUIRED_CONRRAD_DEPENDENCY_REGISTRY")
+        try:
+            records = normalize_dependency_registry(self.conrrad.load_required_dependency_registry())
+            if not registry_is_complete(records):
+                report.conrrad_dependencies = records or not_configured_dependency_matrix(
+                    "CONRRAD dependency registry is absent or incomplete"
+                )
+                report.add_result(GateResult(
+                    ReadinessGate.CONRRAD_DEPENDENCY_REGISTRY_LOADED, False,
+                    "CONRRAD dependency registry is absent or incomplete",
+                ))
+                return False
+            report.conrrad_dependencies = records
+            report.add_result(GateResult(
+                ReadinessGate.CONRRAD_DEPENDENCY_REGISTRY_LOADED, True,
+                f"Required CONRRAD dependency registry loaded ({len(REQUIRED_CONRRAD_SERVICES)} services)",
+            ))
+            return True
+        except Exception as exc:
+            report.conrrad_dependencies = not_configured_dependency_matrix(
+                "CONRRAD dependency registry unavailable"
+            )
+            report.add_result(GateResult(ReadinessGate.CONRRAD_DEPENDENCY_REGISTRY_LOADED, False, f"CONRRAD dependency registry unavailable: {type(exc).__name__}"))
+            return False
+
     def _gate_runtime_identity(self, report: BootstrapReport) -> Optional[RuntimeIdentity]:
         try:
             ident = RuntimeIdentity.load(self.data_dir)
@@ -207,6 +322,7 @@ class ThreePlaneBootstrap:
             return None
 
     def _gate_github_connected(self, report: BootstrapReport) -> bool:
+        self._record_event("CONNECT_GITHUB")
         if not self.github:
             report.add_result(GateResult(ReadinessGate.GITHUB_CONNECTED, False, "No GitHub client provided"))
             return False
@@ -243,6 +359,7 @@ class ThreePlaneBootstrap:
             return False
 
         try:
+            self._record_event("GITHUB_ORGANIZATION_MEMBERSHIP")
             orgs = self.github.list_organizations()
             org_names = {org["login"] for org in orgs}
             if required_org in org_names:
