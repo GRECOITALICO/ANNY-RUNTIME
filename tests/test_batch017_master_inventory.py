@@ -47,10 +47,10 @@ class _Handler:
         self.wfile.end_headers()
 
 
-def test_batch017_inventory_is_unchanged_after_failure_reconciliation():
+def test_batch017_inventory_keeps_reconciled_floors_after_later_expansion():
     summary = DEFAULT_PROJECTION_REGISTRY.summary()
-    assert summary["total_definitions"] == 559
-    assert summary["by_priority"]["P0"] == 268
+    assert summary["total_definitions"] >= 559
+    assert summary["by_priority"]["P0"] >= 268
     assert summary["by_implementation_status"]["BOUND"] == 78
 
 

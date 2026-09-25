@@ -1227,6 +1227,60 @@ def default_projection_registry() -> ProjectionRegistry:
 
         # Batch 016: Admin Audit Entry Model (runtime/admin/audit.py)
         _p("admin.audit_persistence", "Admin audit log file persistence and rotation lifecycle manager", "Evidence / Provenance", priority="P0", source_authority="ADMIN_AUDIT", route_or_detail="/admin/audit-persistence", implementation_status="PLANNED", sort_order=872, tags=("admin", "audit", "persistence")),
+
+        # Batch 020: ANNY-native Runtime operating plane (projection contracts only; not live claims)
+        _p("runtime.anny_native_operating_plane", "ANNY-native Runtime operating plane independent of external coding agents", "Runtime Identity", priority="P0", source_authority="RUNTIME_ENGINE", route_or_detail="/runtime/anny-native-operating-plane", implementation_status="PLANNED", sort_order=873, tags=("runtime", "anny-native", "operating-plane")),
+        _p("runtime.execution_admission", "Runtime execution admission gate for local and delegated work", "Runtime Identity", priority="P0", source_authority="RUNTIME_ENGINE", route_or_detail="/runtime/execution-admission", implementation_status="PLANNED", sort_order=874, tags=("runtime", "admission", "execution")),
+        _p("runtime.local_first_execution_boundary", "Local-first execution boundary distinct from offline operation", "Runtime Identity", priority="P0", source_authority="RUNTIME_ENGINE", route_or_detail="/runtime/local-first-execution-boundary", implementation_status="PLANNED", sort_order=875, tags=("runtime", "local-execution", "boundary")),
+        _p("runtime.provider_neutrality_surface", "Provider-neutral Runtime identity surface without vendor brand as architecture", "Runtime Identity", priority="P0", source_authority="RUNTIME_ENGINE", route_or_detail="/runtime/provider-neutrality", implementation_status="PLANNED", sort_order=876, tags=("runtime", "provider-neutrality")),
+        _p("runtime.certification_chain_projection", "Capability certification-chain projection from DEFINED through CERTIFIED", "Runtime Identity", priority="P0", source_authority="RUNTIME_ENGINE", route_or_detail="/runtime/certification-chain", implementation_status="PLANNED", sort_order=877, tags=("runtime", "certification", "governance")),
+        _p("runtime.truth_class_operator_legend", "Operator truth-class legend for ONLINE DEGRADED BLOCKED UNKNOWN UNVERIFIED", "Control Center", priority="P0", source_authority="PROJECTION_REGISTRY", route_or_detail="/control/truth-class-legend", implementation_status="PLANNED", sort_order=878, tags=("control_center", "truth-class", "observability")),
+
+        # Batch 020: ANNY Harness
+        _p("harness.operating_surface", "ANNY Harness principal operating surface", "Harness", priority="P0", source_authority="HARNESS_REGISTRY", route_or_detail="/harness", implementation_status="PLANNED", sort_order=879, tags=("harness", "operating-surface")),
+        _p("harness.session_state", "ANNY Harness session state and attachment to Runtime", "Harness", priority="P0", source_authority="HARNESS_REGISTRY", route_or_detail="/harness/session", implementation_status="PLANNED", sort_order=880, tags=("harness", "session")),
+        _p("harness.capability_dispatch", "Harness dispatch of catalog capabilities into Runtime execution", "Harness", priority="P0", source_authority="HARNESS_REGISTRY", route_or_detail="/harness/dispatch", implementation_status="PLANNED", sort_order=881, tags=("harness", "dispatch", "catalog")),
+        _p("harness.worker_handoff", "Harness handoff of work onto the worker registry", "Harness", priority="P0", source_authority="HARNESS_REGISTRY", route_or_detail="/harness/worker-handoff", implementation_status="PLANNED", sort_order=882, tags=("harness", "workers", "handoff")),
+        _p("harness.evidence_capture", "Harness evidence capture bound to the audit and provenance stores", "Harness", priority="P0", source_authority="HARNESS_REGISTRY", route_or_detail="/harness/evidence", implementation_status="PLANNED", sort_order=883, tags=("harness", "evidence", "audit")),
+        _p("harness.external_agent_nondependency", "Harness contract that ordinary operation does not require external IDE-agents", "Harness", priority="P0", source_authority="HARNESS_REGISTRY", route_or_detail="/harness/external-agent-nondependency", implementation_status="PLANNED", sort_order=884, tags=("harness", "anny-native", "nondependency")),
+
+        # Batch 020: ANNY IDE
+        _p("ide.operating_surface", "ANNY IDE principal operating surface", "ANNY IDE", priority="P0", source_authority="IDE_REGISTRY", route_or_detail="/ide", implementation_status="PLANNED", sort_order=885, tags=("ide", "operating-surface")),
+        _p("ide.workspace_projection", "ANNY IDE workspace projection over Runtime and Repository Fabric", "ANNY IDE", priority="P0", source_authority="IDE_REGISTRY", route_or_detail="/ide/workspace", implementation_status="PLANNED", sort_order=886, tags=("ide", "workspace", "fabric")),
+        _p("ide.artifact_inspector", "ANNY IDE artifact inspector for Runtime-produced evidence and outputs", "ANNY IDE", priority="P0", source_authority="IDE_REGISTRY", route_or_detail="/ide/artifacts", implementation_status="PLANNED", sort_order=887, tags=("ide", "artifacts", "evidence")),
+        _p("ide.execution_trace", "ANNY IDE execution-trace view of Runtime and Harness runs", "ANNY IDE", priority="P0", source_authority="IDE_REGISTRY", route_or_detail="/ide/execution-trace", implementation_status="PLANNED", sort_order=888, tags=("ide", "execution", "trace")),
+        _p("ide.local_edit_boundary", "ANNY IDE local edit boundary under Runtime authorization", "ANNY IDE", priority="P0", source_authority="IDE_REGISTRY", route_or_detail="/ide/local-edit-boundary", implementation_status="PLANNED", sort_order=889, tags=("ide", "authorization", "boundary")),
+        _p("ide.runtime_attached_session", "ANNY IDE session attached to Runtime rather than an external coding assistant", "ANNY IDE", priority="P0", source_authority="IDE_REGISTRY", route_or_detail="/ide/runtime-session", implementation_status="PLANNED", sort_order=890, tags=("ide", "runtime", "session")),
+
+        # Batch 020: Universal Capability Catalog
+        _p("catalog.universal_index", "Universal Capability Catalog index", "Universal Capability Catalog", priority="P0", source_authority="CAPABILITY_CATALOG", route_or_detail="/intelligence/catalog", implementation_status="PLANNED", sort_order=891, tags=("catalog", "ucc", "index")),
+        _p("catalog.capability_discovery", "Catalog capability discovery without inferring live availability", "Universal Capability Catalog", priority="P0", source_authority="CAPABILITY_CATALOG", route_or_detail="/intelligence/catalog/discovery", implementation_status="PLANNED", sort_order=892, tags=("catalog", "discovery")),
+        _p("catalog.capability_routing", "Catalog capability routing into Runtime, Harness, or delegated workers", "Universal Capability Catalog", priority="P0", source_authority="CAPABILITY_CATALOG", route_or_detail="/intelligence/catalog/routing", implementation_status="PLANNED", sort_order=893, tags=("catalog", "routing")),
+        _p("catalog.capability_orchestration", "Catalog orchestration plan projection over registered capabilities", "Universal Capability Catalog", priority="P0", source_authority="CAPABILITY_CATALOG", route_or_detail="/intelligence/catalog/orchestration", implementation_status="PLANNED", sort_order=894, tags=("catalog", "orchestration")),
+        _p("catalog.capability_binding", "Catalog binding of a capability to an Execution Context", "Universal Capability Catalog", priority="P0", source_authority="CAPABILITY_CATALOG", route_or_detail="/intelligence/catalog/binding", implementation_status="PLANNED", sort_order=895, tags=("catalog", "binding", "execution-context")),
+        _p("catalog.external_construction_tool_exclusion", "Catalog exclusion of external construction tools as structural dependencies", "Universal Capability Catalog", priority="P0", source_authority="CAPABILITY_CATALOG", route_or_detail="/intelligence/catalog/external-tool-exclusion", implementation_status="PLANNED", sort_order=896, tags=("catalog", "anny-native", "nondependency")),
+
+        # Batch 020: deterministic modules, local models, execution context
+        _p("execution.deterministic_module_registry", "Deterministic execution module registry", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/deterministic-modules", implementation_status="PLANNED", sort_order=897, tags=("execution", "deterministic", "modules")),
+        _p("execution.deterministic_replay", "Deterministic replay of a sealed Execution Context", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/deterministic-replay", implementation_status="PLANNED", sort_order=898, tags=("execution", "deterministic", "replay")),
+        _p("execution.runtime_context_surface", "Runtime Execution Context operator surface", "Execution", priority="P0", source_authority="RUNTIME_EXECUTION", route_or_detail="/execution/context", implementation_status="PLANNED", sort_order=899, tags=("execution", "context", "runtime")),
+        _p("intelligence.local_model_integration", "Local-model integration surface for Runtime-attached inference", "Intelligence", priority="P0", source_authority="RUNTIME_MODEL_REGISTRY", route_or_detail="/intelligence/local-models", implementation_status="PLANNED", sort_order=900, tags=("intelligence", "local-model", "integration")),
+        _p("intelligence.local_model_admission", "Local-model admission and certification-status gate", "Intelligence", priority="P0", source_authority="RUNTIME_MODEL_REGISTRY", route_or_detail="/intelligence/local-models/admission", implementation_status="PLANNED", sort_order=901, tags=("intelligence", "local-model", "admission")),
+        _p("intelligence.local_inference_boundary", "Local inference boundary distinct from delegated remote execution", "Intelligence", priority="P0", source_authority="RUNTIME_MODEL_REGISTRY", route_or_detail="/intelligence/local-inference-boundary", implementation_status="PLANNED", sort_order=902, tags=("intelligence", "local-model", "boundary")),
+
+        # Batch 020: worker registry and ANNY-native delegation
+        _p("execution.worker_delegation_board", "Worker delegation board over the registered worker registry", "Execution", priority="P0", source_authority="WORKER_REGISTRY", route_or_detail="/execution/delegation", implementation_status="PLANNED", sort_order=903, tags=("execution", "workers", "delegation")),
+        _p("execution.delegated_worker_receipt", "Delegated-worker receipt and evidence binding", "Execution", priority="P0", source_authority="WORKER_REGISTRY", route_or_detail="/execution/delegation/receipts", implementation_status="PLANNED", sort_order=904, tags=("execution", "workers", "receipts", "evidence")),
+        _p("execution.worker_authorization_boundary", "Worker authorization and grant boundary for delegated execution", "Execution", priority="P0", source_authority="WORKER_REGISTRY", route_or_detail="/execution/worker-authorization-boundary", implementation_status="PLANNED", sort_order=905, tags=("execution", "workers", "authorization")),
+        _p("execution.anny_native_worker_path", "ANNY-native worker path that does not require an external coding agent", "Execution", priority="P0", source_authority="WORKER_REGISTRY", route_or_detail="/execution/anny-native-worker-path", implementation_status="PLANNED", sort_order=906, tags=("execution", "workers", "anny-native")),
+
+        # Batch 020: evidence, SYNC, Control Center observability
+        _p("evidence.certification_chain_index", "Evidence index for the capability certification chain", "Evidence / Provenance", priority="P0", source_authority="EVIDENCE_REGISTRY", route_or_detail="/audit/certification-chain", implementation_status="PLANNED", sort_order=907, tags=("evidence", "certification", "audit")),
+        _p("audit.operator_action_trail", "Operator action trail for Control Center, Harness, and IDE actions", "Evidence / Provenance", priority="P0", source_authority="AUDIT_STORE", route_or_detail="/audit/operator-actions", implementation_status="PLANNED", sort_order=908, tags=("audit", "operator", "control_center")),
+        _p("sync.governed_promotion_board", "Governed SYNC promotion board distinct from activation", "Distribution / Updates", priority="P0", source_authority="SYNC_SERVICE", route_or_detail="/sync/promotion-board", implementation_status="PLANNED", sort_order=909, tags=("sync", "governance", "promotion")),
+        _p("control.harness_state_panel", "Control Center Harness state panel backed by Harness registry projections", "Control Center", priority="P0", source_authority="HARNESS_REGISTRY", route_or_detail="/control/harness", implementation_status="PLANNED", sort_order=910, tags=("control_center", "harness", "observability")),
+        _p("control.ide_state_panel", "Control Center IDE state panel backed by IDE registry projections", "Control Center", priority="P0", source_authority="IDE_REGISTRY", route_or_detail="/control/ide", implementation_status="PLANNED", sort_order=911, tags=("control_center", "ide", "observability")),
+        _p("control.catalog_state_panel", "Control Center Universal Capability Catalog panel backed by catalog projections", "Control Center", priority="P0", source_authority="CAPABILITY_CATALOG", route_or_detail="/control/catalog", implementation_status="PLANNED", sort_order=912, tags=("control_center", "catalog", "observability")),
     ]
     return ProjectionRegistry(items)
 
@@ -1272,11 +1326,16 @@ DEFAULT_NAVIGATION_ITEMS: Tuple[NavigationItem, ...] = (
     NavigationItem("EXECUTION", "Executions", "▶", "/execution/executions", "execution.execution_runs"),
     NavigationItem("EXECUTION", "Workspaces", "📁", "/execution/workspaces", "execution.workspaces", "PLANNED"),
     NavigationItem("EXECUTION", "Results", "📊", "/execution/results", "execution.results", "PLANNED"),
+    NavigationItem("EXECUTION", "Execution Context", "▣", "/execution/context", "execution.runtime_context_surface", "PLANNED"),
 
     NavigationItem("INTELLIGENCE", "Models", "🧠", "/models", "intelligence.models", "ALIAS"),
     NavigationItem("INTELLIGENCE", "Capabilities", "⚡", "/intelligence/capabilities", "intelligence.capabilities"),
     NavigationItem("INTELLIGENCE", "Executors", "🛠", "/intelligence/executors", "intelligence.executors", "PLANNED"),
     NavigationItem("INTELLIGENCE", "Performance", "📈", "/intelligence/performance", "intelligence.performance", "PLANNED"),
+    NavigationItem("INTELLIGENCE", "Capability Catalog", "☰", "/intelligence/catalog", "catalog.universal_index", "PLANNED"),
+
+    NavigationItem("HARNESS", "Harness", "⎈", "/harness", "harness.operating_surface", "PLANNED"),
+    NavigationItem("ANNY IDE", "ANNY IDE", "✎", "/ide", "ide.operating_surface", "PLANNED"),
 
     NavigationItem("INFRASTRUCTURE", "Runtime", "🖥", "/infrastructure/runtime", "infrastructure.runtime"),
     NavigationItem("INFRASTRUCTURE", "GitHub", "🐙", "/infrastructure/github", "infrastructure.github", "PLANNED"),
