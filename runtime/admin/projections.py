@@ -1014,6 +1014,112 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("orchestration.frontier_scheduler", "Dynamic task dependency frontier schedule and concurrency limiter", "Execution", priority="P0", source_authority="ORCHESTRATION_KERNEL", route_or_detail="/orchestration/frontier-scheduler", implementation_status="PLANNED", sort_order=790, tags=("orchestration", "frontier", "scheduler")),
         _p("platform.wsl2_bridge", "WSL2 environment interoperability and filesystem bridge", "Infrastructure", priority="P1", source_authority="PLATFORM_ADAPTER", route_or_detail="/platform/wsl2-bridge", implementation_status="PLANNED", sort_order=791, tags=("platform", "wsl2", "bridge")),
         _p("platform.linux_kernel_monitor", "Linux OS cgroup, namespace, and resource boundary monitor", "Infrastructure", priority="P0", source_authority="PLATFORM_ADAPTER", route_or_detail="/platform/linux-kernel-monitor", implementation_status="PLANNED", sort_order=792, tags=("platform", "linux", "cgroups")),
+
+        # Batch 015: Admin Server Infrastructure (runtime/admin/server.py)
+        _p("admin.server_lifecycle", "Admin HTTP server lifecycle and dual-stack binding supervisor", "Control Center", priority="P0", source_authority="ADMIN_SERVER", route_or_detail="/admin/server-lifecycle", implementation_status="PLANNED", sort_order=793, tags=("admin", "server", "lifecycle")),
+        _p("admin.request_handler", "Admin HTTP request dispatch and security header enforcement handler", "Control Center", priority="P0", source_authority="ADMIN_SERVER", route_or_detail="/admin/request-handler", implementation_status="PLANNED", sort_order=794, tags=("admin", "request", "handler")),
+        _p("admin.loopback_binding", "Dual-stack IPv4/IPv6 loopback server socket binding and port selection", "Control Center", priority="P0", source_authority="ADMIN_PORT", route_or_detail="/admin/loopback-binding", implementation_status="PLANNED", sort_order=795, tags=("admin", "loopback", "port")),
+
+        # Batch 015: Admin Data Transfer Objects (runtime/admin/dto.py)
+        _p("admin.canonical_state_dto", "Canonical operational state projection data transfer object", "Control Center", priority="P0", source_authority="CANONICAL_STATE_DTO", route_or_detail="/admin/dto/canonical-state", implementation_status="PLANNED", sort_order=796, tags=("admin", "dto", "canonical")),
+        _p("admin.continuity_dto", "Continuity timeline and checkpoint data transfer object", "Control Center", priority="P0", source_authority="CONTINUITY_DTO", route_or_detail="/admin/dto/continuity", implementation_status="PLANNED", sort_order=797, tags=("admin", "dto", "continuity")),
+        _p("admin.mission_task_dto", "Mission, task, next-action, and blocker projection data transfer objects", "Control Center", priority="P0", source_authority="STATE_DTO", route_or_detail="/admin/dto/mission-task", implementation_status="PLANNED", sort_order=798, tags=("admin", "dto", "mission", "task")),
+        _p("admin.worker_summary_dto", "L2 worker summary and operational snapshot data transfer object", "Execution", priority="P0", source_authority="WORKER_DTO", route_or_detail="/admin/dto/worker-summary", implementation_status="PLANNED", sort_order=799, tags=("admin", "dto", "worker", "summary")),
+
+        # Batch 015: Bootstrap CONRRAD Integration (runtime/bootstrap/conrrad.py)
+        _p("bootstrap.conrrad_dependency_matrix", "CONRRAD mandatory dependency matrix normalization and completeness evaluator", "CONRRAD", priority="P0", source_authority="CONRRAD_DEPENDENCY", route_or_detail="/bootstrap/conrrad-matrix", implementation_status="PLANNED", sort_order=800, tags=("bootstrap", "conrrad", "dependencies")),
+        _p("bootstrap.conrrad_registry_normalizer", "CONRRAD dependency registry record normalizer and validator", "CONRRAD", priority="P0", source_authority="CONRRAD_DEPENDENCY", route_or_detail="/bootstrap/conrrad-normalizer", implementation_status="PLANNED", sort_order=801, tags=("bootstrap", "conrrad", "normalizer")),
+
+        # Batch 015: Bootstrap Three-Plane Lifecycle (runtime/bootstrap/planes.py)
+        _p("bootstrap.three_plane_resolver", "Three-plane bootstrap gate resolution lifecycle orchestrator", "CONRRAD", priority="P0", source_authority="THREE_PLANE_BOOTSTRAP", route_or_detail="/bootstrap/three-plane-resolver", implementation_status="PLANNED", sort_order=802, tags=("bootstrap", "three_plane", "resolver")),
+        _p("bootstrap.gate_chain_evaluator", "Sequential bootstrap gate dependency chain evaluation engine", "CONRRAD", priority="P0", source_authority="THREE_PLANE_BOOTSTRAP", route_or_detail="/bootstrap/gate-chain", implementation_status="PLANNED", sort_order=803, tags=("bootstrap", "gates", "chain")),
+
+        # Batch 015: Bootstrap Report (runtime/bootstrap/report.py)
+        _p("bootstrap.report_formatter", "Bootstrap verification report and component inventory formatter", "CONRRAD", priority="P0", source_authority="BOOTSTRAP_REPORT", route_or_detail="/bootstrap/report-formatter", implementation_status="PLANNED", sort_order=804, tags=("bootstrap", "report", "formatter")),
+        _p("bootstrap.component_inventory_report", "Bootstrap subsystem component inventory discovery and report projection", "Control Center", priority="P0", source_authority="BOOTSTRAP_REPORT", route_or_detail="/bootstrap/component-inventory", implementation_status="PLANNED", sort_order=805, tags=("bootstrap", "inventory", "report")),
+
+        # Batch 015: API Bridge Authentication (runtime/api/bridge.py)
+        _p("api.bridge_auth_gate", "ChatGPT/Luna external bridge API bearer token authentication gate", "Security / Trust", priority="P0", source_authority="BRIDGE_AUTH", route_or_detail="/api/v1/bridge/auth", implementation_status="PLANNED", sort_order=806, tags=("bridge", "authentication", "gate")),
+        _p("api.bridge_dispatch", "External bridge API route dispatch and task lifecycle coordinator", "Communication", priority="P0", source_authority="BRIDGE_ROUTER", route_or_detail="/api/v1/bridge/dispatch", implementation_status="PLANNED", sort_order=807, tags=("bridge", "dispatch", "routing")),
+
+        # Batch 015: Telemetry Domain Taxonomy (runtime/telemetry/telemetry.py)
+        _p("telemetry.envelope_schema", "Canonical telemetry event envelope record schema and constructor", "Telemetry", priority="P0", source_authority="TELEMETRY_SCHEMA", route_or_detail="/telemetry/envelope-schema", implementation_status="PLANNED", sort_order=808, tags=("telemetry", "envelope", "schema")),
+        _p("telemetry.domain_taxonomy", "Runtime telemetry domain classification taxonomy and routing classes", "Telemetry", priority="P0", source_authority="TELEMETRY_TAXONOMY", route_or_detail="/telemetry/domain-taxonomy", implementation_status="PLANNED", sort_order=809, tags=("telemetry", "domain", "taxonomy")),
+        _p("telemetry.execution_mode_classifier", "Telemetry execution mode and routing class taxonomy classifier", "Telemetry", priority="P0", source_authority="TELEMETRY_SCHEMA", route_or_detail="/telemetry/execution-mode", implementation_status="PLANNED", sort_order=810, tags=("telemetry", "execution", "mode")),
+
+        # Batch 015: Execution Receipt Store (runtime/execution/receipt.py)
+        _p("execution.receipt_ledger", "Durable execution receipt cryptographic ledger and integrity store", "Evidence / Provenance", priority="P0", source_authority="RECEIPT_STORE", route_or_detail="/execution/receipt-ledger", implementation_status="PLANNED", sort_order=811, tags=("execution", "receipt", "ledger")),
+
+        # Batch 015: Execution Policy Engine (runtime/execution/policy.py)
+        _p("execution.policy_engine", "Task execution domain boundary and resource limit policy evaluator", "Execution", priority="P0", source_authority="EXECUTION_POLICY", route_or_detail="/execution/policy-engine", implementation_status="PLANNED", sort_order=812, tags=("execution", "policy", "limits")),
+
+        # Batch 015: Intelligence Taxonomy (runtime/intelligence/taxonomy.py)
+        _p("intelligence.taxonomy_service", "Local intelligence capability taxonomy classification service", "Intelligence", priority="P0", source_authority="INTELLIGENCE_TAXONOMY", route_or_detail="/intelligence/taxonomy-service", implementation_status="PLANNED", sort_order=813, tags=("intelligence", "taxonomy", "classifier")),
+
+        # Batch 015: Intelligence Evidence Builder (runtime/intelligence/evidence_builder.py)
+        _p("intelligence.evidence_builder_service", "Evaluation evidence artifact and scorecard provenance builder service", "Intelligence", priority="P0", source_authority="EVIDENCE_BUILDER", route_or_detail="/intelligence/evidence-builder-service", implementation_status="PLANNED", sort_order=814, tags=("intelligence", "evidence", "artifacts")),
+
+        # Batch 015: Execution Validator (runtime/execution/validator.py)
+        _p("execution.output_validator", "Model output structural conformance and policy compliance validator", "Execution", priority="P0", source_authority="OUTPUT_VALIDATOR", route_or_detail="/execution/output-validator", implementation_status="PLANNED", sort_order=815, tags=("execution", "output", "validation")),
+
+        # Batch 015: Execution Selector (runtime/execution/selector.py)
+        _p("execution.model_selector_service", "Dynamic capability-aware model executor selection and routing service", "Execution", priority="P0", source_authority="EXECUTOR_SELECTOR", route_or_detail="/execution/model-selector", implementation_status="PLANNED", sort_order=816, tags=("execution", "selector", "model")),
+
+        # Batch 015: Admin GitHub Manager (runtime/admin/github.py)
+        _p("admin.github_auth_manager", "GitHub credential lifecycle and device flow authorization manager", "GitHub", priority="P0", source_authority="GITHUB_AUTH_MANAGER", route_or_detail="/admin/github-manager", implementation_status="PLANNED", sort_order=817, tags=("admin", "github", "auth")),
+        _p("admin.github_credential_state", "GitHub OAuth token persistence and validation state machine", "GitHub", priority="P0", source_authority="GITHUB_AUTH_MANAGER", route_or_detail="/admin/github-credential-state", implementation_status="PLANNED", sort_order=818, tags=("admin", "github", "credential")),
+
+        # Batch 015: Admin Middleware (runtime/admin/middleware.py)
+        _p("admin.middleware_guard", "Admin request authentication and authorization middleware enforcer", "Security / Trust", priority="P0", source_authority="ADMIN_MIDDLEWARE", route_or_detail="/admin/middleware-guard", implementation_status="PLANNED", sort_order=819, tags=("admin", "middleware", "auth")),
+        _p("admin.onboarding_revocation", "Onboarding session scope revocation and upgrade controller", "Security / Trust", priority="P0", source_authority="ADMIN_MIDDLEWARE", route_or_detail="/admin/onboarding-revocation", implementation_status="PLANNED", sort_order=820, tags=("admin", "onboarding", "revocation")),
+
+        # Batch 015: Admin CSRF (runtime/admin/csrf.py)
+        _p("admin.csrf_validator", "CSRF token generation, rotation, and form submission validation service", "Security / Trust", priority="P0", source_authority="ADMIN_CSRF", route_or_detail="/admin/csrf-validator", implementation_status="PLANNED", sort_order=821, tags=("admin", "csrf", "validation")),
+
+        # Batch 015: Execution Worker Manager (runtime/execution/worker.py)
+        _p("execution.worker_registry", "Worker capability registration, heartbeat tracking, and drain lifecycle", "Execution", priority="P0", source_authority="WORKER_REGISTRY", route_or_detail="/execution/worker-registry", implementation_status="PLANNED", sort_order=822, tags=("execution", "worker", "registry")),
+
+        # Batch 015: Execution Manager Queue (runtime/execution/manager.py)
+        _p("execution.task_queue", "Task execution queue scheduling, prioritization, and lifecycle state machine", "Execution", priority="P0", source_authority="EXECUTION_MANAGER", route_or_detail="/execution/task-queue", implementation_status="PLANNED", sort_order=823, tags=("execution", "task", "queue")),
+
+        # Batch 015: Continuity State Resolver (runtime/continuity/state.py)
+        _p("continuity.state_machine", "Continuity bootstrap state resolver and lifecycle transition engine", "Continuity", priority="P0", source_authority="CONTINUITY_STATE", route_or_detail="/continuity/state-machine", implementation_status="PLANNED", sort_order=824, tags=("continuity", "state", "machine")),
+
+        # Batch 015: Continuity Operational Provider (runtime/continuity/operational.py)
+        _p("continuity.operational_repo_provider", "Operational repository git clone, checkout, and synchronization provider", "Continuity", priority="P0", source_authority="OPERATIONAL_PROVIDER", route_or_detail="/continuity/operational-repo-provider", implementation_status="PLANNED", sort_order=825, tags=("continuity", "operational", "repository")),
+
+        # Batch 015: Fabric GitHub Adapter (runtime/fabric/github_adapter.py)
+        _p("fabric.github_adapter_service", "GitHub REST API to repository fabric resource adaptation and mapping service", "Repository Fabric", priority="P0", source_authority="FABRIC_GITHUB_ADAPTER", route_or_detail="/fabric/github-adapter-service", implementation_status="PLANNED", sort_order=826, tags=("fabric", "github", "adapter")),
+
+        # Batch 015: GitHub Client (runtime/github/client.py)
+        _p("github.authenticated_client", "Authenticated GitHub REST API client with rate-limit and retry governance", "GitHub", priority="P0", source_authority="GITHUB_CLIENT", route_or_detail="/github/authenticated-client", implementation_status="PLANNED", sort_order=827, tags=("github", "client", "api")),
+
+        # Batch 015: GitHub Discovery (runtime/github/discovery.py)
+        _p("github.org_discovery_service", "GitHub organization, repository, and principal topology discovery service", "GitHub", priority="P0", source_authority="GITHUB_DISCOVERY_SERVICE", route_or_detail="/github/org-discovery", implementation_status="PLANNED", sort_order=828, tags=("github", "discovery", "organization")),
+
+        # Batch 015: Platform Base Adapter (runtime/platform/base.py)
+        _p("platform.base_adapter", "Cross-platform OS host abstraction and environment detection base adapter", "Infrastructure", priority="P0", source_authority="PLATFORM_BASE", route_or_detail="/platform/base-adapter", implementation_status="PLANNED", sort_order=829, tags=("platform", "base", "abstraction")),
+
+        # Batch 015: MCP Tools Registry (runtime/mcp/tools.py)
+        _p("mcp.tool_definitions", "MCP tool definition schema and capability metadata registration", "Infrastructure", priority="P0", source_authority="MCP_TOOLS", route_or_detail="/mcp/tool-definitions", implementation_status="PLANNED", sort_order=830, tags=("mcp", "tools", "definitions")),
+
+        # Batch 015: Control Center Template Engine (runtime/admin/templates_cc.py)
+        _p("admin.control_center_renderer", "Control Center single-page application HTML template renderer", "Control Center", priority="P0", source_authority="CC_RENDERER", route_or_detail="/admin/control-center-renderer", implementation_status="PLANNED", sort_order=831, tags=("admin", "renderer", "spa")),
+
+        # Batch 015: Admin Templates (runtime/admin/templates.py)
+        _p("admin.template_engine", "Admin panel page template composition and rendering engine", "Control Center", priority="P0", source_authority="ADMIN_TEMPLATES", route_or_detail="/admin/template-engine", implementation_status="PLANNED", sort_order=832, tags=("admin", "templates", "rendering")),
+
+        # Batch 015: Compute Registry (runtime/compute/registry.py)
+        _p("compute.capability_registry_service", "Compute hardware capability discovery and registration service", "Infrastructure", priority="P0", source_authority="COMPUTE_REGISTRY", route_or_detail="/compute/capability-registry-service", implementation_status="PLANNED", sort_order=833, tags=("compute", "capability", "registry")),
+
+        # Batch 015: Tools Builtins (runtime/tools/builtins.py)
+        _p("tools.builtin_executor", "Built-in filesystem, shell, and git tool capability-gated executor", "Execution", priority="P0", source_authority="BUILTIN_TOOLS", route_or_detail="/tools/builtin-executor", implementation_status="PLANNED", sort_order=834, tags=("tools", "builtin", "executor")),
+
+        # Batch 015: Continuity Bootstrap (runtime/continuity/bootstrap.py)
+        _p("continuity.bootstrap_provider", "Continuity bootstrap initialization and state seeding provider", "Continuity", priority="P0", source_authority="CONTINUITY_BOOTSTRAP", route_or_detail="/continuity/bootstrap-provider", implementation_status="PLANNED", sort_order=835, tags=("continuity", "bootstrap", "seeding")),
+
+        # Batch 015: Continuity Models (runtime/continuity/models.py)
+        _p("continuity.event_model", "Continuity event classification and lifecycle transition record model", "Continuity", priority="P0", source_authority="CONTINUITY_MODEL", route_or_detail="/continuity/event-model", implementation_status="PLANNED", sort_order=836, tags=("continuity", "event", "model")),
     ]
     return ProjectionRegistry(items)
 
