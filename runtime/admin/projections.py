@@ -156,7 +156,11 @@ class ProjectionRegistry:
 
     def summary(self) -> Dict[str, object]:
         self.validate()
-        items = list(self._items.values())
+        return self._summary_for(list(self._items.values()))
+
+    @staticmethod
+    def _summary_for(items: Sequence[ProjectionDefinition]) -> Dict[str, object]:
+        """Summarize registered definitions without inferring runtime state."""
         by_priority = {p: sum(i.priority == p for i in items) for p in VALID_PRIORITIES}
         by_status = {
             state: sum(i.implementation_status == state for i in items)
@@ -165,6 +169,10 @@ class ProjectionRegistry:
         by_section: Dict[str, int] = {}
         by_freshness: Dict[str, int] = {}
         by_source_authority: Dict[str, int] = {}
+        by_truth_class = {
+            truth: sum(i.truth_class == truth for i in items)
+            for truth in VALID_TRUTH_CLASSES
+        }
         for item in items:
             by_section[item.section] = by_section.get(item.section, 0) + 1
             by_freshness[item.freshness] = by_freshness.get(item.freshness, 0) + 1
@@ -178,6 +186,7 @@ class ProjectionRegistry:
             "by_section": dict(sorted(by_section.items())),
             "by_freshness": dict(sorted(by_freshness.items())),
             "by_source_authority": dict(sorted(by_source_authority.items())),
+            "by_truth_class": by_truth_class,
             "initial_p0_viewport_target": INITIAL_P0_VIEWPORT_TARGET,
             "master_inventory_boundary": MASTER_INVENTORY_BOUNDARY,
             "inventory_limit": None,
@@ -226,6 +235,7 @@ class ProjectionRegistry:
             "inventory_limit": None,
             "initial_p0_viewport_target": INITIAL_P0_VIEWPORT_TARGET,
             "summary": self.summary(),
+            "filtered_summary": self._summary_for(items),
             "page": {
                 "limit": limit if limit is not None else total_filtered,
                 "offset": offset,
