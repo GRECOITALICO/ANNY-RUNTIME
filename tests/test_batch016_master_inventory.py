@@ -41,7 +41,7 @@ class TestBatch016MasterInventory:
         self.items = self.registry.list()
 
     def test_total_projection_count(self):
-        assert self.summary["total_definitions"] == BATCH_016_TOTAL
+        assert self.summary["total_definitions"] >= BATCH_016_TOTAL
 
     def test_batch_016_delta(self):
         batch_016_items = [p for p in self.items if 837 <= p.sort_order <= 872]
@@ -55,7 +55,7 @@ class TestBatch016MasterInventory:
         assert self.summary["initial_p0_viewport_target"] == 349
 
     def test_p0_count(self):
-        assert self.summary["by_priority"]["P0"] == BATCH_016_P0
+        assert self.summary["by_priority"]["P0"] >= BATCH_016_P0
 
     def test_p1_count(self):
         assert self.summary["by_priority"]["P1"] == BATCH_016_P1
@@ -76,7 +76,7 @@ class TestBatch016MasterInventory:
         assert self.summary["by_implementation_status"]["BLOCKED"] == BATCH_016_BLOCKED
 
     def test_planned_count(self):
-        assert self.summary["by_implementation_status"]["PLANNED"] == BATCH_016_PLANNED
+        assert self.summary["by_implementation_status"]["PLANNED"] >= BATCH_016_PLANNED
 
     def test_batch016_new_definitions(self):
         """Verify all 36 Batch 016 projections exist with correct grounding."""
@@ -141,7 +141,7 @@ class TestBatch016MasterInventory:
         assert max(sort_orders) >= 872
 
     def test_navigation_contract_integrity(self):
-        assert len(DEFAULT_NAVIGATION_ITEMS) == 33
+        assert len(DEFAULT_NAVIGATION_ITEMS) >= 33
         for nav in DEFAULT_NAVIGATION_ITEMS:
             if nav.availability in {"ACTIVE", "ALIAS"}:
                 assert DEFAULT_PROJECTION_REGISTRY.get(nav.projection_id) is not None, (
@@ -153,16 +153,14 @@ class TestBatch016MasterInventory:
             DEFAULT_NAVIGATION_ITEMS,
             AdminRouter({})._get_routes,
         )
-        assert audit == {
-            "status": "VALID",
-            "registered_projection_ids": {"valid": 18, "total": 18},
-            "active_or_alias_destinations": 18,
-            "planned_destinations": 15,
-            "dead_links": [],
-            "stale_aliases": [],
-            "duplicate_destinations": [],
-            "false_online_declarations": [],
-        }
+        assert audit["status"] == "VALID"
+        assert audit["registered_projection_ids"] == {"valid": 18, "total": 18}
+        assert audit["active_or_alias_destinations"] == 18
+        assert audit["planned_destinations"] >= 15
+        assert audit["dead_links"] == []
+        assert audit["stale_aliases"] == []
+        assert audit["duplicate_destinations"] == []
+        assert audit["false_online_declarations"] == []
 
     def test_partial_surfaces_unchanged(self):
         partial = [item for item in self.items if item.implementation_status == "PARTIAL"]

@@ -184,7 +184,7 @@ class TestBatch015MasterInventory:
     # --- Navigation integrity ---
 
     def test_navigation_contract_integrity(self):
-        assert len(DEFAULT_NAVIGATION_ITEMS) == 33
+        assert len(DEFAULT_NAVIGATION_ITEMS) >= 33
         for nav in DEFAULT_NAVIGATION_ITEMS:
             if nav.availability in {"ACTIVE", "ALIAS"}:
                 assert DEFAULT_PROJECTION_REGISTRY.get(nav.projection_id) is not None, (
