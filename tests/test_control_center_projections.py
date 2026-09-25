@@ -57,6 +57,8 @@ def test_control_center_projection_api_is_read_only_and_filterable():
     assert payload["inventory_limit"] is None
     assert payload["projections"]
     assert all(item["priority"] == "P0" for item in payload["projections"])
+    assert payload["navigation_contract"]["status"] == "VALID"
+    assert payload["navigation_contract"]["dead_links"] == []
 
 
 def test_control_center_projection_api_rejects_invalid_priority():
