@@ -336,6 +336,12 @@ def control_center_page(csrf_token: str) -> str:
                     <option value="">ALL</option>
                 </select>
             </label>
+            <label style="font-size:.7rem;color:var(--text-secondary)">
+                SOURCE
+                <select id="projection-source-filter" style="margin-left:.35rem;background:#111827;color:#f3f4f6;border:1px solid var(--border);border-radius:5px;padding:.3rem .45rem;max-width:190px">
+                    <option value="">ALL</option>
+                </select>
+            </label>
             <button type="button" class="btn btn-ghost" id="projection-refresh-btn">↻ REFRESH</button>
         </div>
     </div>
@@ -670,12 +676,14 @@ function projectionQuery() {
     const truth = document.getElementById('projection-truth-filter');
     const section = document.getElementById('projection-section-filter');
     const freshness = document.getElementById('projection-freshness-filter');
+    const source = document.getElementById('projection-source-filter');
     if (search && search.value.trim()) params.set('q', search.value.trim());
     if (priority && priority.value) params.set('priority', priority.value);
     if (status && status.value) params.set('implementation_status', status.value);
     if (truth && truth.value) params.set('truth_class', truth.value);
     if (section && section.value) params.set('section', section.value);
     if (freshness && freshness.value) params.set('freshness', freshness.value);
+    if (source && source.value) params.set('source_authority', source.value);
     params.set('limit', String(PROJECTION_PAGE_SIZE));
     params.set('offset', String(projectionOffset));
     return params.toString();
@@ -694,6 +702,7 @@ async function fetchProjectionRegistry(resetOffset = false) {
             const byPriority = s.by_priority || {};
             const bySection = s.by_section || {};
             const byFreshness = s.by_freshness || {};
+            const bySource = s.by_source_authority || {};
 
             const sectionFilter = document.getElementById('projection-section-filter');
             if (sectionFilter) {
@@ -721,6 +730,20 @@ async function fetchProjectionRegistry(resetOffset = false) {
                 }
                 freshnessFilter.value = selected;
                 if (freshnessFilter.value !== selected) freshnessFilter.value = '';
+            }
+
+            const sourceFilter = document.getElementById('projection-source-filter');
+            if (sourceFilter) {
+                const selected = sourceFilter.value;
+                while (sourceFilter.options.length > 1) sourceFilter.remove(1);
+                for (const sourceName of Object.keys(bySource).sort()) {
+                    const option = document.createElement('option');
+                    option.value = sourceName;
+                    option.textContent = sourceName + ' (' + String(bySource[sourceName]) + ')';
+                    sourceFilter.appendChild(option);
+                }
+                sourceFilter.value = selected;
+                if (sourceFilter.value !== selected) sourceFilter.value = '';
             }
             meta.textContent =
                 'MASTER=' + (d.master_inventory_boundary || 'UNKNOWN') +
@@ -869,7 +892,7 @@ setInterval(function() {
     fetchProjectionRegistry();
 }, 10000);
 
-for (const id of ['projection-priority-filter','projection-status-filter','projection-truth-filter','projection-section-filter','projection-freshness-filter']) {
+for (const id of ['projection-priority-filter','projection-status-filter','projection-truth-filter','projection-section-filter','projection-freshness-filter','projection-source-filter']) {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', () => fetchProjectionRegistry(true));
 }

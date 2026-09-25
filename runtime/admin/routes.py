@@ -321,6 +321,7 @@ class AdminRouter:
         implementation_status = query.get('implementation_status', [None])[0]
         truth_class = query.get('truth_class', [None])[0]
         freshness = query.get('freshness', [None])[0]
+        source_authority = query.get('source_authority', [None])[0]
         tag = query.get('tag', [None])[0]
         q = query.get('q', [None])[0]
         projection_id = query.get('projection_id', [None])[0]
@@ -345,6 +346,7 @@ class AdminRouter:
                 implementation_status=implementation_status,
                 truth_class=truth_class,
                 freshness=freshness,
+                source_authority=source_authority,
                 tag=tag,
                 q=q,
                 projection_id=projection_id,
