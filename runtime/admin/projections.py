@@ -314,7 +314,7 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("runtime.identity.state", "ANNY runtime state", "Runtime Identity", sort_order=10, tags=("header", "state")),
         _p("control.top_level_state", "Top-Level State panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=1, tags=("panel", "shell")),
         _p("control.operational_snapshot", "Operational Snapshot panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=2, tags=("panel",)),
-        _p("control.bootstrap_verification", "Bootstrap Verification panel", "Control Center", priority="P0", source_authority="BOOTSTRAP_ENGINE", sort_order=3, tags=("panel", "gates")),
+        _p("control.bootstrap_verification", "Bootstrap Verification panel", "Control Center", priority="P0", source_authority="BOOTSTRAP_ENGINE", route_or_detail="/api/bootstrap/verify", sort_order=3, tags=("panel", "gates")),
         _p("control.truth_freshness", "Truth & Freshness panel", "Control Center", priority="P0", source_authority="RUNTIME_OBSERVATION", sort_order=3.5, tags=("panel", "truth", "freshness")),
         _p("control.runtime_health", "Runtime Health panel", "Control Center", priority="P0", source_authority="RUNTIME", sort_order=4, tags=("panel", "health")),
         _p("control.conrrad_mandatory_services", "CONRRAD Mandatory Services live truth", "Control Center", priority="P0", source_authority="CONRRAD_EXTERNAL_REGISTRY", sort_order=4.5, tags=("panel", "conrrad", "live-truth", "mandatory-services")),
@@ -407,6 +407,19 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("runtime.enrollment", "Instance enrollment lifecycle", "Runtime Identity", priority="P1", source_authority="RUNTIME_IDENTITY", route_or_detail="/identity/enrollment", implementation_status="PLANNED", sort_order=427, tags=("enrollment", "lifecycle")),
         _p("continuity.mutation_contract", "Repository mutation continuity contract", "Continuity", priority="P1", source_authority="RUNTIME_CONTINUITY", route_or_detail="/continuity/mutation", implementation_status="PLANNED", sort_order=428, tags=("continuity", "mutation", "contract")),
         _p("filesystem.workspace_service", "Scoped workspace filesystem service", "Infrastructure", priority="P2", source_authority="RUNTIME_FILESYSTEM", route_or_detail="/filesystem/workspace", implementation_status="PLANNED", sort_order=429, tags=("filesystem", "workspace")),
+
+        # Batch 004: Real Endpoint Binding & Grounded Inventory Expansion
+        _p("admin.restart", "Runtime restart action", "Security / Trust", priority="P1", source_authority="RUNTIME_ADMIN", route_or_detail="/admin/restart", implementation_status="BOUND", sort_order=329, tags=("admin", "lifecycle", "restart")),
+        _p("intelligence.scorecards", "Benchmark certification scorecards", "Intelligence", priority="P1", source_authority="RUNTIME_BENCHMARK_STORE", route_or_detail="/intelligence/scorecards", implementation_status="PLANNED", sort_order=430, tags=("benchmarks", "scorecards", "intelligence")),
+        _p("intelligence.benchmark_cases", "Benchmark test cases", "Intelligence", priority="P1", source_authority="RUNTIME_INTELLIGENCE", route_or_detail="/intelligence/benchmarks/cases", implementation_status="PLANNED", sort_order=431, tags=("benchmarks", "cases", "intelligence")),
+        _p("intelligence.failure_records", "Capability execution failure records", "Intelligence", priority="P1", source_authority="RUNTIME_INTELLIGENCE", route_or_detail="/intelligence/failures", implementation_status="PLANNED", sort_order=432, tags=("failures", "intelligence", "diagnostics")),
+        _p("intelligence.implementation_profiles", "Capability implementation profiles", "Intelligence", priority="P2", source_authority="RUNTIME_INTELLIGENCE", route_or_detail="/intelligence/implementations", implementation_status="PLANNED", sort_order=433, tags=("implementations", "profiles", "intelligence")),
+        _p("intelligence.capability_taxonomy", "Local intelligence capability taxonomy", "Intelligence", priority="P1", source_authority="RUNTIME_INTELLIGENCE", route_or_detail="/intelligence/taxonomy", implementation_status="PLANNED", sort_order=434, tags=("taxonomy", "capabilities", "intelligence")),
+        _p("security.context_guard", "Security isolation context guard", "Security / Trust", priority="P1", source_authority="RUNTIME_SECURITY", route_or_detail="/security/context-guard", implementation_status="PLANNED", sort_order=435, tags=("security", "isolation", "context-guard")),
+        _p("security.execution_context", "Physical operation execution context", "Security / Trust", priority="P1", source_authority="RUNTIME_SECURITY", route_or_detail="/security/execution-context", implementation_status="PLANNED", sort_order=436, tags=("security", "context", "execution")),
+        _p("security.authorized_pipeline", "Authorized execution 10-step pipeline", "Security / Trust", priority="P1", source_authority="RUNTIME_SECURITY", route_or_detail="/security/pipeline", implementation_status="PLANNED", sort_order=437, tags=("security", "pipeline", "execution")),
+        _p("security.authority_validator", "Security authority and capability validator", "Security / Trust", priority="P1", source_authority="RUNTIME_SECURITY", route_or_detail="/security/authority-validator", implementation_status="PLANNED", sort_order=438, tags=("security", "authority", "validation")),
+        _p("shell.executor", "Classified shell command executor", "Execution", priority="P2", source_authority="RUNTIME_SHELL", route_or_detail="/shell/executor", implementation_status="PLANNED", sort_order=439, tags=("shell", "execution", "effects")),
     ]
     return ProjectionRegistry(items)
 
