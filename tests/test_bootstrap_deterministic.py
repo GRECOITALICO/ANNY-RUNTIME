@@ -378,7 +378,7 @@ class TestPhaseJ_DelegationContext:
 
 
 # ---------------------------------------------------------------------------
-# Gate Coverage: All 25 Mandatory Gates defined in MANDATORY_GATES
+# Gate Coverage: All 28 Mandatory Gates defined in MANDATORY_GATES
 # ---------------------------------------------------------------------------
 
 class TestMandatoryGateCoverage_Extended:
@@ -399,8 +399,8 @@ class TestMandatoryGateCoverage_Extended:
         assert not missing, f"Gates not in MANDATORY_GATES: {missing}"
 
     def test_total_mandatory_gate_count(self):
-        """Ensure we have exactly 25 mandatory gates."""
-        assert len(MANDATORY_GATES) == 25
+        """Ensure the current fail-closed bootstrap contract has 28 gates."""
+        assert len(MANDATORY_GATES) == 28
 
     def test_formatter_reports_all_phases(self):
         from runtime.bootstrap.report import ChatGPTBootstrapFormatter
