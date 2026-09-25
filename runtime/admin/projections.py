@@ -470,6 +470,69 @@ def default_projection_registry() -> ProjectionRegistry:
         _p("secrets.broker", "Scoped secret lease broker", "Security / Trust", priority="P1", source_authority="SECRET_BROKER", route_or_detail="/secrets/broker", implementation_status="PLANNED", sort_order=483, tags=("secrets", "broker", "leases")),
         _p("session.manager", "Interactive session lifecycle manager", "Communication", priority="P1", source_authority="SESSION_MANAGER", route_or_detail="/sessions/manager", implementation_status="PLANNED", sort_order=484, tags=("session", "manager", "lifecycles")),
         _p("workspace.ephemeral", "Ephemeral isolation workspace manager", "Execution", priority="P1", source_authority="EPHEMERAL_WORKSPACE", route_or_detail="/workspaces/ephemeral", implementation_status="PLANNED", sort_order=485, tags=("workspace", "ephemeral", "isolation")),
+
+        # Batch 007: Functional Projection Deepening & Control Center Operational Grounding
+        # --- BOUND: verified complete binding chain (route + handler + renderer + data source) ---
+        _p("admin.executions", "Execution list compatibility surface", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/executions", implementation_status="BOUND", sort_order=486, tags=("execution", "compatibility", "admin")),
+        _p("admin.workers", "Worker list compatibility surface", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/workers", implementation_status="BOUND", sort_order=487, tags=("workers", "compatibility", "admin")),
+        _p("admin.capabilities", "Capability list compatibility surface", "Execution", priority="P1", source_authority="RUNTIME_EXECUTION", route_or_detail="/capabilities", implementation_status="BOUND", sort_order=488, tags=("capabilities", "compatibility", "admin")),
+
+        # --- PLANNED: grounded in existing source classes/modules verified in source audit ---
+        # Compute subsystem (runtime/compute/)
+        _p("compute.colab_transport", "Colab remote compute transport layer", "Infrastructure", priority="P2", source_authority="COMPUTE_TRANSPORT", route_or_detail="/compute/colab/transport", implementation_status="PLANNED", sort_order=489, tags=("compute", "colab", "transport")),
+        _p("compute.remote_manager", "Remote compute session lifecycle manager", "Infrastructure", priority="P1", source_authority="COMPUTE_REMOTE_MANAGER", route_or_detail="/compute/remote/manager", implementation_status="PLANNED", sort_order=490, tags=("compute", "remote", "sessions", "lifecycle")),
+        _p("compute.mcp_bridge", "Colab synchronous MCP execution bridge", "Infrastructure", priority="P2", source_authority="COMPUTE_MCP_BRIDGE", route_or_detail="/compute/mcp-bridge", implementation_status="PLANNED", sort_order=491, tags=("compute", "mcp", "bridge", "colab")),
+
+        # Continuity subsystem (runtime/continuity/)
+        _p("continuity.engine", "Continuity state machine engine", "Continuity", priority="P1", source_authority="CONTINUITY_ENGINE", route_or_detail="/continuity/engine", implementation_status="PLANNED", sort_order=492, tags=("continuity", "engine", "state")),
+        _p("continuity.state_resolver", "Bootstrap continuity state resolver", "Continuity", priority="P1", source_authority="CONTINUITY_STATE", route_or_detail="/continuity/state", implementation_status="PLANNED", sort_order=493, tags=("continuity", "state", "resolver")),
+
+        # Core subsystem (runtime/core/)
+        _p("core.access_verifier", "Critical access path verifier", "Security / Trust", priority="P1", source_authority="CORE_ACCESS_VERIFIER", route_or_detail="/core/access-verifier", implementation_status="PLANNED", sort_order=494, tags=("core", "access", "verification", "security")),
+        _p("core.generation", "Runtime generation counter and stale fence", "Runtime Identity", priority="P1", source_authority="CORE_GENERATION", route_or_detail="/core/generation", implementation_status="PLANNED", sort_order=495, tags=("core", "generation", "fencing")),
+        _p("core.recovery", "Runtime recovery manager", "Runtime Identity", priority="P1", source_authority="CORE_RECOVERY", route_or_detail="/core/recovery", implementation_status="PLANNED", sort_order=496, tags=("core", "recovery", "restart")),
+        _p("core.inventory", "Bootstrap component inventory discovery", "Control Center", priority="P1", source_authority="CORE_INVENTORY", route_or_detail="/core/inventory", implementation_status="PLANNED", sort_order=497, tags=("core", "inventory", "bootstrap", "discovery")),
+        _p("core.config", "Runtime configuration state", "Runtime Identity", priority="P1", source_authority="CORE_CONFIG", route_or_detail="/core/config", implementation_status="PLANNED", sort_order=498, tags=("core", "config", "runtime")),
+
+        # Execution subsystem deepening (runtime/execution/)
+        _p("execution.receipt_store", "Execution receipt persistent store", "Evidence / Provenance", priority="P1", source_authority="EXECUTION_RECEIPT_STORE", route_or_detail="/execution/receipts/store", implementation_status="PLANNED", sort_order=499, tags=("execution", "receipts", "store", "integrity")),
+        _p("execution.model_registry", "Model definition and binding registry", "Intelligence", priority="P1", source_authority="EXECUTION_MODEL_REGISTRY", route_or_detail="/execution/model-registry", implementation_status="PLANNED", sort_order=500, tags=("execution", "models", "registry")),
+        _p("execution.qwen_executor", "Qwen model executor implementation", "Intelligence", priority="P2", source_authority="QWEN_EXECUTOR", route_or_detail="/execution/executors/qwen", implementation_status="PLANNED", sort_order=501, tags=("execution", "qwen", "executor")),
+        _p("execution.result_validator", "Model output result validator", "Intelligence", priority="P1", source_authority="RESULT_VALIDATOR", route_or_detail="/execution/validator", implementation_status="PLANNED", sort_order=502, tags=("execution", "validation", "output")),
+        _p("execution.worker_manager", "Worker registration and lifecycle manager", "Execution", priority="P1", source_authority="WORKER_MANAGER", route_or_detail="/execution/worker-manager", implementation_status="PLANNED", sort_order=503, tags=("execution", "workers", "manager")),
+        _p("execution.registry_recovery", "Registry crash recovery and attestation", "Execution", priority="P1", source_authority="REGISTRY_RECOVERY", route_or_detail="/execution/registry/recovery", implementation_status="PLANNED", sort_order=504, tags=("execution", "registry", "recovery", "attestation")),
+
+        # Security subsystem deepening (runtime/security/)
+        _p("security.generation_fence", "Generation-fenced concurrent write protection", "Security / Trust", priority="P1", source_authority="SECURITY_GENERATION_FENCE", route_or_detail="/security/generation-fence", implementation_status="PLANNED", sort_order=505, tags=("security", "generation", "fencing", "concurrency")),
+
+        # Intelligence subsystem deepening (runtime/intelligence/)
+        _p("intelligence.layer", "Local intelligence orchestration layer", "Intelligence", priority="P1", source_authority="INTELLIGENCE_LAYER", route_or_detail="/intelligence/layer", implementation_status="PLANNED", sort_order=506, tags=("intelligence", "layer", "orchestration")),
+        _p("intelligence.telemetry", "Intelligence execution telemetry collector", "Telemetry", priority="P1", source_authority="INTELLIGENCE_TELEMETRY", route_or_detail="/intelligence/telemetry", implementation_status="PLANNED", sort_order=507, tags=("intelligence", "telemetry", "metrics")),
+        _p("intelligence.benchmark_dataset", "Benchmark test dataset repository", "Intelligence", priority="P2", source_authority="BENCHMARK_DATASET", route_or_detail="/intelligence/benchmarks/dataset", implementation_status="PLANNED", sort_order=508, tags=("intelligence", "benchmarks", "dataset")),
+
+        # MCP subsystem deepening (runtime/mcp/)
+        _p("mcp.registry", "MCP tool definition registry", "Infrastructure", priority="P1", source_authority="MCP_TOOL_REGISTRY", route_or_detail="/mcp/registry", implementation_status="PLANNED", sort_order=509, tags=("mcp", "registry", "tools")),
+
+        # Events subsystem (runtime/events/)
+        _p("events.bus_service", "Runtime event publication and subscription bus", "Telemetry", priority="P1", source_authority="EVENT_BUS_SERVICE", route_or_detail="/events/bus-service", implementation_status="PLANNED", sort_order=510, tags=("events", "bus", "publish", "subscribe")),
+
+        # Sync subsystem deepening (runtime/sync/)
+        _p("sync.candidate_verifier", "Sync candidate cryptographic verifier", "Distribution / Updates", priority="P1", source_authority="SYNC_CANDIDATE_VERIFIER", route_or_detail="/sync/candidate-verifier", implementation_status="PLANNED", sort_order=511, tags=("sync", "verifier", "candidate", "sha256")),
+        _p("sync.state_machine", "Sync lifecycle state machine", "Distribution / Updates", priority="P1", source_authority="SYNC_STATE_MACHINE", route_or_detail="/sync/state-machine", implementation_status="PLANNED", sort_order=512, tags=("sync", "state", "lifecycle")),
+
+        # Telemetry subsystem deepening (runtime/telemetry/)
+        _p("telemetry.collector", "Telemetry event collector and store", "Telemetry", priority="P1", source_authority="TELEMETRY_COLLECTOR", route_or_detail="/telemetry/collector", implementation_status="PLANNED", sort_order=513, tags=("telemetry", "collector", "store")),
+        _p("telemetry.context", "Distributed trace context propagation", "Telemetry", priority="P2", source_authority="TELEMETRY_CONTEXT", route_or_detail="/telemetry/context", implementation_status="PLANNED", sort_order=514, tags=("telemetry", "tracing", "context")),
+        _p("telemetry.envelope", "Telemetry event envelope and routing", "Telemetry", priority="P2", source_authority="TELEMETRY_ENVELOPE", route_or_detail="/telemetry/envelope", implementation_status="PLANNED", sort_order=515, tags=("telemetry", "envelope", "routing")),
+
+        # Bootstrap subsystem deepening (runtime/bootstrap/)
+        _p("bootstrap.three_plane", "Three-plane bootstrap verification engine", "CONRRAD", priority="P1", source_authority="BOOTSTRAP_THREE_PLANE", route_or_detail="/bootstrap/three-plane", implementation_status="PLANNED", sort_order=516, tags=("bootstrap", "three_plane", "verification")),
+        _p("bootstrap.report", "Bootstrap report and component inventory", "CONRRAD", priority="P1", source_authority="BOOTSTRAP_REPORT", route_or_detail="/bootstrap/report", implementation_status="PLANNED", sort_order=517, tags=("bootstrap", "report", "inventory")),
+
+        # Admin subsystem deepening (runtime/admin/)
+        _p("admin.csrf", "CSRF token validation middleware", "Security / Trust", priority="P1", source_authority="ADMIN_CSRF", route_or_detail="/admin/csrf", implementation_status="PLANNED", sort_order=518, tags=("admin", "csrf", "security")),
+        _p("admin.middleware", "Admin request authentication middleware", "Security / Trust", priority="P1", source_authority="ADMIN_MIDDLEWARE", route_or_detail="/admin/middleware", implementation_status="PLANNED", sort_order=519, tags=("admin", "middleware", "auth")),
+        _p("admin.audit", "Admin operation audit trail", "Evidence / Provenance", priority="P1", source_authority="ADMIN_AUDIT", route_or_detail="/admin/audit", implementation_status="PLANNED", sort_order=520, tags=("admin", "audit", "operations")),
     ]
     return ProjectionRegistry(items)
 
