@@ -120,7 +120,7 @@ class HarnessDispatcher:
         )
 
         try:
-            runtime_context = execution_manager.submit_task(bound_task)
+            runtime_context = execution_manager.submit_task(bound_task, execution_context=execution_context)
         except Exception:
             return HarnessDispatchOutcome(
                 DispatchDecision.BLOCKED,
