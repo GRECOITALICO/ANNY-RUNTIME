@@ -290,7 +290,7 @@ def start_admin_server(host: str, port: int):
     secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
     github_manager = build_github_auth_manager(secret_backend, config)
     
-    from runtime.workspace.ephemeral import EphemeralWorkspaceManager
+    from runtime.workspace.runtime_manager import RuntimeWorkspaceManager
     from runtime.execution.manager import ExecutionManager
     from runtime.github.client import GitHubClient
     from runtime.github.discovery import OrganizationDiscoveryService
@@ -304,9 +304,12 @@ def start_admin_server(host: str, port: int):
     telemetry_collector = TelemetryCollector(str(data_dir))
     telemetry_aggregator = TelemetryAggregator(telemetry_collector)
 
-    ephemeral_workspace_manager = EphemeralWorkspaceManager()
+    runtime_workspace_manager = RuntimeWorkspaceManager(
+        data_dir / "workspaces",
+        {"max_concurrent_executions": config.max_concurrent_executions},
+    )
     execution_manager = ExecutionManager(
-        workspace_manager=ephemeral_workspace_manager,
+        workspace_manager=runtime_workspace_manager,
         audit_manager=audit_manager,
         github_client=github_client,
         fabric_client=fabric_client,
@@ -366,8 +369,69 @@ def start_admin_server(host: str, port: int):
     def run_bootstrap():
         try:
             engine.startup(github_client=github_client, fabric_client=fabric_client)
+
+            from runtime.process.manager import ProcessManager
+            from runtime.shell.executor import ShellExecutor
+            from runtime.filesystem.service import FilesystemService
+            from runtime.git.service import GitService
+            from runtime.toolchain.runner import DevelopmentToolRunner
+            from runtime.execution.harness_contract import HarnessDispatchContract
+            from runtime.execution.harness_dispatcher import HarnessDispatcher
+            from runtime.github.engineering import GitHubEngineeringClient
+            from runtime.engineering.surface import EngineeringSurface
+
+            process_manager = ProcessManager(
+                {
+                    "max_concurrent_executions": config.max_concurrent_executions,
+                },
+                engine.generation.current,
+            )
+            shell_executor = ShellExecutor(process_manager, runtime_workspace_manager)
+            filesystem_service = FilesystemService(runtime_workspace_manager)
+            git_service = GitService(shell_executor, engine.mutation_contract)
+            toolchain_runner = DevelopmentToolRunner(shell_executor)
+            harness_contract = HarnessDispatchContract()
+            harness_dispatcher = __import__(
+                "runtime.execution.harness_dispatcher",
+                fromlist=["HarnessDispatcher"],
+            ).HarnessDispatcher(harness_contract)
+            github_engineering = (
+                GitHubEngineeringClient(github_client)
+                if github_client is not None
+                else None
+            )
+
+            surface = EngineeringSurface(
+                workspace_manager=runtime_workspace_manager,
+                process_manager=process_manager,
+                shell_executor=shell_executor,
+                filesystem_service=filesystem_service,
+                git_service=git_service,
+                toolchain_runner=toolchain_runner,
+                execution_manager=execution_manager,
+                harness_contract=harness_contract,
+                harness_dispatcher=harness_dispatcher,
+                github_client=github_client,
+                github_engineering=github_engineering,
+            )
+            engine.process_manager = process_manager
+            engine.workspace_manager = runtime_workspace_manager
+            engine.shell_executor = shell_executor
+            engine.filesystem_service = filesystem_service
+            engine.git_service = git_service
+            engine.toolchain_runner = toolchain_runner
+            engine.harness_contract = harness_contract
+            engine.harness_dispatcher = harness_dispatcher
+            engine.github_client = github_client
+            engine.github_engineering = github_engineering
+            engine.engineering_surface = surface
+
+            server.admin_context["engineering_surface"] = surface
+            server.router.context["engineering_surface"] = surface
+            server.admin_context["process_manager"] = process_manager
+            server.router.context["process_manager"] = process_manager
         except Exception as e:
-            logger.error(f"Runtime engine startup error: {e}")
+            logger.error(f"Runtime engine startup error: {e}", exc_info=True)
 
     if server.start():
         t = threading.Thread(target=run_bootstrap, daemon=True)
