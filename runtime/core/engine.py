@@ -160,15 +160,50 @@ class RuntimeEngine:
         self._persist_state(clean_shutdown=True)
 
     def health_check(self) -> Dict[str, Any]:
-        """Returns the status of each subsystem."""
+        """Return observable subsystem status without synthetic success."""
+        subsystems = {}
+
+        identity = getattr(self, "identity_manager", None)
+        subsystems["identity"] = "ATTACHED" if identity is not None else "UNKNOWN"
+
+        continuity = getattr(self, "continuity_engine", None)
+        subsystems["journal"] = "ATTACHED" if continuity is not None else "UNKNOWN"
+
+        execution = getattr(self, "execution_manager", None)
+        if execution is None:
+            subsystems["execution"] = "UNKNOWN"
+        else:
+            try:
+                active = [
+                    item for item in execution.get_all_executions()
+                    if getattr(item.status, "name", str(item.status))
+                    in {"QUEUED", "RUNNING"}
+                ]
+                subsystems["execution"] = {
+                    "state": "ATTACHED",
+                    "active_count": len(active),
+                }
+            except Exception as exc:
+                subsystems["execution"] = {
+                    "state": "ERROR",
+                    "error": type(exc).__name__,
+                }
+
+        surface = getattr(self, "engineering_surface", None)
+        subsystems["engineering_surface"] = (
+            surface.inventory() if surface is not None else "UNKNOWN"
+        )
+
+        degraded = any(
+            value == "UNKNOWN"
+            or (isinstance(value, dict) and value.get("state") == "ERROR")
+            for value in subsystems.values()
+        )
         return {
-            "status": "ok",
+            "status": "degraded" if degraded else "ok",
             "generation": self._generation.current,
-            "subsystems": {
-                "identity": "ok",
-                "journal": "ok",
-                "execution": "ok"
-            }
+            "runtime_state": self._state.name,
+            "subsystems": subsystems,
         }
 
     # --- Stubs for internal processes ---
@@ -207,15 +242,43 @@ class RuntimeEngine:
     def _handle_active_executions(self) -> None:
         import logging
         logger = logging.getLogger(__name__)
-        # Active execution classification
-        # In a real system, iterate over active executions and classify them.
-        executions = [] # fetch active executions
-        classifications = {"COMPLETED": 0, "CANCELLED": 0, "FENCED": 0, "ORPHANED_REQUIRES_RECONCILIATION": 0}
-        for exec_obj in executions:
-            # Classification logic goes here
-            classifications["ORPHANED_REQUIRES_RECONCILIATION"] += 1
-            
-        logger.info(f"Drained active executions: {classifications}")
+        execution_manager = getattr(self, "execution_manager", None)
+        if execution_manager is None:
+            logger.info("No attached execution manager; no active executions observed.")
+            return
+
+        classifications = {
+            "COMPLETED": 0,
+            "CANCELLED": 0,
+            "FENCED": 0,
+            "ORPHANED_REQUIRES_RECONCILIATION": 0,
+        }
+        try:
+            executions = execution_manager.get_all_executions()
+        except Exception as exc:
+            logger.error("Unable to inspect active executions: %s", type(exc).__name__)
+            return
+
+        for execution in executions:
+            status = getattr(getattr(execution, "status", None), "name", "")
+            if status == "QUEUED":
+                classifications["CANCELLED"] += 1
+            elif status == "RUNNING":
+                worker = next(
+                    (
+                        item
+                        for item in execution_manager.worker_manager.list_workers()
+                        if item.execution_id == execution.execution_id
+                    ),
+                    None,
+                )
+                if worker is not None:
+                    execution_manager.worker_manager.cancel_worker(worker.worker_id)
+                    classifications["CANCELLED"] += 1
+                else:
+                    classifications["ORPHANED_REQUIRES_RECONCILIATION"] += 1
+
+        logger.info("Active execution shutdown classification: %s", classifications)
 
     def _close_sessions(self) -> None:
         import logging
