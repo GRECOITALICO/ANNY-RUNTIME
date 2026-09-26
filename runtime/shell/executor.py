@@ -40,7 +40,7 @@ def classify_command(command: str) -> str:
         return ShellEffectClass.UNKNOWN
 
     base = tokens[0]
-    if base in {"ls", "cat", "grep", "rg", "find", "head", "tail", "wc", "diff", "pwd", "which", "python", "python3", "pytest", "ruff", "mypy", "git"}:
+    if base in {"ls", "cat", "grep", "rg", "find", "head", "tail", "wc", "diff", "pwd", "which", "git"}:
         if base == "git" and len(tokens) > 1:
             sub = tokens[1]
             if sub in {"status", "log", "diff", "show", "rev-parse", "branch", "ls-files", "cat-file"}:
@@ -52,7 +52,7 @@ def classify_command(command: str) -> str:
             return ShellEffectClass.UNKNOWN
         return ShellEffectClass.READONLY
 
-    if base in {"mkdir", "cp", "mv", "rm", "touch", "chmod", "sed", "python", "python3"}:
+    if base in {"mkdir", "cp", "mv", "rm", "touch", "chmod", "sed", "pytest", "ruff", "mypy", "pyright"}:
         return ShellEffectClass.WORKSPACE_MUTATING
 
     if base in {"kill", "pkill", "killall"}:
