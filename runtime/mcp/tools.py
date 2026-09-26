@@ -27,8 +27,14 @@ def filesystem_inspect(input_data: Dict[str, Any], context: Dict[str, Any]) -> D
     # Security: resolve and validate path is within allowed workspace
     workspace = context.get("workspace_path", "")
     resolved = os.path.realpath(path)
-    if workspace and not resolved.startswith(os.path.realpath(workspace)):
-        raise ToolImplementationError(f"Path {path} is outside workspace boundary")
+    if workspace:
+        from pathlib import Path
+        try:
+            Path(resolved).relative_to(Path(os.path.realpath(workspace)))
+        except ValueError as exc:
+            raise ToolImplementationError(
+                f"Path {path} is outside workspace boundary"
+            ) from exc
 
     if not os.path.exists(resolved):
         return {"exists": False, "path": path}
