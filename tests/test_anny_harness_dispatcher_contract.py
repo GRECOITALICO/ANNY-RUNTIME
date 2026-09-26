@@ -119,7 +119,7 @@ def test_replay_conflict_is_not_a_successful_dispatch():
     assert outcome.is_success is False
 
 
-def test_executable_harness_dispatcher_uses_workspace_and_execution_manager_without_bypass():
+def test_executable_harness_dispatcher_uses_workspace_and_execution_manager_without_bypass(tmp_path, monkeypatch):
     from runtime.execution.harness_dispatcher import HarnessDispatcher
     from runtime.execution.models import ExecutionStatus, TaskExecutionContext
     from runtime.workspace.manager import Workspace, WorkspaceState
@@ -179,9 +179,16 @@ def test_executable_harness_dispatcher_uses_workspace_and_execution_manager_with
             assert execution_id == self.context.execution_id
             return self.context
 
+    from dataclasses import replace
+    from runtime.execution import harness_dispatcher as dispatcher_module
+    evidence_dir = tmp_path / "evidence" / "runtime-execution-001"
+    evidence_dir.mkdir(parents=True)
+    (evidence_dir / "evidence.json").write_text("{}", encoding="utf-8")
+    (evidence_dir / "reproducibility.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(dispatcher_module, "get_data_dir", lambda: tmp_path)
     dispatcher = HarnessDispatcher()
     request = _request(
-        task=_task(),
+        task=replace(_task(), input={"path": "contract/repository"}),
         source_snapshot_id="sha:current",
     )
     manager = FakeExecutionManager()
