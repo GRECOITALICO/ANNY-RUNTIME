@@ -101,7 +101,8 @@ def test_api_status_derives_health():
     handler = MockHandler() # reset handler
     router.dispatch_get("/api/status", handler)
     resp = json.loads(handler.wfile.body.decode('utf-8'))
-    assert resp["runtime_health"] == "HEALTHY"
+    # A READY process without demonstrated CONRRAD dependencies is not healthy.
+    assert resp["runtime_health"] == "DEGRADED"
 
 def test_health_no_secret_disclosure():
     mock_engine = MagicMock()

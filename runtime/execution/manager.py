@@ -50,7 +50,7 @@ class ExecutionManager:
             telemetry_collector=self.telemetry_collector
         )
 
-    def submit_task(self, task: Task) -> TaskExecutionContext:
+    def submit_task(self, task: Task, execution_context=None) -> TaskExecutionContext:
         execution_id = str(uuid.uuid4())
         if self.telemetry_collector:
             envelope = TelemetryEnvelope.create(
@@ -73,10 +73,34 @@ class ExecutionManager:
             raise ValueError(f"Deterministic write capability requires a governed write executor: {task.capability_id}")
 
         selection = self.selector.select(task, cap, self.policy)
-        try:
-            workspace_path = self.workspace_manager.create_workspace(execution_id, task.project_id)
-        except Exception as exc:
-            raise RuntimeError(f"Failed to create workspace: {exc}") from exc
+
+        governed_workspace = None
+        if execution_context is not None:
+            if not hasattr(self.workspace_manager, "status"):
+                raise RuntimeError("Governed workspace manager is required for context-bound execution")
+            if execution_context.account_id != task.account_id:
+                raise PermissionError("ExecutionContext account does not match task")
+            if execution_context.project_id != task.project_id:
+                raise PermissionError("ExecutionContext project does not match task")
+            if not execution_context.workspace_id:
+                raise PermissionError("ExecutionContext has no workspace binding")
+            try:
+                governed_workspace = self.workspace_manager.status(
+                    execution_context,
+                    execution_context.workspace_id,
+                )
+            except Exception as exc:
+                raise PermissionError(f"Governed workspace validation failed: {type(exc).__name__}") from exc
+            if governed_workspace is None:
+                raise PermissionError("Governed workspace not found")
+            workspace_path = governed_workspace.local_path
+            execution_generation = execution_context.generation
+        else:
+            try:
+                workspace_path = self.workspace_manager.create_workspace(execution_id, task.project_id)
+            except Exception as exc:
+                raise RuntimeError(f"Failed to create workspace: {exc}") from exc
+            execution_generation = self.runtime_engine.generation.current if self.runtime_engine else 1
 
         routing_class = WorkerManager._routing_class(selection.executor_type.value)
         context = TaskExecutionContext(
@@ -103,7 +127,8 @@ class ExecutionManager:
         context.model_id = selection.model_id
         context.model_version = selection.model_version
         context.policy_version = selection.policy_version
-        context.generation = self.runtime_engine.generation.current if self.runtime_engine else 1
+        context.generation = execution_generation
+        context.governed_workspace_id = execution_context.workspace_id if execution_context is not None else None
 
         self._tasks[execution_id] = task
         self._executions[execution_id] = context
@@ -241,7 +266,7 @@ class ExecutionManager:
                     shutil.copy2(fpath, evidence_dir / fpath.name)
 
 
-            if task.workspace_policy == "destroy_on_complete":
+            if task.workspace_policy == "destroy_on_complete" and context.governed_workspace_id is None:
                 self.workspace_manager.destroy_workspace(context.workspace_path)
 
         if self.continuity_engine:

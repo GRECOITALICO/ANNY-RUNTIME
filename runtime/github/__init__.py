@@ -16,3 +16,15 @@ __all__ = [
     "GitHubTimeoutError",
     "GitHubRateLimitError",
 ]
+
+from runtime.github.engineering import (
+    GitHubEngineeringClient,
+    GitHubEngineeringError,
+    GitHubEngineeringAuthorizationError,
+)
+
+__all__ += [
+    "GitHubEngineeringClient",
+    "GitHubEngineeringError",
+    "GitHubEngineeringAuthorizationError",
+]

@@ -1,6 +1,7 @@
 from enum import Enum, auto
 from dataclasses import dataclass
 from typing import List, Optional, Dict
+import os
 import subprocess
 import time
 import uuid
@@ -100,7 +101,7 @@ class ProcessManager:
             handle = subprocess.Popen(
                 command,
                 cwd=workspace_path,
-                env=env,
+                env={**os.environ, **env} if env is not None else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True

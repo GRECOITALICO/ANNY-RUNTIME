@@ -27,8 +27,14 @@ def filesystem_inspect(input_data: Dict[str, Any], context: Dict[str, Any]) -> D
     # Security: resolve and validate path is within allowed workspace
     workspace = context.get("workspace_path", "")
     resolved = os.path.realpath(path)
-    if workspace and not resolved.startswith(os.path.realpath(workspace)):
-        raise ToolImplementationError(f"Path {path} is outside workspace boundary")
+    if workspace:
+        from pathlib import Path
+        try:
+            Path(resolved).relative_to(Path(os.path.realpath(workspace)))
+        except ValueError as exc:
+            raise ToolImplementationError(
+                f"Path {path} is outside workspace boundary"
+            ) from exc
 
     if not os.path.exists(resolved):
         return {"exists": False, "path": path}
@@ -47,66 +53,77 @@ def filesystem_inspect(input_data: Dict[str, Any], context: Dict[str, Any]) -> D
     }
 
 
+def _safe_workspace_path(context: Dict[str, Any], relative_path: str) -> str:
+    """Resolve a path under the Runtime-provided workspace."""
+    from pathlib import Path
+    workspace = context.get("workspace_path", "")
+    if not workspace:
+        raise ToolImplementationError("Workspace is not bound")
+    root = Path(workspace).resolve()
+    target = (root / relative_path).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise ToolImplementationError("Path outside workspace boundary") from exc
+    return str(target)
+
+
+def repository_inspect(input_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    """Inspect a checked-out local repository."""
+    path = _safe_workspace_path(context, input_data.get("path", "."))
+    import subprocess
+    if not os.path.exists(path):
+        return {"path": path, "exists": False, "is_git_repository": False, "head": None}
+    git_dir = os.path.join(path, ".git")
+    is_git = os.path.exists(git_dir)
+    head = None
+    if is_git:
+        result = subprocess.run(
+            ["git", "-C", path, "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if result.returncode == 0:
+            head = result.stdout.strip()
+    return {"path": path, "exists": True, "is_git_repository": is_git, "head": head}
+
+
 def repository_read(input_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
-    """Read file content from a repository workspace."""
-    github_client = context.get("github_client")
-    if not github_client:
-        raise ToolImplementationError("GitHubClient not provided in context")
-        
-    repo_path = input_data.get("repo_path", "")
-    file_path = input_data.get("file_path", "")
-    if not file_path or not repo_path:
-        raise ToolImplementationError("Missing required fields: repo_path, file_path")
-
-    try:
-        parts = repo_path.strip("/").split("/")
-        owner, repo = parts[-2], parts[-1]
-    except Exception:
-        raise ToolImplementationError(f"Invalid repo_path format. Expected owner/repo, got {repo_path}")
-
-    try:
-        content = github_client.get_file(owner, repo, file_path)
-    except Exception as e:
-        raise ToolImplementationError(f"Failed to read file from GitHub: {e}")
-
-    return {
-        "content": content,
-        "size": len(content),
-        "path": file_path,
-        "encoding": "utf-8",
-    }
+    """Read a file from the checked-out Runtime workspace."""
+    path = input_data.get("file_path", "")
+    if not path:
+        raise ToolImplementationError("Missing required field: file_path")
+    safe = _safe_workspace_path(context, path)
+    if not os.path.isfile(safe):
+        raise ToolImplementationError("Repository file not found")
+    with open(safe, "r", encoding="utf-8") as handle:
+        content = handle.read()
+    return {"content": content, "size": len(content.encode("utf-8")), "path": path, "encoding": "utf-8"}
 
 
 def repository_search(input_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
-    """Search repository content."""
-    github_client = context.get("github_client")
-    if not github_client:
-        raise ToolImplementationError("GitHubClient not provided in context")
-        
-    repo_path = input_data.get("repo_path", "")
+    """Search checked-out repository content without requiring GitHub."""
+    repo_path = _safe_workspace_path(context, input_data.get("repo_path", "."))
     pattern = input_data.get("pattern", "")
-    if not pattern or not repo_path:
-        raise ToolImplementationError("Missing required fields: repo_path, pattern")
-
-    try:
-        parts = repo_path.strip("/").split("/")
-        owner, repo = parts[-2], parts[-1]
-    except Exception:
-        raise ToolImplementationError(f"Invalid repo_path format. Expected owner/repo, got {repo_path}")
-
-    try:
-        # Use canonical GitHubClient search API
-        res = github_client.search_code(f"{owner}/{repo}", pattern)
-        items = res.get("items", [])
-        matches = [item["path"] for item in items]
-    except Exception as e:
-        raise ToolImplementationError(f"Failed to search GitHub: {e}")
-
+    if not pattern:
+        raise ToolImplementationError("Missing required field: pattern")
+    import subprocess
+    result = subprocess.run(
+        ["git", "-C", repo_path, "grep", "-n", "-I", "--", pattern],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    matches = sorted(line for line in result.stdout.splitlines() if line)
     return {
-        "pattern": pattern,
         "repo_path": repo_path,
+        "pattern": pattern,
         "matches": matches,
         "count": len(matches),
+        "exit_code": result.returncode,
     }
 
 
@@ -169,6 +186,7 @@ def fabric_register(input_data: Dict[str, Any], context: Dict[str, Any]) -> Dict
 # Map tool_id -> implementation function
 TOOL_IMPLEMENTATIONS = {
     "filesystem.inspect": filesystem_inspect,
+    "repository.inspect": repository_inspect,
     "repository.read": repository_read,
     "repository.search": repository_search,
     "fabric.read": fabric_read,

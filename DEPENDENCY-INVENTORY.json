@@ -1,0 +1,9 @@
+[
+  {"import": "cryptography", "python_package": "cryptography"},
+  {"import": "dateutil", "python_package": "python-dateutil"},
+  {"import": "llama_cpp", "python_package": "llama-cpp-python"},
+  {"import": "mcp", "python_package": "mcp"},
+  {"import": "psutil", "python_package": "psutil"},
+  {"import": "websocket", "python_package": "websocket-client"},
+  {"import": "yaml", "python_package": "pyyaml"}
+]

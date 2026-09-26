@@ -1,34 +1,29 @@
-from dataclasses import dataclass, field
-from typing import Dict, Optional, List, Set
-from datetime import datetime
+"""Governed shell execution for ANNY Runtime.
+
+All commands execute inside a Runtime-owned workspace through ProcessManager.
+Unknown effects fail closed.
+"""
+
+from __future__ import annotations
+
+import shlex
 import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Dict, Optional
+
+from runtime.security.execution_context import ExecutionContext
+
 
 @dataclass(frozen=True)
-class ExecutionContext:
-    tenant_id: str
-    account_id: str
-    project_id: str
-    anny_instance_id: str
-    runtime_id: str
-    session_id: str
-    actor_id: str
-    operation_id: str
-    execution_id: str
-    generation: int
-    issued_at: datetime
-    expires_at: datetime
-    workspace_id: Optional[str] = None
-    capabilities: Set[str] = field(default_factory=set)
-    
-    def has_capability(self, capability: str) -> bool:
-        return capability in self.capabilities
-
-@dataclass
 class ShellResult:
     exit_code: int
     stdout: str
     stderr: str
     duration_ms: int
+    effect_class: str
+    process_id: Optional[str] = None
+
 
 class ShellEffectClass:
     READONLY = "READONLY"
@@ -37,90 +32,124 @@ class ShellEffectClass:
     REMOTE_MUTATION = "REMOTE_MUTATION"
     UNKNOWN = "UNKNOWN"
 
+
 def classify_command(command: str) -> str:
-    cmd_base = command.split()[0] if command.split() else ""
-    
-    readonly_cmds = {"ls", "cat", "grep", "find", "head", "tail", "wc", "diff"}
-    mutating_cmds = {"mkdir", "cp", "mv", "rm", "touch", "chmod", "sed"}
-    process_cmds = {"kill", "pkill", "killall"}
-    
-    if cmd_base in readonly_cmds:
-        return ShellEffectClass.READONLY
-    if cmd_base in mutating_cmds:
-        return ShellEffectClass.WORKSPACE_MUTATING
-    if cmd_base in process_cmds:
-        return ShellEffectClass.PROCESS_CONTROL
-    
-    if cmd_base == "git":
-        if len(command.split()) > 1:
-            sub = command.split()[1]
-            if sub in {"status", "log", "diff"}:
+    """Conservative classification of the first command segment."""
+    tokens = shlex.split(command, posix=True)
+    if not tokens:
+        return ShellEffectClass.UNKNOWN
+
+    base = tokens[0]
+    if base in {"ls", "cat", "grep", "rg", "find", "head", "tail", "wc", "diff", "pwd", "which", "git"}:
+        if base == "git" and len(tokens) > 1:
+            sub = tokens[1]
+            if sub in {"status", "log", "diff", "show", "rev-parse", "branch", "ls-files", "cat-file"}:
                 return ShellEffectClass.READONLY
-            if sub in {"push", "remote"}:
+            if sub in {"add", "commit", "checkout", "switch", "reset", "restore", "merge", "rebase", "tag"}:
+                return ShellEffectClass.WORKSPACE_MUTATING
+            if sub in {"push", "fetch", "pull", "remote", "clone"}:
                 return ShellEffectClass.REMOTE_MUTATION
-    
-    if cmd_base == "echo" and ">" in command:
+            return ShellEffectClass.UNKNOWN
+        return ShellEffectClass.READONLY
+
+    if base in {"mkdir", "cp", "mv", "rm", "touch", "chmod", "sed", "pytest", "ruff", "mypy", "pyright"}:
         return ShellEffectClass.WORKSPACE_MUTATING
-        
-    if "curl -X POST" in command or "wget --post" in command:
-        return ShellEffectClass.REMOTE_MUTATION
-        
+
+    if base in {"kill", "pkill", "killall"}:
+        return ShellEffectClass.PROCESS_CONTROL
+
     return ShellEffectClass.UNKNOWN
+
 
 class ShellExecutor:
     def __init__(self, process_manager, workspace_manager) -> None:
         self.process_manager = process_manager
         self.workspace_manager = workspace_manager
 
+    @staticmethod
+    def _validate_command_syntax(command: str) -> None:
+        """Reject shell control syntax until structured composite execution exists."""
+        forbidden = ("\n", "\r", ";", "&&", "||", "|", ">", "<", "`", "$(", "\x00")
+        for token in forbidden:
+            if token in command:
+                raise PermissionError(
+                    "Shell control syntax is not permitted in the deterministic executor: "
+                    f"{token!r}"
+                )
+        if not command.strip():
+            raise ValueError("Command cannot be empty")
+
+    @staticmethod
+    def _required_capabilities(command: str, effect: str) -> set[str]:
+        required = {"PROCESS_EXECUTION"}
+        tokens = shlex.split(command, posix=True)
+
+        if effect == ShellEffectClass.REMOTE_MUTATION:
+            required.update({"REMOTE_REPOSITORY_MUTATION", "NETWORK_ACCESS"})
+            return required
+
+        if tokens and tokens[0] == "git":
+            subcommand = tokens[1] if len(tokens) > 1 else ""
+            if effect == ShellEffectClass.READONLY:
+                required.add("GIT_READ")
+            elif effect == ShellEffectClass.WORKSPACE_MUTATING:
+                required.add("GIT_WRITE")
+            else:
+                raise PermissionError("Unknown Git effect: action denied by default")
+            return required
+
+        if effect == ShellEffectClass.READONLY:
+            required.add("FILE_READ")
+        elif effect == ShellEffectClass.WORKSPACE_MUTATING:
+            required.add("FILE_WRITE")
+        elif effect == ShellEffectClass.PROCESS_CONTROL:
+            required.add("PROCESS_CONTROL")
+        else:
+            raise PermissionError("Effect UNKNOWN: action denied by default")
+        return required
+
     def execute(
         self,
         context: ExecutionContext,
         command: str,
         timeout: int = 300,
-        env: Optional[Dict[str, str]] = None
+        env: Optional[Dict[str, str]] = None,
     ) -> ShellResult:
-        start_time = time.time()
-        
-        effect = classify_command(command)
-        
-        req_cap = None
-        if effect == ShellEffectClass.READONLY:
-            req_cap = "FILE_READ"
-        elif effect == ShellEffectClass.WORKSPACE_MUTATING:
-            req_cap = "FILE_WRITE"
-        elif effect == ShellEffectClass.PROCESS_CONTROL:
-            req_cap = "PROCESS_CONTROL"
-        elif effect == ShellEffectClass.REMOTE_MUTATION:
-            req_cap = "REMOTE_REPOSITORY_MUTATION"
-        else:
-            raise PermissionError("Effect UNKNOWN: Action denied by default")
-            
-        if not context.has_capability(req_cap):
-            raise PermissionError(f"Action requires capability {req_cap}")
-            
+        if not isinstance(context, ExecutionContext):
+            raise TypeError("Canonical ExecutionContext required")
         if not context.workspace_id:
             raise ValueError("Context must have a workspace_id")
-            
-        ws = self.workspace_manager.status(context.workspace_id)
-        if not ws:
+
+        self._validate_command_syntax(command)
+        effect = classify_command(command)
+        for capability in self._required_capabilities(command, effect):
+            if not context.has_capability(capability):
+                raise PermissionError(f"Action requires capability {capability}")
+
+        now = datetime.now(timezone.utc)
+        if not context.is_valid(now, self.process_manager.generation):
+            raise PermissionError("ExecutionContext expired or generation-stale")
+
+        workspace = self.workspace_manager.status(context, context.workspace_id)
+        if workspace is None:
             raise ValueError("Workspace not found")
-            
+        if workspace.local_path is None:
+            raise ValueError("Workspace has no local path")
+
+        start = time.time()
         record = self.process_manager.start(
             context,
-            command=['bash', '-c', command],
-            workspace_path=ws.local_path,
+            command=["bash", "-lc", command],
+            workspace_path=workspace.local_path,
             timeout=timeout,
-            env=env
+            env=env,
         )
-        
-        if record:
-            record = self.process_manager.wait(context, record.process_id, timeout)
-        
-        duration_ms = int((time.time() - start_time) * 1000)
-        
+        record = self.process_manager.wait(context, record.process_id, timeout)
         return ShellResult(
             exit_code=record.exit_code if record and record.exit_code is not None else -1,
             stdout=record.stdout if record else "",
             stderr=record.stderr if record else "",
-            duration_ms=duration_ms
+            duration_ms=int((time.time() - start) * 1000),
+            effect_class=effect,
+            process_id=record.process_id if record else None,
         )

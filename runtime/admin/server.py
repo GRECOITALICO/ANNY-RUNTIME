@@ -24,57 +24,60 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
     server: 'AdminServer' # Type hint for the custom server instance
 
     def do_GET(self):
-        # Single request context shared between middleware and router
+        # Every request gets an isolated router/context snapshot. The previous
+        # implementation shared router.context across worker threads, allowing
+        # concurrent JSON responses to overwrite/delete each other's state.
         context: Dict[str, Any] = dict(self.server.router.context)
+        request_router = AdminRouter(context)
+
         if not self.server.middleware.process_request('GET', self.path, self.headers, context):
             self.server.middleware.process_response(context)
-            self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
-            self.server.router._redirect(self, context.get('redirect_to', '/login'))
+            request_router.context.update({'set_cookies': context.get('set_cookies', [])})
+            request_router._redirect(self, context.get('redirect_to', '/login'))
             return
 
-        saved_context = dict(self.server.router.context)
-        self.server.router.context.update(context)
         try:
             self.server.middleware.process_response(context)
-            self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
+            request_router.context.update({'set_cookies': context.get('set_cookies', [])})
 
             if self.path.split('?', 1)[0] == '/api/sync/status':
-                sync_service = self.server.router.context.get('sync_service')
+                sync_service = request_router.context.get('sync_service')
                 if sync_service is None:
-                    self.server.router._send_json(self, {
+                    request_router._send_json(self, {
                         'sync_state': 'UNKNOWN',
                         'error_classification': 'SYNC_SERVICE_UNAVAILABLE',
                     }, status=503)
                 else:
-                    self.server.router._send_json(self, sync_service.status())
+                    request_router._send_json(self, sync_service.status())
                 return
 
             if self.path.split('?', 1)[0] == '/':
                 session = context.get('admin_session')
                 is_onboarding = bool(session and getattr(session, 'scope', None) == 'ONBOARDING_ONLY')
-                html_page = self.server.router.handle_dashboard(urllib.parse.urlparse(self.path))
+                html_page = request_router.handle_dashboard(urllib.parse.urlparse(self.path))
                 if not is_onboarding:
                     html_page = inject_sync_controls(
                         html_page,
                         getattr(session, 'csrf_token', '') if session else '',
                     )
-                self.server.router._send_html(self, html_page)
+                request_router._send_html(self, html_page)
                 return
 
-            self.server.router.dispatch_get(self.path, self)
-        finally:
-            for key in list(self.server.router.context.keys()):
-                if key not in saved_context and key not in ('bootstrap_snapshot', 'sync_service'):
-                    del self.server.router.context[key]
-            self.server.router.context.update({k: v for k, v in saved_context.items()
-                                               if k not in ('admin_session', 'set_cookies', 'new_session_id', 'secure_cookie')})
+            request_router.dispatch_get(self.path, self)
+        except Exception as e:
+            logger.error(f"Error handling GET {self.path}: {e}", exc_info=True)
+            request_router._send_html(self, "500 Internal Server Error", status=500)
 
     def do_POST(self):
+        # POST requests also receive isolated request state so transient response
+        # fields (JSON/HTML/cookies) cannot leak across concurrent requests.
         context: Dict[str, Any] = dict(self.server.router.context)
+        request_router = AdminRouter(context)
+
         if not self.server.middleware.process_request('POST', self.path, self.headers, context):
             self.server.middleware.process_response(context)
-            self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
-            self.server.router._redirect(self, context.get('redirect_to', '/login'))
+            request_router.context.update({'set_cookies': context.get('set_cookies', [])})
+            request_router._redirect(self, context.get('redirect_to', '/login'))
             return
 
         content_type = self.headers.get('content-type', '')
@@ -89,58 +92,69 @@ class AdminRequestHandler(BaseHTTPRequestHandler):
 
         if not self.server.middleware.process_post_body(self.path, form_data, context):
             self.server.middleware.process_response(context)
-            self.server.router.context.update({'set_cookies': context.get('set_cookies', [])})
-            self.server.router._redirect(self, context.get('redirect_to', '/'))
+            request_router.context.update({'set_cookies': context.get('set_cookies', [])})
+            request_router._redirect(self, context.get('redirect_to', '/'))
             return
 
-        saved_context = dict(self.server.router.context)
-        self.server.router.context.update(context)
         try:
             if self.path.split('?', 1)[0] == '/api/sync':
-                sync_service = self.server.router.context.get('sync_service')
+                sync_service = request_router.context.get('sync_service')
                 if sync_service is None:
-                    self.server.router._send_json(self, {'status': 'failed', 'sync_state': 'FAILED', 'error_classification': 'SYNC_SERVICE_UNAVAILABLE'}, status=503)
+                    request_router._send_json(self, {
+                        'status': 'failed',
+                        'sync_state': 'FAILED',
+                        'error_classification': 'SYNC_SERVICE_UNAVAILABLE'
+                    }, status=503)
                 else:
-                    self.server.router._send_json(self, sync_service.start())
-                self.server.middleware.process_response(self.server.router.context)
+                    request_router._send_json(self, sync_service.start())
+                self.server.middleware.process_response(request_router.context)
                 return
 
             if self.path.split('?', 1)[0] == '/api/sync/stage':
-                sync_service = self.server.router.context.get('sync_service')
+                sync_service = request_router.context.get('sync_service')
                 if sync_service is None:
-                    self.server.router._send_json(self, {'status': 'failed', 'sync_state': 'FAILED', 'error_classification': 'SYNC_SERVICE_UNAVAILABLE'}, status=503)
+                    request_router._send_json(self, {
+                        'status': 'failed',
+                        'sync_state': 'FAILED',
+                        'error_classification': 'SYNC_SERVICE_UNAVAILABLE'
+                    }, status=503)
                 else:
-                    self.server.router._send_json(self, sync_service.stage())
-                self.server.middleware.process_response(self.server.router.context)
+                    request_router._send_json(self, sync_service.stage())
+                self.server.middleware.process_response(request_router.context)
                 return
 
             if self.path.split('?', 1)[0] == '/api/sync/activate':
-                sync_service = self.server.router.context.get('sync_service')
+                sync_service = request_router.context.get('sync_service')
                 if sync_service is None:
-                    self.server.router._send_json(self, {'status': 'failed', 'sync_state': 'FAILED', 'error_classification': 'SYNC_SERVICE_UNAVAILABLE'}, status=503)
+                    request_router._send_json(self, {
+                        'status': 'failed',
+                        'sync_state': 'FAILED',
+                        'error_classification': 'SYNC_SERVICE_UNAVAILABLE'
+                    }, status=503)
                 else:
-                    self.server.router._send_json(self, sync_service.activate())
-                self.server.middleware.process_response(self.server.router.context)
+                    request_router._send_json(self, sync_service.activate())
+                self.server.middleware.process_response(request_router.context)
                 return
 
             if self.path.split('?', 1)[0] == '/api/sync/rollback':
-                sync_service = self.server.router.context.get('sync_service')
+                sync_service = request_router.context.get('sync_service')
                 if sync_service is None:
-                    self.server.router._send_json(self, {'status': 'failed', 'sync_state': 'FAILED', 'error_classification': 'SYNC_SERVICE_UNAVAILABLE'}, status=503)
+                    request_router._send_json(self, {
+                        'status': 'failed',
+                        'sync_state': 'FAILED',
+                        'error_classification': 'SYNC_SERVICE_UNAVAILABLE'
+                    }, status=503)
                 else:
-                    self.server.router._send_json(self, sync_service.rollback())
-                self.server.middleware.process_response(self.server.router.context)
+                    request_router._send_json(self, sync_service.rollback())
+                self.server.middleware.process_response(request_router.context)
                 return
 
-            self.server.router.dispatch_post(self.path, form_data, self)
-            self.server.middleware.process_response(self.server.router.context)
-        finally:
-            for key in list(self.server.router.context.keys()):
-                if key not in saved_context and key not in ('bootstrap_snapshot', 'sync_service'):
-                    del self.server.router.context[key]
-            self.server.router.context.update({k: v for k, v in saved_context.items()
-                                               if k not in ('admin_session', 'set_cookies', 'new_session_id', 'secure_cookie', 'destroy_session')})
-        
+            request_router.dispatch_post(self.path, form_data, self)
+            self.server.middleware.process_response(request_router.context)
+        except Exception as e:
+            logger.error(f"Error handling POST {self.path}: {e}", exc_info=True)
+            request_router._send_html(self, "500 Internal Server Error", status=500)
+
     def log_message(self, format, *args):
         """Override to use standard logger."""
         logger.debug(f"Admin HTTP: {self.client_address[0]} - {format % args}")
@@ -276,7 +290,7 @@ def start_admin_server(host: str, port: int):
     secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
     github_manager = build_github_auth_manager(secret_backend, config)
     
-    from runtime.workspace.ephemeral import EphemeralWorkspaceManager
+    from runtime.workspace.runtime_manager import RuntimeWorkspaceManager
     from runtime.execution.manager import ExecutionManager
     from runtime.github.client import GitHubClient
     from runtime.github.discovery import OrganizationDiscoveryService
@@ -290,9 +304,12 @@ def start_admin_server(host: str, port: int):
     telemetry_collector = TelemetryCollector(str(data_dir))
     telemetry_aggregator = TelemetryAggregator(telemetry_collector)
 
-    ephemeral_workspace_manager = EphemeralWorkspaceManager()
+    runtime_workspace_manager = RuntimeWorkspaceManager(
+        data_dir / "workspaces",
+        {"max_concurrent_executions": config.max_concurrent_executions},
+    )
     execution_manager = ExecutionManager(
-        workspace_manager=ephemeral_workspace_manager,
+        workspace_manager=runtime_workspace_manager,
         audit_manager=audit_manager,
         github_client=github_client,
         fabric_client=fabric_client,
@@ -352,8 +369,69 @@ def start_admin_server(host: str, port: int):
     def run_bootstrap():
         try:
             engine.startup(github_client=github_client, fabric_client=fabric_client)
+
+            from runtime.process.manager import ProcessManager
+            from runtime.shell.executor import ShellExecutor
+            from runtime.filesystem.service import FilesystemService
+            from runtime.git.service import GitService
+            from runtime.toolchain.runner import DevelopmentToolRunner
+            from runtime.execution.harness_contract import HarnessDispatchContract
+            from runtime.execution.harness_dispatcher import HarnessDispatcher
+            from runtime.github.engineering import GitHubEngineeringClient
+            from runtime.engineering.surface import EngineeringSurface
+
+            process_manager = ProcessManager(
+                {
+                    "max_concurrent_executions": config.max_concurrent_executions,
+                },
+                engine.generation.current,
+            )
+            shell_executor = ShellExecutor(process_manager, runtime_workspace_manager)
+            filesystem_service = FilesystemService(runtime_workspace_manager)
+            git_service = GitService(shell_executor, engine.mutation_contract)
+            toolchain_runner = DevelopmentToolRunner(shell_executor)
+            harness_contract = HarnessDispatchContract()
+            harness_dispatcher = __import__(
+                "runtime.execution.harness_dispatcher",
+                fromlist=["HarnessDispatcher"],
+            ).HarnessDispatcher(harness_contract)
+            github_engineering = (
+                GitHubEngineeringClient(github_client)
+                if github_client is not None
+                else None
+            )
+
+            surface = EngineeringSurface(
+                workspace_manager=runtime_workspace_manager,
+                process_manager=process_manager,
+                shell_executor=shell_executor,
+                filesystem_service=filesystem_service,
+                git_service=git_service,
+                toolchain_runner=toolchain_runner,
+                execution_manager=execution_manager,
+                harness_contract=harness_contract,
+                harness_dispatcher=harness_dispatcher,
+                github_client=github_client,
+                github_engineering=github_engineering,
+            )
+            engine.process_manager = process_manager
+            engine.workspace_manager = runtime_workspace_manager
+            engine.shell_executor = shell_executor
+            engine.filesystem_service = filesystem_service
+            engine.git_service = git_service
+            engine.toolchain_runner = toolchain_runner
+            engine.harness_contract = harness_contract
+            engine.harness_dispatcher = harness_dispatcher
+            engine.github_client = github_client
+            engine.github_engineering = github_engineering
+            engine.engineering_surface = surface
+
+            server.admin_context["engineering_surface"] = surface
+            server.router.context["engineering_surface"] = surface
+            server.admin_context["process_manager"] = process_manager
+            server.router.context["process_manager"] = process_manager
         except Exception as e:
-            logger.error(f"Runtime engine startup error: {e}")
+            logger.error(f"Runtime engine startup error: {e}", exc_info=True)
 
     if server.start():
         t = threading.Thread(target=run_bootstrap, daemon=True)
