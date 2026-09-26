@@ -15,8 +15,9 @@ from enum import Enum
 from typing import Any, Dict, Optional, Set
 
 from runtime.execution.capability import CapabilityRegistry, ExecutorType
-from runtime.execution.models import ExecutionResult, ExecutionStatus
+from runtime.execution.models import ExecutionResult, ExecutionStatus, Task
 from runtime.security.execution_context import ExecutionContext
+from runtime.workspace.manager import WorkspaceManager, WorkspaceState
 
 
 class DispatchStatus(str, Enum):
@@ -367,6 +368,130 @@ class HarnessDispatcher:
             capability_id=request.capability_id,
             message="Harness request validated; Runtime handoff is ready",
             handoff=handoff,
+        )
+
+    def dispatch_and_execute(
+        self,
+        request: HarnessDispatchRequest,
+        context: Optional[ExecutionContext],
+        *,
+        execution_manager: Any,
+        workspace_manager: WorkspaceManager,
+    ) -> HarnessResultEnvelope | HarnessDispatchDecision:
+        """Execute only after Harness validation and governed workspace binding.
+
+        The Harness never invokes an executor directly. It creates a canonical
+        Runtime Task and hands it to ExecutionManager after validating the
+        caller context, source revision, and workspace ownership.
+        """
+        decision = self.validate(request, context)
+        if decision.status is not DispatchStatus.ACCEPTED:
+            return decision
+        assert context is not None
+        assert decision.handoff is not None
+
+        try:
+            workspace = workspace_manager.status(context, request.workspace_id)
+        except (PermissionError, ValueError) as exc:
+            return self._reject(
+                request,
+                FailureCode.WORKSPACE_BINDING_FAILURE,
+                f"Workspace authorization failed: {type(exc).__name__}",
+            )
+
+        if workspace is None:
+            return self._reject(
+                request,
+                FailureCode.WORKSPACE_BINDING_FAILURE,
+                "ExecutionContext workspace does not exist",
+            )
+        if workspace.state not in {WorkspaceState.READY, WorkspaceState.ACTIVE, WorkspaceState.IDLE}:
+            return self._reject(
+                request,
+                FailureCode.WORKSPACE_BINDING_FAILURE,
+                f"Workspace is not executable: {workspace.state.name}",
+            )
+        if request.source_snapshot != workspace.source_revision:
+            return self._reject(
+                request,
+                FailureCode.STALE_SOURCE_SNAPSHOT,
+                "Source snapshot does not match the bound workspace revision",
+            )
+
+        repository_input = dict(request.input)
+        raw_path = repository_input.get("path")
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            return self._reject(request, FailureCode.INVALID_INPUT, "Repository path is required")
+        candidate = (workspace.local_path + "/" + raw_path).replace("\\\\", "/")
+
+        from pathlib import Path
+        workspace_root = Path(workspace.local_path).resolve()
+        bound_path = Path(candidate).resolve()
+        try:
+            bound_path.relative_to(workspace_root)
+        except ValueError:
+            return self._reject(
+                request,
+                FailureCode.WORKSPACE_BINDING_FAILURE,
+                "Repository path escapes the bound workspace",
+            )
+
+        repository_input["path"] = str(bound_path)
+        task = Task(
+            task_id=request.request_id,
+            capability_id=request.capability_id,
+            account_id=request.account_id,
+            project_id=request.project_id,
+            input=repository_input,
+            constraints=dict(request.constraints),
+            deadline=request.deadline,
+            workspace_policy=request.workspace_policy,
+            evidence_policy=request.evidence_policy,
+            requested_by=context.actor_id,
+            created_at=datetime.now(timezone.utc),
+        )
+
+        try:
+            execution_context = execution_manager.submit_task(task)
+            execution_manager.execute_sync(execution_context.execution_id)
+        except Exception as exc:
+            return HarnessResultEnvelope(
+                request_id=request.request_id,
+                execution_id=None,
+                capability_id=request.capability_id,
+                dispatch_status=DispatchStatus.BLOCKED,
+                execution_status=None,
+                result=None,
+                validation_status=None,
+                evidence_ref=None,
+                evidence_hash=None,
+                failure_reason=f"EXECUTION_DISPATCH_ERROR:{type(exc).__name__}",
+                created_at=datetime.now(timezone.utc),
+                completed_at=None,
+            )
+
+        validation_status = "STRUCTURAL_VALID" if (
+            request.capability_id == "repository.inspect"
+            and isinstance(execution_context.result, dict)
+            and isinstance(execution_context.result.get("is_git_repository"), bool)
+        ) else "UNVERIFIED"
+        execution_result = ExecutionResult(
+            execution_id=execution_context.execution_id,
+            task_id=execution_context.task_id,
+            status=execution_context.status,
+            result_data=execution_context.result,
+            result_hash=execution_context.result_hash,
+            error_message=execution_context.error_message,
+            failure_reason=execution_context.failure_reason,
+            duration_ms=execution_context.duration_ms,
+            completed_at=execution_context.completed_at,
+            evidence_ref=execution_context.evidence_ref,
+        )
+        return HarnessResultEnvelope.from_execution(
+            request_id=request.request_id,
+            capability_id=request.capability_id,
+            execution=execution_result,
+            validation_status=validation_status,
         )
 
     @staticmethod
