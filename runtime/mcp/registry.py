@@ -118,6 +118,18 @@ class ToolRegistry:
                 audit_level="summary",
             ),
             ToolPolicy(
+                policy_id="pol-repo-inspect",
+                tool_id="repository.inspect",
+                max_invocations_per_execution=100,
+                max_input_size=4096,
+                max_output_size=1024 * 1024,
+                require_evidence=True,
+                allowed_callers=["repository.inspect"],
+                network_policy="disabled",
+                filesystem_policy="read_only",
+                audit_level="summary",
+            ),
+            ToolPolicy(
                 policy_id="pol-repo-read",
                 tool_id="repository.read",
                 max_invocations_per_execution=50,
