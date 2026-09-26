@@ -2,7 +2,7 @@
 
 ## Status and boundary
 
-**DEFINED AND LOCALLY VALIDATED CONTRACT BOUNDARY.** This document and
+**DEFINED CONTRACT + EXECUTABLE GOVERNED DISPATCHER.** This document and
 `runtime/execution/harness_contract.py` define a request validator only. They
 do not dispatch a Runtime task, start a worker, issue a durable receipt, prove
 ANNY first use, verify live Runtime/CONRRAD, or certify a capability.
@@ -65,8 +65,7 @@ must never be converted to a fallback route.
 
 ## Future execution handoff
 
-After a future approved `ExecutionManager` submission and worker selection,
-`HarnessExecutionHandoff` carries existing Runtime identities:
+After validation, the executable dispatcher may submit the bound Task to the existing `ExecutionManager`; `WorkerManager` remains responsible for worker selection and execution:
 
 - `TaskExecutionContext.execution_id`;
 - `WorkerDefinition.worker_id` and `executor_id`;
@@ -102,7 +101,7 @@ filesystem, process, or external coding-agent APIs.
 
 ## Next implementation preconditions
 
-Before a governed execution attempt, implement and test: a dispatcher that
-calls the existing manager, authority validation against the existing store and
-generation fence, source-snapshot verification, receipt persistence into the
-canonical evidence path, and ANNY result-consumption/checkpoint handling.
+Before claiming Runtime-executed or ANNY-first-use status, the dispatcher must be
+actually exercised in an execution-capable Runtime environment and its receipt/evidence
+must be consumed and checkpointed through the canonical control-plane path. A local
+unit-test pass alone is insufficient.
