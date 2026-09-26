@@ -117,3 +117,118 @@ def test_replay_conflict_is_not_a_successful_dispatch():
     assert outcome.decision is DispatchDecision.REJECTED
     assert outcome.reason is DispatchReason.REPLAY_CONFLICT
     assert outcome.is_success is False
+
+
+def test_executable_harness_dispatcher_uses_workspace_and_execution_manager_without_bypass():
+    from runtime.execution.harness_dispatcher import HarnessDispatcher
+    from runtime.execution.models import ExecutionStatus, TaskExecutionContext
+    from runtime.workspace.manager import Workspace, WorkspaceState
+
+    class FakeWorkspaceManager:
+        def status(self, context, workspace_id):
+            return Workspace(
+                workspace_id=workspace_id,
+                tenant_id=context.tenant_id,
+                project_id=context.project_id,
+                actor_scope=[context.actor_id],
+                repository="repository",
+                source_revision="sha:current",
+                state=WorkspaceState.READY,
+                generation=context.generation,
+                local_path="/tmp/governed-workspace",
+                created_at="now",
+            )
+
+    class FakeExecutionManager:
+        def __init__(self):
+            self.submitted = None
+            self.worker_manager = type("Workers", (), {})()
+            self.worker = type(
+                "Worker",
+                (),
+                {"execution_id": "runtime-execution-001", "worker_id": "wrk-test", "executor_id": "deterministic"},
+            )()
+            self.worker_manager.list_workers = lambda: [self.worker]
+            self.context = TaskExecutionContext(
+                execution_id="runtime-execution-001",
+                task_id="dispatch-request-001",
+                account_id="contract-account",
+                project_id="contract-project",
+                capability_id="repository.inspect",
+                workspace_path="/tmp/ephemeral/runtime-execution-001",
+                environment={},
+                allowed_tools=[],
+                deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
+                resource_limits={},
+                network_policy="disabled",
+                write_policy="read_only",
+                status=ExecutionStatus.SUCCEEDED,
+                result={
+                    "path": "/tmp/governed-workspace/repository",
+                    "is_git_repository": True,
+                    "head": "sha:current",
+                },
+                result_hash="result-hash",
+            )
+
+        def submit_task(self, task):
+            self.submitted = task
+            return self.context
+
+        def execute_sync(self, execution_id):
+            assert execution_id == self.context.execution_id
+            return self.context
+
+    dispatcher = HarnessDispatcher()
+    request = _request(
+        task=_task(),
+        source_snapshot_id="sha:current",
+    )
+    manager = FakeExecutionManager()
+
+    result = dispatcher.dispatch_and_execute(
+        request,
+        _context(),
+        execution_manager=manager,
+        workspace_manager=FakeWorkspaceManager(),
+    )
+
+    assert result.execution_status == "SUCCEEDED"
+    assert result.evidence_hash == "result-hash"
+    assert manager.submitted.input["path"] == "/tmp/governed-workspace/contract/repository"
+
+
+def test_executable_dispatcher_blocks_stale_source_before_manager_execution():
+    from runtime.execution.harness_dispatcher import HarnessDispatcher
+    from runtime.workspace.manager import Workspace, WorkspaceState
+
+    class FakeWorkspaceManager:
+        def status(self, context, workspace_id):
+            return Workspace(
+                workspace_id=workspace_id,
+                tenant_id=context.tenant_id,
+                project_id=context.project_id,
+                actor_scope=[context.actor_id],
+                repository="repository",
+                source_revision="sha:new",
+                state=WorkspaceState.READY,
+                generation=context.generation,
+                local_path="/tmp/governed-workspace",
+                created_at="now",
+            )
+
+    class ForbiddenExecutionManager:
+        worker_manager = None
+
+        def submit_task(self, task):
+            raise AssertionError("stale source must block before execution")
+
+    result = HarnessDispatcher().dispatch_and_execute(
+        _request(source_snapshot_id="sha:old"),
+        _context(),
+        execution_manager=ForbiddenExecutionManager(),
+        workspace_manager=FakeWorkspaceManager(),
+    )
+
+    assert result.decision is DispatchDecision.BLOCKED
+    assert result.reason is DispatchReason.STALE_SOURCE_SNAPSHOT
