@@ -14,6 +14,11 @@ class Capability(Enum):
     WORKSPACE_CREATE = auto()
     WORKSPACE_DELETE = auto()
     NETWORK_ACCESS = auto()
+    GITHUB_READ = auto()
+    GITHUB_WRITE = auto()
+    GITHUB_PR_WRITE = auto()
+    GITHUB_ISSUE_WRITE = auto()
+    GITHUB_ACTIONS_DISPATCH = auto()
 
 @dataclass
 class CapabilityDecision:
