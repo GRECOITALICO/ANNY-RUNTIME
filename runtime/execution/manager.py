@@ -128,6 +128,7 @@ class ExecutionManager:
         context.model_version = selection.model_version
         context.policy_version = selection.policy_version
         context.generation = execution_generation
+        context.governed_workspace_id = execution_context.workspace_id if execution_context is not None else None
 
         self._tasks[execution_id] = task
         self._executions[execution_id] = context
@@ -265,7 +266,7 @@ class ExecutionManager:
                     shutil.copy2(fpath, evidence_dir / fpath.name)
 
 
-            if task.workspace_policy == "destroy_on_complete" and governed_workspace is None:
+            if task.workspace_policy == "destroy_on_complete" and context.governed_workspace_id is None:
                 self.workspace_manager.destroy_workspace(context.workspace_path)
 
         if self.continuity_engine:
