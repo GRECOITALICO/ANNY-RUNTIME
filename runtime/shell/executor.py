@@ -67,6 +67,19 @@ class ShellExecutor:
         self.workspace_manager = workspace_manager
 
     @staticmethod
+    def _validate_command_syntax(command: str) -> None:
+        """Reject shell control syntax until structured composite execution exists."""
+        forbidden = ("\n", "\r", ";", "&&", "||", "|", ">", "<", "`", "$(", "\x00")
+        for token in forbidden:
+            if token in command:
+                raise PermissionError(
+                    "Shell control syntax is not permitted in the deterministic executor: "
+                    f"{token!r}"
+                )
+        if not command.strip():
+            raise ValueError("Command cannot be empty")
+
+    @staticmethod
     def _required_capabilities(command: str, effect: str) -> set[str]:
         required = {"PROCESS_EXECUTION"}
         tokens = shlex.split(command, posix=True)
@@ -107,6 +120,7 @@ class ShellExecutor:
         if not context.workspace_id:
             raise ValueError("Context must have a workspace_id")
 
+        self._validate_command_syntax(command)
         effect = classify_command(command)
         for capability in self._required_capabilities(command, effect):
             if not context.has_capability(capability):
