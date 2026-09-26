@@ -310,3 +310,17 @@ deployment_authorized=false
 merge_authorized=false
 KIRA_P2=SEPARATE_AND_UNTOUCHED
 T12=SEPARATE_BLOCKER
+
+
+## Open-source acceleration boundary
+
+ANNY Runtime may use mature open-source infrastructure for commodity engineering layers when the license and security review permit it.
+
+The reuse decision belongs below the ANNY governance boundary:
+
+ANNY policy -> ExecutionContext -> capability -> Runtime adapter -> component -> validation -> evidence.
+
+Open-source reuse is an implementation accelerator, not an authority source and not a substitute for ANNY's own continuity, policy, evidence or Repository Fabric semantics.
+
+The durable policy is:
+architecture/ANNY-RUNTIME-OPEN-SOURCE-REUSE-AND-PROVENANCE-POLICY-001.md
