@@ -142,7 +142,7 @@ class DeterministicExecutor:
         if not isinstance(target_path, str) or not target_path:
             raise ValueError("Missing 'path' in input")
         abs_target = os.path.abspath(target_path)
-        self._enforce_path(abs_target)
+        self._enforce_path(abs_target, context)
         if not os.path.isdir(abs_target):
             result = {"error": "Directory does not exist", "path": target_path, "entries": []}
         else:
@@ -164,7 +164,7 @@ class DeterministicExecutor:
         if not isinstance(target_path, str) or not target_path:
             raise ValueError("Missing 'path' in input")
         abs_target = os.path.abspath(target_path)
-        self._enforce_path(abs_target)
+        self._enforce_path(abs_target, context)
         if not os.path.exists(abs_target):
             result = {"error": "Path does not exist", "path": target_path}
         elif os.path.isdir(abs_target):
@@ -187,12 +187,12 @@ class DeterministicExecutor:
             timeout=30,
         )
 
-    def _repository_path(self, task: Task) -> str:
+    def _repository_path(self, task: Task, context: TaskExecutionContext) -> str:
         repo_path = task.input.get("path")
         if not isinstance(repo_path, str) or not repo_path:
             raise ValueError("Missing repository 'path' in input")
         abs_target = os.path.abspath(repo_path)
-        self._enforce_path(abs_target)
+        self._enforce_path(abs_target, context)
         if not os.path.exists(os.path.join(abs_target, ".git")):
             raise ValueError("Path is not a Git repository")
         return abs_target
@@ -203,7 +203,7 @@ class DeterministicExecutor:
         if not isinstance(repo_path, str) or not repo_path:
             raise ValueError("Missing 'path' in input")
         abs_target = os.path.abspath(repo_path)
-        self._enforce_path(abs_target)
+        self._enforce_path(abs_target, context)
         if not os.path.exists(abs_target):
             result = {"error": "Repository path does not exist", "path": repo_path}
         else:
@@ -214,7 +214,7 @@ class DeterministicExecutor:
 
     def _execute_repository_search(self, task: Task, context: TaskExecutionContext) -> None:
         self._deadline(context)
-        repo_path = self._repository_path(task)
+        repo_path = self._repository_path(task, context)
         pattern = task.input.get("pattern")
         if not isinstance(pattern, str) or not pattern:
             raise ValueError("Missing search 'pattern'")
