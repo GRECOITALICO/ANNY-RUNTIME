@@ -74,81 +74,33 @@ def cmd_status(args):
 
 
 def cmd_doctor(args):
-    import platform
-    results = []
-    
-    def check(name, condition, detail=""):
-        status = "PASS" if condition else "FAIL"
-        results.append((name, status, detail))
-        icon = "✓" if condition else "✗"
-        print(f"  [{status}] {icon} {name}" + (f" — {detail}" if detail else ""))
-    
+    from runtime.diagnostics.doctor import RuntimeDoctor
+
     print(f"ANNY Runtime Diagnostics v{VERSION}")
     print()
-    
-    # OS
-    check("Operating System", sys.platform == "linux", f"{platform.system()} {platform.release()}")
-    
-    # Python
-    py_ok = sys.version_info >= (3, 11)
-    check("Python >= 3.11", py_ok, f"{sys.version.split()[0]}")
-    
-    # Data directory
-    DATA_DIR = get_data_dir()
-    check("Data directory exists", DATA_DIR.exists(), str(DATA_DIR))
-    
-    # Identity
-    id_file = DATA_DIR / "identity" / "runtime_identity.json"
-    check("Identity initialized", id_file.exists())
-    
-    # Private key
-    pk_file = DATA_DIR / "identity" / "private_key.pem"
-    if pk_file.exists():
-        perms = oct(pk_file.stat().st_mode)[-3:]
-        check("Private key permissions", perms == "600", f"mode={perms}")
-    else:
-        check("Private key exists", False)
-    
-    # Port
-    port = get_admin_port()
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind(('127.0.0.1', port))
-            port_ok = True
-    except OSError:
-        port_ok = False
-    check("Admin port available", port_ok, f"port={port}")
-    
-    # Forbidden port
-    check("Port 3434 not used", port != 3434, "Reserved by CONRRAD")
-    
-    # Cryptography
-    try:
-        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-        check("cryptography library", True)
-    except ImportError:
-        check("cryptography library", False, "pip install cryptography>=41.0.0")
-    
-    # Systemd
-    install_mode = get_install_mode()
-    if install_mode == "system":
-        systemd_unit = Path("/etc/systemd/system/anny-runtime.service")
-    else:
-        systemd_unit = Path.home() / ".config" / "systemd" / "user" / "anny-runtime.service"
-    check("Systemd unit installed", systemd_unit.exists(), f"mode={install_mode}")
-    
-    # Sandbox
-    sandbox_dir = DATA_DIR / "sandboxes"
-    check("Sandbox directory", sandbox_dir.exists() or True, "Will be created on first use")
-    
+
+    checks = RuntimeDoctor().run_all()
+    failures = 0
+    for check in checks:
+        icon = {
+            "PASS": "✓",
+            "FAIL": "✗",
+            "WARN": "!",
+            "UNKNOWN": "?",
+            "SKIP": "-",
+        }.get(check.status, "?")
+        detail = f" — {check.message}" if check.message else ""
+        print(f"  [{check.status}] {icon} {check.name}{detail}")
+        if check.status == "FAIL":
+            failures += 1
+
     print()
-    fails = sum(1 for _, s, _ in results if s == "FAIL")
-    if fails == 0:
-        print("  All checks passed.")
-    else:
-        print(f"  {fails} check(s) failed.")
-    return 0 if fails == 0 else 1
+    if failures:
+        print(f"  {failures} check(s) failed.")
+        return 1
+
+    print("  No failed checks. UNKNOWN/WARN states remain non-verified.")
+    return 0
 
 
 def cmd_identity_bootstrap(args):
