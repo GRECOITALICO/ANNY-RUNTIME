@@ -155,3 +155,144 @@ def test_invalid_repository_inspect_input_is_rejected():
 
     assert decision.status is DispatchStatus.REJECTED
     assert decision.reason_code is FailureCode.INVALID_INPUT
+
+
+def test_dispatch_and_execute_binds_repository_path_to_governed_workspace():
+    from pathlib import Path
+    from runtime.execution.models import ExecutionStatus, TaskExecutionContext
+    from runtime.workspace.manager import Workspace, WorkspaceState
+
+    class FakeWorkspaceManager:
+        def __init__(self):
+            self.workspace = Workspace(
+                workspace_id="workspace-local",
+                tenant_id="tenant-local",
+                project_id="project-local",
+                actor_scope=["ANNY"],
+                repository="GRECOITALICO/ANNY-RUNTIME",
+                source_revision="abc123",
+                state=WorkspaceState.READY,
+                generation=1,
+                local_path="/tmp/anny-governed-workspace",
+                created_at="now",
+            )
+
+        def status(self, context, workspace_id):
+            assert workspace_id == self.workspace.workspace_id
+            return self.workspace
+
+    class FakeExecutionManager:
+        def __init__(self):
+            self.submitted = None
+            self.context = TaskExecutionContext(
+                execution_id="runtime-exec-001",
+                task_id="req-001",
+                account_id="acct-local",
+                project_id="project-local",
+                capability_id="repository.inspect",
+                workspace_path="/tmp/ephemeral/runtime-exec-001",
+                environment={},
+                allowed_tools=[],
+                deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
+                resource_limits={},
+                network_policy="disabled",
+                write_policy="read_only",
+                status=ExecutionStatus.SUCCEEDED,
+                result={"path": "/tmp/anny-governed-workspace/repository", "is_git_repository": True, "head": "abc123"},
+                result_hash="result-hash",
+            )
+
+        def submit_task(self, task):
+            self.submitted = task
+            return self.context
+
+        def execute_sync(self, execution_id):
+            assert execution_id == self.context.execution_id
+            return self.context
+
+    dispatcher = HarnessDispatcher()
+    request = make_request(source_snapshot="abc123", input={"path": "repository"})
+    context = make_context()
+    manager = FakeExecutionManager()
+
+    result = dispatcher.dispatch_and_execute(
+        request,
+        context,
+        execution_manager=manager,
+        workspace_manager=FakeWorkspaceManager(),
+    )
+
+    assert result.dispatch_status is DispatchStatus.ACCEPTED
+    assert result.execution_id == "runtime-exec-001"
+    assert result.validation_status == "STRUCTURAL_VALID"
+    assert result.evidence_hash == "result-hash"
+    assert manager.submitted is not None
+    assert Path(manager.submitted.input["path"]).as_posix() == "/tmp/anny-governed-workspace/repository"
+
+
+def test_dispatch_blocks_stale_source_snapshot_before_execution():
+    from runtime.workspace.manager import Workspace, WorkspaceState
+
+    class FakeWorkspaceManager:
+        def status(self, context, workspace_id):
+            return Workspace(
+                workspace_id=workspace_id,
+                tenant_id=context.tenant_id,
+                project_id=context.project_id,
+                actor_scope=[context.actor_id],
+                repository="repo",
+                source_revision="current-revision",
+                state=WorkspaceState.READY,
+                generation=context.generation,
+                local_path="/tmp/workspace",
+                created_at="now",
+            )
+
+    class ForbiddenExecutionManager:
+        def submit_task(self, task):
+            raise AssertionError("execution must not start on stale snapshot")
+
+    request = make_request(source_snapshot="old-revision")
+    result = HarnessDispatcher().dispatch_and_execute(
+        request,
+        make_context(),
+        execution_manager=ForbiddenExecutionManager(),
+        workspace_manager=FakeWorkspaceManager(),
+    )
+
+    assert result.status is DispatchStatus.BLOCKED
+    assert result.reason_code is FailureCode.STALE_SOURCE_SNAPSHOT
+
+
+def test_dispatch_blocks_path_escape_before_execution():
+    from runtime.workspace.manager import Workspace, WorkspaceState
+
+    class FakeWorkspaceManager:
+        def status(self, context, workspace_id):
+            return Workspace(
+                workspace_id=workspace_id,
+                tenant_id=context.tenant_id,
+                project_id=context.project_id,
+                actor_scope=[context.actor_id],
+                repository="repo",
+                source_revision="git-head:UNVERIFIED",
+                state=WorkspaceState.READY,
+                generation=context.generation,
+                local_path="/tmp/workspace",
+                created_at="now",
+            )
+
+    class ForbiddenExecutionManager:
+        def submit_task(self, task):
+            raise AssertionError("execution must not start on path escape")
+
+    request = make_request(input={"path": "../outside"})
+    result = HarnessDispatcher().dispatch_and_execute(
+        request,
+        make_context(),
+        execution_manager=ForbiddenExecutionManager(),
+        workspace_manager=FakeWorkspaceManager(),
+    )
+
+    assert result.status is DispatchStatus.BLOCKED
+    assert result.reason_code is FailureCode.WORKSPACE_BINDING_FAILURE
