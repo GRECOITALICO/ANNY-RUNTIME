@@ -78,3 +78,16 @@ def test_filesystem_prefix_collision_is_rejected(tmp_path):
     service = FilesystemService(FakeWorkspaceManager(str(base)))
     with pytest.raises(ValueError, match="OUTSIDE_WORKSPACE"):
         service.read(context(), "../workspace-escape/file.txt")
+
+
+def test_deterministic_executor_rejects_workspace_escape(tmp_path):
+    from runtime.execution.deterministic_executor import DeterministicExecutor, ExecutorSecurityError
+
+    workspace = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    workspace.mkdir()
+    outside.mkdir()
+    executor = DeterministicExecutor(None)
+
+    with pytest.raises(ExecutorSecurityError, match="outside execution workspace"):
+        executor._enforce_path(str(outside), type("C", (), {"workspace_path": str(workspace)})())
