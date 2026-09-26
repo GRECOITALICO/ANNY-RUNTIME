@@ -22,41 +22,55 @@ def cmd_version(args):
 
 
 def cmd_status(args):
-    DATA_DIR = get_data_dir()
+    data_dir = get_data_dir()
     install_mode = get_install_mode()
-    identity_file = DATA_DIR / "identity" / "runtime_identity.json"
+    identity_file = data_dir / "identity" / "runtime_identity.json"
     print(f"ANNY Runtime v{VERSION}")
     print(f"Install Mode:    {install_mode}")
-    print(f"Data Directory:  {DATA_DIR}")
+    print(f"Data Directory:  {data_dir}")
     print(f"Runtime Dir:     {get_runtime_dir()}")
     print(f"Admin Port:      {get_admin_port()}")
     print()
-    
-    # Identity
-    if identity_file.exists():
-        with open(identity_file) as f:
-            identity = json.load(f)
-        print(f"  Runtime ID:      {identity.get('runtime_id', 'UNKNOWN')}")
-        print(f"  Installation ID: {identity.get('installation_id', 'UNKNOWN')}")
-        print(f"  Identity:        READY")
+
+    if identity_file.is_file():
+        try:
+            identity = json.loads(identity_file.read_text(encoding="utf-8"))
+            print(f"  Runtime ID:      {identity.get('runtime_id', 'UNKNOWN')}")
+            print(f"  Installation ID: {identity.get('installation_id', 'UNKNOWN')}")
+            print("  Identity:        OBSERVED")
+        except (OSError, json.JSONDecodeError):
+            print("  Identity:        INVALID")
     else:
-        print(f"  Identity:        NOT INITIALIZED")
-    
-    # GitHub
-    github_file = DATA_DIR / "secrets" / "github_credential.json"
-    if github_file.exists():
-        print(f"  GitHub:          CONNECTED")
+        print("  Identity:        NOT_INITIALIZED")
+
+    config = RuntimeConfig.load()
+
+    try:
+        from runtime.admin.github import GitHubAuthManager
+        from runtime.secrets.backend import FileSecretBackend
+        from runtime.identity.runtime_identity import RuntimeIdentity
+
+        identity_obj = RuntimeIdentity.load(data_dir)
+        secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_obj._private_key)
+        github_manager = GitHubAuthManager(
+            secret_backend,
+            client_id=config.github_client_id,
+        )
+        status = github_manager.get_status().to_dict()
+        print(f"  GitHub:          {status.get('auth_status', 'UNKNOWN')}")
+        if status.get("principal"):
+            print(f"  GitHub Principal: {status['principal']}")
+    except Exception as exc:
+        print(f"  GitHub:          UNKNOWN ({type(exc).__name__})")
+
+    if config.fabric_org and config.fabric_repo:
+        print(f"  Fabric Binding:  CONFIGURED ({config.fabric_org}/{config.fabric_repo})")
     else:
-        print(f"  GitHub:          NOT CONNECTED")
-    
-    # Fabric
-    fabric_file = DATA_DIR / "secrets" / "fabric_registration.json"
-    if fabric_file.exists():
-        print(f"  Fabric:          CONNECTED")
-    else:
-        print(f"  Fabric:          NOT CONNECTED")
-    
+        print("  Fabric Binding:  NOT_CONFIGURED")
+
     print()
+
+
 
 
 def cmd_doctor(args):
@@ -159,50 +173,10 @@ def cmd_identity_bootstrap(args):
         identity = manager.create_identity()
         print(f"Identity created: {identity.runtime_id}")
         print(f"Installation ID:  {identity.installation_id}")
-    except ImportError:
-        # Fallback: generate identity manually
-        import uuid
-        from datetime import datetime, timezone
-        try:
-            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-            from cryptography.hazmat.primitives import serialization
-            
-            private_key = Ed25519PrivateKey.generate()
-            public_key = private_key.public_key()
-            
-            pub_bytes = public_key.public_bytes(
-                serialization.Encoding.Raw,
-                serialization.PublicFormat.Raw
-            ).hex()
-            
-            priv_pem = private_key.private_bytes(
-                serialization.Encoding.PEM,
-                serialization.PrivateFormat.PKCS8,
-                serialization.NoEncryption()
-            )
-            
-            pk_file = id_dir / "private_key.pem"
-            pk_file.write_bytes(priv_pem)
-            pk_file.chmod(0o600)
-            
-            identity_data = {
-                "runtime_id": f"rt-{uuid.uuid4().hex[:16]}",
-                "installation_id": f"inst-{uuid.uuid4().hex[:16]}",
-                "public_key": pub_bytes,
-                "platform": sys.platform,
-                "runtime_version": VERSION,
-                "protocol_version": "1.0",
-                "generation": 1,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-            
-            id_file.write_text(json.dumps(identity_data, indent=2))
-            print(f"Identity created: {identity_data['runtime_id']}")
-            print(f"Installation ID:  {identity_data['installation_id']}")
-        except ImportError:
-            print("Error: cryptography library not installed.")
-            print("Run: pip install cryptography>=41.0.0")
-            sys.exit(1)
+    except ImportError as exc:
+        logger.error("RuntimeIdentityManager is unavailable: %s", exc)
+        print("Error: canonical Runtime identity bootstrap is unavailable.")
+        sys.exit(1)
 
 
 def cmd_server(args):
@@ -323,7 +297,7 @@ def main():
     p_uninstall.set_defaults(func=cmd_uninstall)
     
     p_server = subparsers.add_parser("server", help="Start admin web server")
-    p_server.add_argument("--port", type=int, default=3643)
+    p_server.add_argument("--port", type=int, default=get_admin_port())
     p_server.set_defaults(func=cmd_server)
     
     p_id = subparsers.add_parser("identity-bootstrap", help="Create initial identity")
