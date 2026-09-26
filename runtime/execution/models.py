@@ -108,6 +108,7 @@ class TaskExecutionContext:
     capability_family: Optional[str] = None
     department_id: Optional[str] = None
     generation: Optional[int] = None
+    governed_workspace_id: Optional[str] = None
 
 @dataclass
 class ExecutionResult:
