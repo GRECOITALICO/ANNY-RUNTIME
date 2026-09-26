@@ -253,40 +253,46 @@ def cmd_uninstall(args):
             print("Cancelled.")
             return
     
-    # Remove systemd
-    if get_install_mode() == "system":
+    # Remove systemd using argv lists; never invoke a shell.
+    system_mode = get_install_mode() == "system"
+    if system_mode:
         unit = Path("/etc/systemd/system/anny-runtime.service")
-        cmd_disable = "sudo systemctl disable anny-runtime.service 2>/dev/null || true"
+        subprocess.run(
+            ["sudo", "systemctl", "disable", "anny-runtime.service"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     else:
         unit = Path.home() / ".config" / "systemd" / "user" / "anny-runtime.service"
-        cmd_disable = "systemctl --user disable anny-runtime.service 2>/dev/null || true"
-        
+        subprocess.run(
+            ["systemctl", "--user", "disable", "anny-runtime.service"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
     if unit.exists():
-        os.system(cmd_disable)
-        if get_install_mode() == "system":
-            os.system(f"sudo rm {unit}")
+        if system_mode:
+            subprocess.run(["sudo", "rm", "--", str(unit)], check=True)
         else:
             unit.unlink()
         print("  Removed systemd unit.")
-    
+
     # Remove CLI symlink
-    if get_install_mode() == "system":
-        cli_link = Path("/usr/local/bin/anny-runtime")
-    else:
-        cli_link = Path.home() / ".local" / "bin" / "anny-runtime"
-    
+    cli_link = Path("/usr/local/bin/anny-runtime") if system_mode else Path.home() / ".local" / "bin" / "anny-runtime"
     if cli_link.exists():
-        if get_install_mode() == "system":
-            os.system(f"sudo rm {cli_link}")
+        if system_mode:
+            subprocess.run(["sudo", "rm", "--", str(cli_link)], check=True)
         else:
             cli_link.unlink()
         print("  Removed CLI.")
-    
+
     # Remove software
     install_dir = get_runtime_dir()
     if install_dir.exists():
-        if get_install_mode() == "system":
-            os.system(f"sudo rm -rf {install_dir}")
+        if system_mode:
+            subprocess.run(["sudo", "rm", "-rf", "--", str(install_dir)], check=True)
         else:
             shutil.rmtree(install_dir)
         print("  Removed software.")
