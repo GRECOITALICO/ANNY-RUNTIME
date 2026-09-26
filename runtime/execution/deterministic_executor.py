@@ -263,7 +263,7 @@ class DeterministicExecutor:
         if not isinstance(target_path, str) or not target_path:
             raise ValueError("Missing artifact 'path' in input")
         abs_target = os.path.abspath(target_path)
-        self._enforce_path(abs_target)
+        self._enforce_path(abs_target, context)
         if not os.path.exists(abs_target):
             result = {"error": "Artifact does not exist", "path": target_path}
         else:
