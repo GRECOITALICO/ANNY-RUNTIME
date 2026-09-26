@@ -336,6 +336,129 @@ class GitHubEngineeringClient:
             body={"body": body},
         )
 
+    def list_pull_request_reviews(
+        self,
+        context: ExecutionContext,
+        owner: str,
+        repo: str,
+        number: int,
+        *,
+        per_page: int = 100,
+    ) -> Any:
+        return self._request(
+            context,
+            "GITHUB_READ",
+            "GET",
+            self._repo_path(owner, repo, f"/pulls/{int(number)}/reviews"),
+            query={"per_page": min(max(per_page, 1), 100)},
+        )
+
+    def create_pull_request_review(
+        self,
+        context: ExecutionContext,
+        owner: str,
+        repo: str,
+        number: int,
+        *,
+        body: str = "",
+        event: str = "COMMENT",
+        comments: Optional[list[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"body": body, "event": event}
+        if comments:
+            payload["comments"] = comments
+        return self._request(
+            context,
+            "GITHUB_PR_WRITE",
+            "POST",
+            self._repo_path(owner, repo, f"/pulls/{int(number)}/reviews"),
+            body=payload,
+        )
+
+    def list_releases(
+        self,
+        context: ExecutionContext,
+        owner: str,
+        repo: str,
+        *,
+        per_page: int = 100,
+    ) -> Any:
+        return self._request(
+            context,
+            "GITHUB_READ",
+            "GET",
+            self._repo_path(owner, repo, "/releases"),
+            query={"per_page": min(max(per_page, 1), 100)},
+        )
+
+    def get_release(self, context: ExecutionContext, owner: str, repo: str, release_id: int) -> Dict[str, Any]:
+        return self._request(
+            context,
+            "GITHUB_READ",
+            "GET",
+            self._repo_path(owner, repo, f"/releases/{int(release_id)}"),
+        )
+
+    def create_release(
+        self,
+        context: ExecutionContext,
+        owner: str,
+        repo: str,
+        *,
+        tag_name: str,
+        name: str,
+        target_commitish: Optional[str] = None,
+        body: str = "",
+        draft: bool = True,
+        prerelease: bool = False,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {
+            "tag_name": tag_name,
+            "name": name,
+            "body": body,
+            "draft": bool(draft),
+            "prerelease": bool(prerelease),
+        }
+        if target_commitish:
+            payload["target_commitish"] = target_commitish
+        return self._request(
+            context,
+            "GITHUB_WRITE",
+            "POST",
+            self._repo_path(owner, repo, "/releases"),
+            body=payload,
+        )
+
+    def list_tags(
+        self,
+        context: ExecutionContext,
+        owner: str,
+        repo: str,
+        *,
+        per_page: int = 100,
+    ) -> Any:
+        return self._request(
+            context,
+            "GITHUB_READ",
+            "GET",
+            self._repo_path(owner, repo, "/tags"),
+            query={"per_page": min(max(per_page, 1), 100)},
+        )
+
+    def get_branch_protection(
+        self,
+        context: ExecutionContext,
+        owner: str,
+        repo: str,
+        branch: str,
+    ) -> Dict[str, Any]:
+        return self._request(
+            context,
+            "GITHUB_READ",
+            "GET",
+            self._repo_path(owner, repo, f"/branches/{urllib.parse.quote(branch, safe='')}/protection"),
+        )
+
     def list_workflows(self, context: ExecutionContext, owner: str, repo: str) -> Dict[str, Any]:
         return self._request(
             context,
