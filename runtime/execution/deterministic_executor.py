@@ -87,15 +87,25 @@ class DeterministicExecutor:
             raise ValueError("Missing 'path' in input")
         return os.path.abspath(target_path)
 
-    def _enforce_path(self, path: str) -> None:
+    def _enforce_path(self, path: str, context: TaskExecutionContext | None = None) -> None:
+        resolved = os.path.realpath(path)
         forbidden_paths = [
             "/var/lib/anny-runtime/secrets",
             "/home/anny/.ssh",
             "/root",
         ]
         for forbidden in forbidden_paths:
-            if path == os.path.abspath(forbidden) or path.startswith(os.path.abspath(forbidden) + os.sep):
+            forbidden_root = os.path.realpath(forbidden)
+            if resolved == forbidden_root or resolved.startswith(forbidden_root + os.sep):
                 raise ExecutorSecurityError(f"Access to {forbidden} is explicitly denied")
+
+        if context is not None and context.workspace_path:
+            workspace_root = os.path.realpath(context.workspace_path)
+            try:
+                import pathlib
+                pathlib.Path(resolved).relative_to(pathlib.Path(workspace_root))
+            except ValueError as exc:
+                raise ExecutorSecurityError("Access outside execution workspace is denied") from exc
 
     def _limit_output(self, context: TaskExecutionContext, result: Dict[str, Any]) -> None:
         encoded = json.dumps(result, sort_keys=True, default=str).encode("utf-8")
@@ -110,7 +120,7 @@ class DeterministicExecutor:
         if not isinstance(target_path, str) or not target_path:
             raise ValueError("Missing 'path' in input")
         abs_target = os.path.abspath(target_path)
-        self._enforce_path(abs_target)
+        self._enforce_path(abs_target, context)
         if not os.path.exists(abs_target):
             result = {"error": "Path does not exist", "path": target_path}
         else:
