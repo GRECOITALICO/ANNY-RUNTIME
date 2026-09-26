@@ -1033,16 +1033,37 @@ class AdminRouter:
 
 
     def handle_admin_restart(self, form_data) -> str:
-        self._audit("RUNTIME_RESTART", "SUCCESS")
-        return '/'
+        engine = self.context.get("runtime_engine")
+        if engine is None:
+            self._audit("RUNTIME_RESTART", "BLOCKED", "RUNTIME_ENGINE_UNAVAILABLE")
+            return '/?restart=BLOCKED'
+        try:
+            github_manager = self.context.get("github_manager")
+            github_client = None
+            if github_manager and github_manager.has_token():
+                from runtime.github.client import GitHubClient
+                github_client = GitHubClient(secret_backend=github_manager.secret_backend)
+            engine.shutdown()
+            engine.startup(github_client=github_client, fabric_client=self._get_fabric_client())
+            self._audit("RUNTIME_RESTART", "SUCCESS")
+            return '/'
+        except Exception as exc:
+            self._audit("RUNTIME_RESTART", "FAILED", type(exc).__name__)
+            return '/?restart=FAILED'
 
     def handle_admin_diagnostics(self, form_data) -> str:
-        self._audit("DIAGNOSTICS_RUN", "SUCCESS")
+        try:
+            from runtime.diagnostics.doctor import RuntimeDoctor
+            checks = RuntimeDoctor(self.context.get("runtime_engine")).run_all()
+            status = "SUCCESS" if all(c.status == "PASS" for c in checks) else "PARTIAL"
+            self._audit("DIAGNOSTICS_RUN", status)
+        except Exception as exc:
+            self._audit("DIAGNOSTICS_RUN", "FAILED", type(exc).__name__)
         return '/doctor'
 
     def handle_admin_update_check(self, form_data) -> str:
-        self._audit("UPDATE_CHECK", "SUCCESS")
-        return '/'
+        self._audit("UPDATE_CHECK", "BLOCKED", "UPDATE_SOURCE_NOT_IMPLEMENTED")
+        return '/?update=NOT_IMPLEMENTED'
 
     def handle_fabric_setup(self, form_data) -> str:
         fabric_org = form_data.get('fabric_org', [''])[0]
@@ -1094,7 +1115,7 @@ class AdminRouter:
                     
                 # Fetch real orgs
                 try:
-                    gh_orgs = gh_client.get("/user/orgs").json()
+                    gh_orgs = gh_client.list_organizations()
                     if isinstance(gh_orgs, list):
                         orgs.extend(gh_orgs)
                 except Exception:
