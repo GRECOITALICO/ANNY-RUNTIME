@@ -67,16 +67,30 @@ class ShellExecutor:
         self.workspace_manager = workspace_manager
 
     @staticmethod
-    def _required_capabilities(effect: str) -> set[str]:
+    def _required_capabilities(command: str, effect: str) -> set[str]:
         required = {"PROCESS_EXECUTION"}
+        tokens = shlex.split(command, posix=True)
+
+        if effect == ShellEffectClass.REMOTE_MUTATION:
+            required.update({"REMOTE_REPOSITORY_MUTATION", "NETWORK_ACCESS"})
+            return required
+
+        if tokens and tokens[0] == "git":
+            subcommand = tokens[1] if len(tokens) > 1 else ""
+            if effect == ShellEffectClass.READONLY:
+                required.add("GIT_READ")
+            elif effect == ShellEffectClass.WORKSPACE_MUTATING:
+                required.add("GIT_WRITE")
+            else:
+                raise PermissionError("Unknown Git effect: action denied by default")
+            return required
+
         if effect == ShellEffectClass.READONLY:
             required.add("FILE_READ")
         elif effect == ShellEffectClass.WORKSPACE_MUTATING:
             required.add("FILE_WRITE")
         elif effect == ShellEffectClass.PROCESS_CONTROL:
             required.add("PROCESS_CONTROL")
-        elif effect == ShellEffectClass.REMOTE_MUTATION:
-            required.add("REMOTE_REPOSITORY_MUTATION")
         else:
             raise PermissionError("Effect UNKNOWN: action denied by default")
         return required
@@ -94,7 +108,7 @@ class ShellExecutor:
             raise ValueError("Context must have a workspace_id")
 
         effect = classify_command(command)
-        for capability in self._required_capabilities(effect):
+        for capability in self._required_capabilities(command, effect):
             if not context.has_capability(capability):
                 raise PermissionError(f"Action requires capability {capability}")
 
