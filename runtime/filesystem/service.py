@@ -18,8 +18,10 @@ class FilesystemService:
         base = Path(ws.local_path).resolve()
         requested = (base / path).resolve()
         
-        if not str(requested).startswith(str(base)):
-            raise ValueError("OUTSIDE_WORKSPACE error")
+        try:
+            requested.relative_to(base)
+        except ValueError as exc:
+            raise ValueError("OUTSIDE_WORKSPACE error") from exc
             
         return requested
 
