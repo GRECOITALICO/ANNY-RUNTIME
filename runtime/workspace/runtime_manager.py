@@ -58,7 +58,44 @@ class RuntimeWorkspaceManager:
         self.ephemeral.destroy_workspace(workspace_path)
 
     def get_workspace_size(self, workspace_path: str) -> int:
-        return self.ephemeral.get_workspace_size(workspace_path)
+        normalized = Path(workspace_path).resolve()
+        allowed_roots = (
+            self.governed.base_dir.resolve(),
+            Path(self.ephemeral.base_dir).resolve(),
+        )
+        if not any(
+            normalized == root or normalized.is_relative_to(root)
+            for root in allowed_roots
+        ):
+            raise ValueError("Workspace path is outside Runtime-managed workspace roots")
+
+        total = 0
+        if normalized.exists():
+            for path in normalized.rglob("*"):
+                if path.is_file() and not path.is_symlink():
+                    total += path.stat().st_size
+        return total
 
     def get_workspace_paths(self, workspace_path: str) -> Dict[str, str]:
-        return self.ephemeral.get_workspace_paths(workspace_path)
+        normalized = Path(workspace_path).resolve()
+        allowed_roots = (
+            self.governed.base_dir.resolve(),
+            Path(self.ephemeral.base_dir).resolve(),
+        )
+        if not any(
+            normalized == root or normalized.is_relative_to(root)
+            for root in allowed_roots
+        ):
+            raise ValueError("Workspace path is outside Runtime-managed workspace roots")
+        base = str(normalized)
+        return {
+            "base": base,
+            "input": str(normalized / "input"),
+            "work": str(normalized / "work"),
+            "output": str(normalized / "output"),
+            "logs": str(normalized / "logs"),
+            "evidence": str(normalized / "evidence"),
+            "result": str(normalized / "result"),
+            "metadata": str(normalized / "metadata"),
+            "cache": str(normalized / "cache"),
+        }
