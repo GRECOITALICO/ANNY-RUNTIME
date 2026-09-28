@@ -1,3 +1,5 @@
+import io
+import json
 import urllib.error
 from unittest.mock import Mock, patch
 
@@ -62,6 +64,39 @@ def test_preflight_binding_mismatch_blocks():
     }
     result = preflight._parse_payload(payload, "rt-1", "inst-1", "req-1")
     assert result.status is PlaneStatus.BLOCKED
+
+
+def test_preflight_uses_canonical_post_wire_contract():
+    preflight = ConrradPreflight("https://conrrad.example/v1/bootstrap/preflight", credential_provider())
+    payload = {
+        "status": "ONLINE_VERIFIED",
+        "evidence_status": "CERTIFIED_BY_LIVE_EVIDENCE",
+        "request_id": "server-request",
+        "endpoint": "https://conrrad.example/v1/bootstrap/preflight",
+        "dependency_registry": ["CONRRAD.REPOSITORY_FABRIC"],
+        "binding": {
+            "runtime_id": "rt-1", "installation_id": "inst-1", "node_id": "node-1",
+            "trust_authority": "trust-1", "issuer_id": "issuer-1", "tenant_id": "tenant-1",
+            "project_id": "project-1", "workspace_or_resource_scope": "workspace-1",
+            "source_reference": "authority-1",
+        },
+        "reason": None,
+    }
+    response = Mock()
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+    response.read.return_value = json.dumps(payload).encode("utf-8")
+    with patch("urllib.request.urlopen", return_value=response) as urlopen:
+        result = preflight.run("rt-1", "inst-1")
+    assert result.passed is True
+    request = urlopen.call_args.args[0]
+    assert request.get_method() == "POST"
+    assert json.loads(request.data.decode("utf-8")) == {
+        "runtime_id": "rt-1", "installation_id": "inst-1"
+    }
+    assert request.headers["Content-type"] == "application/json"
+    assert request.headers["Authorization"] == "Bearer value"
+    assert request.headers["X-request-id"]
 
 
 def test_local_trust_is_never_verified():
