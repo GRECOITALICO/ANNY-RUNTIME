@@ -171,6 +171,25 @@ class ConrradPreflight:
                 request_id=request_id,
             )
 
+        response_request_id = payload.get("request_id")
+        response_endpoint = payload.get("endpoint")
+        if not isinstance(response_request_id, str) or response_request_id != request_id:
+            return ConrradPreflightResult(
+                PlaneStatus.ONLINE_UNVERIFIED,
+                EvidenceStatus.UNKNOWN,
+                self.endpoint,
+                reason="CONRRAD preflight response request_id mismatch",
+                request_id=request_id,
+            )
+        if not isinstance(response_endpoint, str) or response_endpoint != self.endpoint:
+            return ConrradPreflightResult(
+                PlaneStatus.ONLINE_UNVERIFIED,
+                EvidenceStatus.UNKNOWN,
+                self.endpoint,
+                reason="CONRRAD preflight response endpoint mismatch",
+                request_id=request_id,
+            )
+
         status = PlaneStatus(payload.get("status", PlaneStatus.UNKNOWN.value))
         evidence_status = EvidenceStatus(
             payload.get("evidence_status", EvidenceStatus.UNKNOWN.value)
