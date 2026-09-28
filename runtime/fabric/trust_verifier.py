@@ -135,9 +135,13 @@ class ExternalTrustVerifier:
         required = ["request_id", "verification_status", "verified", "verifier_id", "verified_at", "evidence_ref"]
         if any(key not in raw for key in required):
             return self._result("UNKNOWN", False, "MALFORMED_VERIFIER_RESPONSE", request_id)
+        if raw["request_id"] != request_id:
+            return self._result("UNKNOWN", False, "MALFORMED_VERIFIER_RESPONSE", request_id)
         status = str(raw["verification_status"])
-        verified = raw["verified"] is True
-        if status == "VERIFIED" and not verified:
+        if not isinstance(raw["verified"], bool):
+            return self._result("UNKNOWN", False, "MALFORMED_VERIFIER_RESPONSE", request_id)
+        verified = raw["verified"]
+        if (status == "VERIFIED") != verified:
             return self._result("UNKNOWN", False, "MALFORMED_VERIFIER_RESPONSE", request_id)
         return TrustVerificationResult(
             verification_status=status,
