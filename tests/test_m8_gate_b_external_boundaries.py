@@ -128,3 +128,63 @@ def test_installation_binding_description_never_contains_credential(tmp_path):
     assert "secret-value" not in json.dumps(metadata)
     assert metadata["runtime_id"] == "rt1"
     assert metadata["installation_id"] == "inst1"
+
+
+def test_trust_verifier_rejects_partial_token_before_network():
+    client = ExternalFabricTrustVerifier("https://verifier.invalid")
+    with pytest.raises(Exception, match="missing required claims"):
+        client.verify(
+            request_id="r1",
+            correlation_id="c1",
+            nonce="n1",
+            runtime_id="rt1",
+            installation_id="inst1",
+            trust_token={
+                "issued_at": "2026-09-28T02:00:00Z",
+                "expires_at": "2026-09-28T03:00:00Z",
+                "runtime_id": "rt1",
+                "node_id": "node1",
+                "signature": "sig",
+            },
+            expected_node_id="node1",
+            expected_issuer="issuer1",
+            expected_audience="CONRRAD.M8.NONPROD.001",
+            observed_at="2026-09-28T02:00:00Z",
+            installation_credential="cred",
+        )
+
+
+def test_execution_context_parser_rejects_wrong_installation_or_audience():
+    client = ExternalExecutionContextIssuerClient("https://issuer.invalid")
+    now = datetime.now(timezone.utc)
+    payload = {
+        "context_id": "ctx1",
+        "tenant_id": "tenant",
+        "account_id": "acct",
+        "project_id": "proj",
+        "installation_id": "inst-other",
+        "runtime_id": "rt1",
+        "session_id": "sess",
+        "actor_id": "actor",
+        "operation_id": "op",
+        "execution_id": "exec",
+        "generation": 1,
+        "issued_at": now.isoformat(),
+        "expires_at": (now + timedelta(minutes=5)).isoformat(),
+        "issuer": "issuer",
+        "audience": "WRONG-AUDIENCE",
+        "capability_claims": [],
+        "signature": {
+            "algorithm": "EdDSA",
+            "key_id": "k1",
+            "value": "sig",
+            "trust_root_id": "root1",
+        },
+    }
+    with pytest.raises(ExecutionContextIssuerError):
+        client._parse_issued_context(
+            payload,
+            expected_runtime_id="rt1",
+            expected_installation_id="inst1",
+            expected_audience="CONRRAD.M8.NONPROD.001",
+        )
