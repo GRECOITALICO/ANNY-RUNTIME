@@ -103,11 +103,17 @@ class ConrradPreflight:
                 request_id=request_id,
             )
 
+        body = json.dumps({
+            "runtime_id": runtime_id,
+            "installation_id": installation_id,
+        }).encode("utf-8")
         req = urllib.request.Request(
             self.endpoint,
-            method="GET",
+            data=body,
+            method="POST",
             headers={
                 "Accept": "application/json",
+                "Content-Type": "application/json",
                 "Authorization": header,
                 "X-Request-ID": request_id,
             },
