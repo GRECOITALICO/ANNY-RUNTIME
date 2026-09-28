@@ -177,6 +177,26 @@ def test_verifier_unavailable_is_unknown():
     assert result.verified is False
 
 
+def test_trust_verifier_rejects_response_request_id_mismatch():
+    verifier = ExternalTrustVerifier("https://example.invalid/verify", credential_provider())
+    raw = {
+        "request_id": "wrong-request", "verification_status": "VERIFIED", "verified": True,
+        "verifier_id": "verifier-1", "verified_at": "2026-09-28T00:00:00Z", "evidence_ref": "ev-1",
+    }
+    result = verifier._parse_response(raw, "expected-request")
+    assert result.verified is False
+    assert result.reason_code == "MALFORMED_VERIFIER_RESPONSE"
+
+def test_trust_verifier_rejects_non_verified_status_with_true_flag():
+    verifier = ExternalTrustVerifier("https://example.invalid/verify", credential_provider())
+    raw = {
+        "request_id": "expected-request", "verification_status": "REJECTED", "verified": True,
+        "verifier_id": "verifier-1", "verified_at": "2026-09-28T00:00:00Z", "evidence_ref": "ev-1",
+    }
+    result = verifier._parse_response(raw, "expected-request")
+    assert result.verified is False
+    assert result.reason_code == "MALFORMED_VERIFIER_RESPONSE"
+
 def test_execution_context_requires_all_authority_refs():
     client = ExternalExecutionContextClient("https://example.invalid/issuer", credential_provider())
     raw = {
