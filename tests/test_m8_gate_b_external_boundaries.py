@@ -91,3 +91,40 @@ def test_execution_context_parser_rejects_wrong_runtime():
     }
     with pytest.raises(ExecutionContextIssuerError):
         client._parse_issued_context(payload, expected_runtime_id="rt1")
+
+
+def test_installation_credential_provider_fails_closed_when_unconfigured(tmp_path):
+    from runtime.security.installation_credential import (
+        InstallationCredentialError,
+        InstallationCredentialProvider,
+    )
+    from runtime.secrets.backend import FileSecretBackend
+
+    backend = FileSecretBackend(str(tmp_path), b"master-key")
+    provider = InstallationCredentialProvider(
+        backend,
+        credential_ref="installation-credential",
+        runtime_id="rt1",
+        installation_id="inst1",
+    )
+    assert provider.is_configured() is False
+    with pytest.raises(InstallationCredentialError, match="UNCONFIGURED"):
+        provider.get_credential()
+
+
+def test_installation_binding_description_never_contains_credential(tmp_path):
+    from runtime.security.installation_credential import InstallationCredentialProvider
+    from runtime.secrets.backend import FileSecretBackend
+
+    backend = FileSecretBackend(str(tmp_path), b"master-key")
+    backend.store("installation-credential", b"secret-value")
+    provider = InstallationCredentialProvider(
+        backend,
+        credential_ref="installation-credential",
+        runtime_id="rt1",
+        installation_id="inst1",
+    )
+    metadata = provider.describe_binding()
+    assert "secret-value" not in json.dumps(metadata)
+    assert metadata["runtime_id"] == "rt1"
+    assert metadata["installation_id"] == "inst1"
