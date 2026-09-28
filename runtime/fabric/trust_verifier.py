@@ -5,6 +5,7 @@ import json
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -52,6 +53,11 @@ class ExternalTrustVerifier:
         nonce = uuid.uuid4().hex
         if not self.endpoint:
             return self._result("UNKNOWN", False, "TRUST_ROOT_UNAVAILABLE", request_id)
+        if any(not getattr(token, field, "") for field in (
+            "token_id", "issued_at", "expires_at", "issuer", "audience",
+            "runtime_id", "node_id", "signature"
+        )):
+            return self._result("REJECTED", False, "MALFORMED_TOKEN", request_id)
         authorization = self.credential_provider.authorization_header()
         if authorization is None:
             return self._result("UNKNOWN", False, "AUTHENTICATION_FAILED", request_id)
@@ -73,7 +79,7 @@ class ExternalTrustVerifier:
             "expected_node_id": expected_node_id,
             "expected_issuer": expected_issuer,
             "expected_audience": expected_audience,
-            "observed_at": token.issued_at,
+            "observed_at": datetime.now(timezone.utc).isoformat(),
             "nonce": nonce,
         }
         data = json.dumps(payload).encode("utf-8")
