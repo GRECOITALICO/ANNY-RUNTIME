@@ -43,7 +43,7 @@ class RuntimeEngine:
         from runtime.security.execution_context_client import ExternalExecutionContextClient
         from runtime.conrrad.preflight import ConrradPreflight
 
-        identity = RuntimeIdentity.load(self.data_dir)
+        identity = RuntimeIdentity.load(self.config.data_dir)
         self.installation_auth = InstallationCredentialProvider(
             self._secret_backend,
             getattr(self.config, "conrrad_installation_credential_ref", ""),
