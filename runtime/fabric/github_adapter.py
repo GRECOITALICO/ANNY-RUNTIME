@@ -18,6 +18,7 @@ from runtime.fabric.models import (
     FabricNode, FabricTenant, FabricProject,
     FabricTrustToken, FabricHealthResult, FabricStatus
 )
+from runtime.fabric.trust_verifier import ExternalFabricTrustVerifier, TrustVerificationResult
 
 logger = logging.getLogger(__name__)
 
@@ -285,7 +286,7 @@ class GitHubFabricAdapter:
 
 
     def issue_trust_token(self, runtime_id: str, private_key: bytes) -> FabricTrustToken:
-        """Issues an offline trust token using HMAC over GitHub token + Private Key."""
+        """Construct a local candidate token; it is NEVER externally verified here."""
         try:
             gh_token = self.gh._get_token()
         except Exception:
@@ -313,8 +314,53 @@ class GitHubFabricAdapter:
             issued_at=issued_at_str,
             expires_at=expires_at_str,
             signature=signature,
-            verified=True
+            # Local construction is only issuance/candidate state. External Fabric
+            # verification is the only path that may establish VERIFIED.
+            verified=False
         )
+
+    def verify_trust_token(
+        self,
+        token: FabricTrustToken,
+        *,
+        verifier_endpoint: str,
+        installation_credential: str,
+        request_id: str,
+        correlation_id: str,
+        nonce: str,
+        expected_issuer: str,
+        expected_audience: str,
+        observed_at: str,
+    ) -> TrustVerificationResult:
+        """Delegate trust verification to the external authoritative verifier."""
+        verifier = ExternalFabricTrustVerifier(verifier_endpoint)
+        payload = {
+            "issued_at": token.issued_at,
+            "expires_at": token.expires_at,
+            "runtime_id": token.runtime_id,
+            "node_id": token.node_id,
+            "signature": token.signature,
+        }
+        return verifier.verify(
+            request_id=request_id,
+            correlation_id=correlation_id,
+            nonce=nonce,
+            runtime_id=token.runtime_id,
+            installation_id=self._require_installation_id(),
+            trust_token=payload,
+            expected_node_id=token.node_id,
+            expected_issuer=expected_issuer,
+            expected_audience=expected_audience,
+            observed_at=observed_at,
+            installation_credential=installation_credential,
+        )
+
+    def _require_installation_id(self) -> str:
+        """Resolve installation identity from an explicitly supplied adapter attribute."""
+        installation_id = getattr(self, "installation_id", None)
+        if not installation_id:
+            raise FabricError("INSTALLATION_ID_MISSING", "Runtime installation_id is required for authoritative trust verification")
+        return installation_id
 
     def read_policy(self) -> Dict[str, Any]:
         """Reads the fabric/policy.json config from the Fabric repo."""
