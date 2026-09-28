@@ -14,7 +14,7 @@ def _safe(value: Any) -> Any:
         result = {}
         for key, child in value.items():
             low = str(key).lower()
-            if any(marker in low for marker in ("token", "secret", "password", "credential", "private_key", "authorization")):
+            if low == "authorization" or any(marker in low for marker in ("token", "secret", "password", "credential", "private_key")):
                 result[str(key)] = "[REDACTED]"
             else:
                 result[str(key)] = _safe(child)
