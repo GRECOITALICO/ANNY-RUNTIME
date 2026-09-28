@@ -197,7 +197,7 @@ class ExternalExecutionContextIssuerClient:
         expected_audience: Optional[str] = None,
     ) -> IssuedExecutionContext:
         required = (
-            "context_id", "tenant_id", "account_id", "project_id", "installation_id",
+            "context_id", "principal", "tenant_id", "account_id", "project_id", "installation_id",
             "runtime_id", "session_id", "actor_id", "operation_id", "execution_id",
             "generation", "issued_at", "expires_at", "issuer", "audience",
             "capability_claims", "signature",
@@ -239,11 +239,17 @@ class ExternalExecutionContextIssuerClient:
         if expires <= issued:
             raise ExecutionContextIssuerError("Issuer expiry must be after issuance")
 
+        anny_instance_id = payload.get("anny_instance_id")
+        if not anny_instance_id:
+            raise ExecutionContextIssuerError(
+                "Issuer response lacks Runtime-required anny_instance_id; contract mapping must be reconciled before execution"
+            )
+
         context = ExecutionContext(
             tenant_id=str(payload["tenant_id"]),
             account_id=str(payload["account_id"]),
             project_id=str(payload["project_id"]),
-            anny_instance_id=str(payload.get("anny_instance_id", "")),
+            anny_instance_id=str(anny_instance_id),
             runtime_id=str(payload["runtime_id"]),
             session_id=str(payload["session_id"]),
             actor_id=str(payload["actor_id"]),
