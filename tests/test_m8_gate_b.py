@@ -73,7 +73,7 @@ def test_preflight_binding_mismatch_blocks():
 
 
 def test_malformed_installation_credential_fails_closed():
-    result = InstallationCredentialProvider(Backend(value=b"\\xff"), "m8-ref").authorization_header()
+    result = InstallationCredentialProvider(Backend(value=bytes([0xff])), "m8-ref").authorization_header()
     assert result is None
 
 
