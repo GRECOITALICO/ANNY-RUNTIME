@@ -6,6 +6,7 @@ from runtime.fabric.models import FabricTrustToken
 from runtime.fabric.trust_verifier import ExternalTrustVerifier
 from runtime.security.execution_context_client import ExecutionContextValidationError, ExternalExecutionContextClient
 from runtime.security.installation_auth import InstallationCredentialProvider, InstallationAuthStatus
+from runtime.bootstrap.planes import ThreePlaneBootstrap
 
 
 class Backend:
@@ -106,3 +107,53 @@ def test_execution_context_requires_all_authority_refs():
         assert "authorization_refs" in str(exc)
     else:
         raise AssertionError("expected authority-reference validation failure")
+
+
+def test_preflight_failure_blocks_before_github():
+    github = __import__("unittest").mock.Mock()
+    preflight = __import__("unittest").mock.Mock(
+        passed=False,
+        status=PlaneStatus.BLOCKED,
+        evidence_status=EvidenceStatus.UNKNOWN,
+        reason="dependency unavailable",
+    )
+    bootstrap = ThreePlaneBootstrap(
+        data_dir="/tmp/anny-m8-test",
+        github_client=github,
+        fabric_client=None,
+        continuity_engine=__import__("unittest").mock.Mock(),
+        preflight_result=preflight,
+        installation_auth=credential_provider(),
+        external_trust_verifier=None,
+    )
+    report = bootstrap.resolve()
+    assert report.anny_ready is False
+    github.get_repository.assert_not_called()
+    github.list_organizations.assert_not_called()
+
+
+def test_issuer_response_installation_runtime_audience_mismatch_rejected():
+    client = ExternalExecutionContextClient("https://example.invalid/issuer", credential_provider())
+    raw = {
+        "context_id": "ctx-1", "principal": "principal-1", "tenant_id": "tenant-1",
+        "account_id": "account-1", "project_id": "project-1", "installation_id": "inst-other",
+        "runtime_id": "rt-other", "session_id": "session-1", "actor_id": "actor-1",
+        "operation_id": "op-1", "execution_id": "exec-1", "generation": 1,
+        "issued_at": "2026-09-28T00:00:00Z", "expires_at": "2026-09-28T01:00:00Z",
+        "issuer": "issuer-1", "audience": "other-audience", "capability_claims": ["cap-1"],
+        "authorization_refs": ["auth-1"], "policy_refs": ["policy-1"],
+        "evidence_correlation": {"id": "ev-1"},
+        "signature": {"algorithm": "RSA", "key_id": "key-1", "value": "sig",
+                       "signed_claims_digest": "digest", "trust_root_id": "trust-1"}
+    }
+    try:
+        client._parse_context(
+            raw,
+            expected_installation_id="inst-1",
+            expected_runtime_id="rt-1",
+            expected_audience="aud-1",
+        )
+    except ExecutionContextValidationError as exc:
+        assert "installation_id" in str(exc)
+    else:
+        raise AssertionError("expected issuer identity mismatch")
