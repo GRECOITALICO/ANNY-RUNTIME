@@ -60,6 +60,16 @@ class ExternalExecutionContextClient:
         requested_capabilities: Optional[list[str]] = None,
         session_hint: Optional[str] = None,
     ) -> ExecutionContextAuthorityResult:
+        required_scope = (
+            "tenant_id", "account_id", "project_id", "workspace_or_resource_scope"
+        )
+        if not isinstance(requested_scope, dict):
+            return ExecutionContextAuthorityResult(None, 400, "INVALID_REQUESTED_SCOPE")
+        missing = [field for field in required_scope if not requested_scope.get(field)]
+        if missing:
+            return ExecutionContextAuthorityResult(
+                None, 400, "MISSING_REQUESTED_SCOPE:" + ",".join(missing)
+            )
         return self._request(
             "/v1/control/execution-contexts",
             {
