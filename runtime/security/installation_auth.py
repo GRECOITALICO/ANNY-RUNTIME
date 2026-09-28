@@ -79,4 +79,7 @@ class InstallationCredentialProvider:
         value = self.get_bytes()
         if value is None:
             return None
-        return "Bearer " + value.decode("utf-8")
+        try:
+            return "Bearer " + value.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
