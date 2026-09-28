@@ -34,6 +34,9 @@ class BootstrapReport:
     admission_status: str = "UNKNOWN"
     reconciliation_status: str = "UNKNOWN"
     limits_verified: bool = False
+    conrrad_preflight_status: str = "UNKNOWN"
+    conrrad_evidence_status: str = "UNKNOWN"
+    runtime_installation_auth_status: str = "UNKNOWN"
     
     # Inventories
     capabilities: ComponentInventory = field(default_factory=ComponentInventory)
@@ -79,6 +82,9 @@ class ChatGPTBootstrapFormatter:
             f"ANNY BOOTSTRAP: {status}",
             f"---",
             f"PHASE A (LOCAL RUNTIME):",
+            f"  CONRRAD_PREFLIGHT: {report.conrrad_preflight_status}",
+            f"  CONRRAD_EVIDENCE: {report.conrrad_evidence_status}",
+            f"  INSTALLATION_AUTH: {report.runtime_installation_auth_status}",
             f"  RUNTIME_IDENTITY: {g(ReadinessGate.RUNTIME_IDENTITY)}",
             f"  RUNTIME_REACHABLE: {g(ReadinessGate.RUNTIME_REACHABLE)}",
             f"  RUNTIME_HEALTH: {g(ReadinessGate.RUNTIME_HEALTH_VERIFIED)}",
