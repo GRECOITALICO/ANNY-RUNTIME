@@ -25,6 +25,13 @@ def credential_provider():
     return InstallationCredentialProvider(Backend(), "m8-ref")
 
 
+def test_file_secret_backend_uses_canonical_data_dir():
+    from pathlib import Path
+    from runtime.secrets.backend import FileSecretBackend
+    backend = FileSecretBackend("/tmp/anny-m8-secret-root", b"test-master-key")
+    assert backend.secrets_dir == Path("/tmp/anny-m8-secret-root") / "secrets"
+
+
 def test_missing_installation_reference_is_unconfigured():
     result = InstallationCredentialProvider(Backend(), "").status()
     assert result.status is InstallationAuthStatus.UNCONFIGURED
