@@ -1,5 +1,5 @@
 import urllib.error
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from runtime.conrrad.preflight import ConrradPreflight, EvidenceStatus, PlaneStatus
 from runtime.fabric.models import FabricTrustToken
@@ -110,8 +110,8 @@ def test_execution_context_requires_all_authority_refs():
 
 
 def test_preflight_failure_blocks_before_github():
-    github = __import__("unittest").mock.Mock()
-    preflight = __import__("unittest").mock.Mock(
+    github = Mock()
+    preflight = Mock(
         passed=False,
         status=PlaneStatus.BLOCKED,
         evidence_status=EvidenceStatus.UNKNOWN,
@@ -121,7 +121,7 @@ def test_preflight_failure_blocks_before_github():
         data_dir="/tmp/anny-m8-test",
         github_client=github,
         fabric_client=None,
-        continuity_engine=__import__("unittest").mock.Mock(),
+        continuity_engine=Mock(),
         preflight_result=preflight,
         installation_auth=credential_provider(),
         external_trust_verifier=None,
