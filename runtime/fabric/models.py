@@ -85,11 +85,12 @@ class FabricTrustToken:
     issued_at: str
     expires_at: str
     signature: str
+    # Preserve the legacy sixth positional field for compatibility.
+    verified: bool = False
     token_id: str = ""
     issuer: str = ""
     audience: str = ""
     verification_status: str = "UNVERIFIED"
-    verified: bool = False
 
 
 @dataclass
