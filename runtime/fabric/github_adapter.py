@@ -331,6 +331,7 @@ class GitHubFabricAdapter:
         expected_issuer: str,
         expected_audience: str,
         observed_at: str,
+        installation_id: str,
     ) -> TrustVerificationResult:
         """Delegate trust verification to the external authoritative verifier."""
         verifier = ExternalFabricTrustVerifier(verifier_endpoint)
@@ -346,7 +347,7 @@ class GitHubFabricAdapter:
             correlation_id=correlation_id,
             nonce=nonce,
             runtime_id=token.runtime_id,
-            installation_id=self._require_installation_id(),
+            installation_id=installation_id,
             trust_token=payload,
             expected_node_id=token.node_id,
             expected_issuer=expected_issuer,
@@ -355,12 +356,6 @@ class GitHubFabricAdapter:
             installation_credential=installation_credential,
         )
 
-    def _require_installation_id(self) -> str:
-        """Resolve installation identity from an explicitly supplied adapter attribute."""
-        installation_id = getattr(self, "installation_id", None)
-        if not installation_id:
-            raise FabricError("INSTALLATION_ID_MISSING", "Runtime installation_id is required for authoritative trust verification")
-        return installation_id
 
     def read_policy(self) -> Dict[str, Any]:
         """Reads the fabric/policy.json config from the Fabric repo."""
