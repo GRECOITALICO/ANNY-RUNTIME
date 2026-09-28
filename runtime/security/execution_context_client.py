@@ -72,6 +72,9 @@ class ExternalExecutionContextClient:
                 "session_hint": session_hint,
                 "nonce": uuid.uuid4().hex,
             },
+            expected_installation_id=installation_id,
+            expected_runtime_id=runtime_id,
+            expected_audience=audience,
         )
 
     def refresh(self, context_id: str, installation_id: str, runtime_id: str, audience: str) -> ExecutionContextAuthorityResult:
@@ -85,6 +88,9 @@ class ExternalExecutionContextClient:
                 "context_id": context_id,
                 "nonce": uuid.uuid4().hex,
             },
+            expected_installation_id=installation_id,
+            expected_runtime_id=runtime_id,
+            expected_audience=audience,
         )
 
     def revoke(self, context_id: str, installation_id: str, runtime_id: str, audience: str) -> ExecutionContextAuthorityResult:
@@ -98,12 +104,23 @@ class ExternalExecutionContextClient:
                 "context_id": context_id,
                 "nonce": uuid.uuid4().hex,
             },
+            expected_installation_id=installation_id,
+            expected_runtime_id=runtime_id,
+            expected_audience=audience,
         )
 
     def get(self, context_id: str) -> ExecutionContextAuthorityResult:
         return self._request(f"/v1/control/execution-contexts/{context_id}", None, method="GET")
 
-    def _request(self, suffix: str, payload: Optional[Dict[str, Any]], method: str = "POST") -> ExecutionContextAuthorityResult:
+    def _request(
+        self,
+        suffix: str,
+        payload: Optional[Dict[str, Any]],
+        method: str = "POST",
+        expected_installation_id: Optional[str] = None,
+        expected_runtime_id: Optional[str] = None,
+        expected_audience: Optional[str] = None,
+    ) -> ExecutionContextAuthorityResult:
         authorization = self.credential_provider.authorization_header()
         if not self.endpoint or authorization is None:
             return ExecutionContextAuthorityResult(None, None, "ISSUER_UNAVAILABLE")
@@ -121,7 +138,12 @@ class ExternalExecutionContextClient:
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as response:
                 raw = json.loads(response.read().decode("utf-8"))
-            context = self._parse_context(raw)
+            context = self._parse_context(
+                raw,
+                expected_installation_id=expected_installation_id,
+                expected_runtime_id=expected_runtime_id,
+                expected_audience=expected_audience,
+            )
             evidence_ref = None
             if self.evidence_store:
                 ref = self.evidence_store.record(
@@ -150,12 +172,24 @@ class ExternalExecutionContextClient:
         except Exception:
             return ExecutionContextAuthorityResult(None, None, "UNKNOWN")
 
-    def _parse_context(self, raw: Dict[str, Any]) -> ExecutionContext:
+    def _parse_context(
+        self,
+        raw: Dict[str, Any],
+        expected_installation_id: Optional[str] = None,
+        expected_runtime_id: Optional[str] = None,
+        expected_audience: Optional[str] = None,
+    ) -> ExecutionContext:
         if not isinstance(raw, dict):
             raise ExecutionContextValidationError("Context response must be an object")
         missing = [key for key in REQUIRED_CONTEXT_FIELDS if key not in raw]
         if missing:
             raise ExecutionContextValidationError("Missing required context fields: " + ",".join(missing))
+        if expected_installation_id is not None and raw["installation_id"] != expected_installation_id:
+            raise ExecutionContextValidationError("Issuer response installation_id mismatch")
+        if expected_runtime_id is not None and raw["runtime_id"] != expected_runtime_id:
+            raise ExecutionContextValidationError("Issuer response runtime_id mismatch")
+        if expected_audience is not None and raw["audience"] != expected_audience:
+            raise ExecutionContextValidationError("Issuer response audience mismatch")
         signature = raw["signature"]
         if not isinstance(signature, dict) or any(key not in signature for key in REQUIRED_SIGNATURE_FIELDS):
             raise ExecutionContextValidationError("Missing required signature fields")
