@@ -23,11 +23,10 @@ class FabricStatus(str, Enum):
 
 @dataclass
 class FabricNode:
-    """Represents a Repository Fabric control node (node_id resolved from Fabric)."""
-    node_id: str          # e.g. "NODE-001" (resolved from Fabric, not hardcoded)
-    org: str              # e.g. "my-org" (resolved from RuntimeConfig, not hardcoded)
-    repo: str             # e.g. "my-fabric-repo" (resolved from RuntimeConfig, not hardcoded)
-    purpose: str          # e.g. "REPOSITORY_FABRIC"
+    node_id: str
+    org: str
+    repo: str
+    purpose: str
     created_at: str
     status: FabricStatus = FabricStatus.CONNECTED
 
@@ -44,7 +43,6 @@ class FabricNode:
 
 @dataclass
 class FabricTenant:
-    """A registered runtime tenant in the Fabric."""
     tenant_id: str
     runtime_id: str
     project_ids: List[str]
@@ -64,7 +62,6 @@ class FabricTenant:
 
 @dataclass
 class FabricProject:
-    """A project binding within a tenant."""
     project_id: str
     tenant_id: str
     repo: str
@@ -82,18 +79,21 @@ class FabricProject:
 
 @dataclass
 class FabricTrustToken:
-    """A verified trust relationship between runtime and Fabric."""
+    """Locally constructed token is always UNVERIFIED until external verification."""
     runtime_id: str
     node_id: str
     issued_at: str
     expires_at: str
-    signature: str    # HMAC-SHA256 of runtime_id+node_id+issued_at
+    signature: str
+    token_id: str = ""
+    issuer: str = ""
+    audience: str = ""
+    verification_status: str = "UNVERIFIED"
     verified: bool = False
 
 
 @dataclass
 class FabricHealthResult:
-    """Result of a Fabric reachability probe."""
     reachable: bool
     node_id: Optional[str] = None
     latency_ms: Optional[float] = None
@@ -102,16 +102,15 @@ class FabricHealthResult:
 
 @dataclass
 class FabricProvenanceEntry:
-    """A single provenance record in the Fabric."""
     commit_sha: str
     runtime_id: str
     mission_id: str
     recorded_at: str
     verified: bool = False
 
+
 @dataclass
 class FabricPolicy:
-    """Policy rules inherited from the Repository Fabric."""
     revision: str
     require_admission: bool = True
     allow_local_models: bool = True
@@ -128,9 +127,9 @@ class FabricPolicy:
             max_workspace_size_mb=data.get("max_workspace_size_mb", 1024),
         )
 
+
 @dataclass
 class FabricContract:
-    """Execution boundaries and limits."""
     contract_id: str
     tenant_id: str
     granted_capabilities: List[str] = field(default_factory=list)
