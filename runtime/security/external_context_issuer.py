@@ -149,7 +149,12 @@ class ExternalExecutionContextIssuerClient:
             nonce=nonce,
             installation_credential=installation_credential,
         )
-        return self._parse_issued_context(raw, expected_runtime_id=payload.get("runtime_id"))
+        return self._parse_issued_context(
+            raw,
+            expected_runtime_id=payload.get("runtime_id"),
+            expected_installation_id=payload.get("installation_id"),
+            expected_audience=payload.get("audience"),
+        )
 
     def _request_raw(
         self, path: str, *, payload: dict[str, Any], method: str,
@@ -186,7 +191,10 @@ class ExternalExecutionContextIssuerClient:
 
     @staticmethod
     def _parse_issued_context(
-        payload: Mapping[str, Any], expected_runtime_id: Optional[str]
+        payload: Mapping[str, Any],
+        expected_runtime_id: Optional[str],
+        expected_installation_id: Optional[str] = None,
+        expected_audience: Optional[str] = None,
     ) -> IssuedExecutionContext:
         required = (
             "context_id", "tenant_id", "account_id", "project_id", "installation_id",
@@ -201,6 +209,10 @@ class ExternalExecutionContextIssuerClient:
             )
         if expected_runtime_id and payload["runtime_id"] != expected_runtime_id:
             raise ExecutionContextIssuerError("Issuer returned a different runtime_id")
+        if expected_installation_id and payload["installation_id"] != expected_installation_id:
+            raise ExecutionContextIssuerError("Issuer returned a different installation_id")
+        if expected_audience and payload["audience"] != expected_audience:
+            raise ExecutionContextIssuerError("Issuer returned a different audience")
         if not isinstance(payload["generation"], int) or payload["generation"] < 1:
             raise ExecutionContextIssuerError("Issuer generation must be a positive integer")
         if str(payload["lifecycle_state"] if "lifecycle_state" in payload else "ACTIVE").upper() != "ACTIVE":
