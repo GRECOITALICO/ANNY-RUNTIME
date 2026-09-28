@@ -273,7 +273,7 @@ def start_admin_server(host: str, port: int):
         ttl_seconds=config.admin_session_ttl_seconds,
     )
     audit_manager = AdminAuditLog(str(data_dir), identity_manager.runtime_id)
-    secret_backend = FileSecretBackend(str(data_dir / "secrets"), identity_manager._private_key)
+    secret_backend = FileSecretBackend(str(data_dir), identity_manager._private_key)
     github_manager = build_github_auth_manager(secret_backend, config)
     
     from runtime.workspace.ephemeral import EphemeralWorkspaceManager
