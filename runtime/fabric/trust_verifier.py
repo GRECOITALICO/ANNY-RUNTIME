@@ -112,6 +112,12 @@ class ExternalFabricTrustVerifier:
             )
         if not installation_credential:
             raise TrustVerificationError("Authenticated Runtime installation credential is required")
+        token_required = ("token_id", "issued_at", "expires_at", "issuer", "audience", "runtime_id", "node_id", "signature")
+        token_missing = [key for key in token_required if not trust_token.get(key)]
+        if token_missing:
+            # A locally constructed partial token is a candidate only; it must not
+            # be sent to the authoritative verifier as if it were complete trust.
+            raise TrustVerificationError("Trust token missing required claims: " + ", ".join(token_missing))
 
         body = json.dumps(request, sort_keys=True).encode("utf-8")
         req = urllib.request.Request(self.endpoint, data=body, method="POST")
