@@ -299,16 +299,12 @@ def start_admin_server(host: str, port: int):
         telemetry_collector=telemetry_collector
     )
         
+    # GitHub discovery is intentionally deferred until after the real Runtime
+    # startup/preflight boundary has passed.
     disc_repos_raw = []
-    if github_client:
-        try:
-            disc = OrganizationDiscoveryService(github_client)
-            disc_repos_raw = disc.discover_repositories()
-        except Exception as e:
-            logger.warning(f"Startup discovery failed: {e}")
 
     from runtime.core.engine import RuntimeEngine
-    engine = RuntimeEngine(config)
+    engine = RuntimeEngine(config, secret_backend=secret_backend)
     execution_manager.runtime_engine = engine
     
     update_source_repo = os.environ.get("ANNY_UPDATE_SOURCE_REPO", "").strip()
@@ -352,6 +348,17 @@ def start_admin_server(host: str, port: int):
     def run_bootstrap():
         try:
             engine.startup(github_client=github_client, fabric_client=fabric_client)
+            if engine.conrrad_preflight is not None and engine.conrrad_preflight.passed and github_client:
+                try:
+                    disc = OrganizationDiscoveryService(github_client)
+                    disc_repos_raw = disc.discover_repositories()
+                    server.admin_context["bootstrap_snapshot"] = {
+                        "result": engine.bootstrap_report,
+                        "discovered_repos": disc_repos_raw,
+                    }
+                    server.router.context["bootstrap_snapshot"] = server.admin_context["bootstrap_snapshot"]
+                except Exception as e:
+                    logger.warning(f"Post-preflight discovery failed: {e}")
         except Exception as e:
             logger.error(f"Runtime engine startup error: {e}")
 
