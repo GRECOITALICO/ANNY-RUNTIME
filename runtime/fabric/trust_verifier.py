@@ -6,6 +6,7 @@ import urllib.error
 import urllib.request
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -40,6 +41,10 @@ class ExternalTrustVerifier:
         self.evidence_store = evidence_store
         self.timeout = timeout
 
+    def _endpoint_is_https(self) -> bool:
+        parsed = urlparse(self.endpoint)
+        return parsed.scheme.lower() == "https" and bool(parsed.netloc)
+
     def verify(
         self,
         token: FabricTrustToken,
@@ -53,6 +58,8 @@ class ExternalTrustVerifier:
         nonce = uuid.uuid4().hex
         if not self.endpoint:
             return self._result("UNKNOWN", False, "TRUST_ROOT_UNAVAILABLE", request_id)
+        if not self._endpoint_is_https():
+            return self._result("UNKNOWN", False, "TRUST_VERIFIER_REQUIRES_HTTPS", request_id)
         if any(not getattr(token, field, "") for field in (
             "token_id", "issued_at", "expires_at", "issuer", "audience",
             "runtime_id", "node_id", "signature"
