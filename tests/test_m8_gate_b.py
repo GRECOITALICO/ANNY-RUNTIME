@@ -599,8 +599,7 @@ def test_execution_manager_revalidates_external_context_at_execution_time(tmp_pa
     }
     with patch.object(RuntimeIdentity, "load", return_value=Mock(runtime_id="rt-1", installation_id="inst-1")):
         try:
-            with patch.object(RuntimeIdentity, "load", return_value=identity):
-        manager.execute_sync("exec-1")
+            manager.execute_sync("exec-1")
         except PermissionError as exc:
             assert "external generation changed" in str(exc)
         else:
@@ -1165,7 +1164,8 @@ def test_m8_verified_context_reaches_execution_boundary(tmp_path):
     manager.worker_manager.list_workers.return_value = [worker]
     manager.worker_manager.start_worker.side_effect = lambda worker_id, context, task, capability: setattr(context, "status", ExecutionStatus.SUCCEEDED)
     manager.worker_manager.terminate_worker.return_value = None
-    manager.execute_sync("exec-1")
+    with patch.object(RuntimeIdentity, "load", return_value=identity):
+        manager.execute_sync("exec-1")
     manager.worker_manager.start_worker.assert_called_once()
     passed_context = manager.worker_manager.start_worker.call_args.args[1]
     assert passed_context.external_execution_context.verification_status == "VERIFIED"
