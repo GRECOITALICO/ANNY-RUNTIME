@@ -11,6 +11,12 @@ from urllib.parse import urlparse
 from typing import Any, Dict, Optional
 
 from runtime.security.execution_context import ExecutionContext
+from runtime.security.execution_context_verifier import (
+    ExecutionContextValidationError,
+    ExecutionContextVerifier,
+    TrustMaterialResolver,
+    UNKNOWN_REASONS,
+)
 from runtime.security.installation_auth import InstallationCredentialProvider
 from runtime.security.m8_evidence import M8EvidenceStore
 
@@ -27,16 +33,13 @@ REQUIRED_SIGNATURE_FIELDS = (
 )
 
 
-class ExecutionContextValidationError(ValueError):
-    pass
-
-
 @dataclass(frozen=True)
 class ExecutionContextAuthorityResult:
     context: Optional[ExecutionContext]
     status_code: Optional[int]
     reason: Optional[str] = None
     evidence_ref: Optional[str] = None
+    verification_status: str = "UNKNOWN"
 
 
 class ExternalExecutionContextClient:
@@ -46,11 +49,23 @@ class ExternalExecutionContextClient:
         credential_provider: InstallationCredentialProvider,
         evidence_store: Optional[M8EvidenceStore] = None,
         timeout: float = 10.0,
+        trust_material_backend: Optional[Any] = None,
+        trust_root_id: str = "",
+        trust_root_reference: str = "",
+        expected_issuer: str = "",
     ) -> None:
         self.endpoint = (endpoint or "").rstrip("/")
         self.credential_provider = credential_provider
         self.evidence_store = evidence_store
         self.timeout = timeout
+        self.verifier = ExecutionContextVerifier(
+            TrustMaterialResolver(
+                trust_material_backend,
+                trust_root_id,
+                trust_root_reference,
+            ),
+            expected_issuer=expected_issuer,
+        )
 
     def _endpoint_is_https(self) -> bool:
         parsed = urlparse(self.endpoint)
@@ -149,61 +164,133 @@ class ExternalExecutionContextClient:
         expected_runtime_id: Optional[str] = None,
         expected_audience: Optional[str] = None,
     ) -> ExecutionContextAuthorityResult:
-        if not self.endpoint:
-            return ExecutionContextAuthorityResult(None, None, "ISSUER_UNAVAILABLE")
-        if not self._endpoint_is_https():
-            return ExecutionContextAuthorityResult(None, 400, "ISSUER_ENDPOINT_REQUIRES_HTTPS")
-
-        authorization = self.credential_provider.authorization_header()
-        if authorization is None:
-            return ExecutionContextAuthorityResult(None, None, "ISSUER_UNAVAILABLE")
-        data = json.dumps(payload).encode("utf-8") if payload is not None else None
-        req = urllib.request.Request(
-            self.endpoint + suffix,
-            method=method,
-            data=data,
-            headers={
-                "Accept": "application/json",
-                **({"Content-Type": "application/json"} if data is not None else {}),
-                "Authorization": authorization,
-            },
+        request_id = (
+            str(payload.get("request_id"))
+            if isinstance(payload, dict) and payload.get("request_id")
+            else uuid.uuid4().hex
         )
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                raw = json.loads(response.read().decode("utf-8"))
-            context = self._parse_context(
-                raw,
-                expected_installation_id=expected_installation_id,
-                expected_runtime_id=expected_runtime_id,
-                expected_audience=expected_audience,
+        raw: Optional[Dict[str, Any]] = None
+        verified_at = None
+        result: ExecutionContextAuthorityResult
+
+        if not self.endpoint:
+            result = ExecutionContextAuthorityResult(
+                None, None, "ISSUER_UNAVAILABLE", verification_status="UNKNOWN"
             )
-            evidence_ref = None
-            if self.evidence_store:
-                ref = self.evidence_store.record(
-                    "execution-context",
-                    {
-                        "context_id": raw.get("context_id"),
-                        "runtime_id": raw.get("runtime_id"),
-                        "installation_id": raw.get("installation_id"),
-                        "generation": raw.get("generation"),
-                        "issuer": raw.get("issuer"),
-                        "audience": raw.get("audience"),
-                        "authorization_refs": raw.get("authorization_refs"),
-                        "policy_refs": raw.get("policy_refs"),
-                        "evidence_correlation": raw.get("evidence_correlation"),
-                        "signature": raw.get("signature"),
+        elif not self._endpoint_is_https():
+            result = ExecutionContextAuthorityResult(
+                None, 400, "ISSUER_ENDPOINT_REQUIRES_HTTPS", verification_status="REJECTED"
+            )
+        else:
+            authorization = self.credential_provider.authorization_header()
+            if authorization is None:
+                result = ExecutionContextAuthorityResult(
+                    None, None, "ISSUER_UNAVAILABLE", verification_status="UNKNOWN"
+                )
+            else:
+                request_payload = dict(payload) if isinstance(payload, dict) else None
+                if request_payload is not None:
+                    request_payload["request_id"] = request_id
+                    data = json.dumps(request_payload).encode("utf-8")
+                else:
+                    data = None
+                req = urllib.request.Request(
+                    self.endpoint + suffix,
+                    method=method,
+                    data=data,
+                    headers={
+                        "Accept": "application/json",
+                        **({"Content-Type": "application/json"} if data is not None else {}),
+                        "Authorization": authorization,
+                        "X-Request-ID": request_id,
                     },
                 )
-                evidence_ref = str(ref)
-            return ExecutionContextAuthorityResult(context, 200, evidence_ref=evidence_ref)
-        except urllib.error.HTTPError as exc:
-            return ExecutionContextAuthorityResult(None, exc.code, "ISSUER_REJECTED")
-        except (urllib.error.URLError, TimeoutError):
-            return ExecutionContextAuthorityResult(None, None, "ISSUER_UNAVAILABLE")
-        except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
-            return ExecutionContextAuthorityResult(None, 502, f"MALFORMED_CONTEXT:{type(exc).__name__}")
-        except Exception:
-            return ExecutionContextAuthorityResult(None, None, "UNKNOWN")
+                try:
+                    with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                        raw = json.loads(response.read().decode("utf-8"))
+                    context = self._parse_context(
+                        raw,
+                        expected_installation_id=expected_installation_id,
+                        expected_runtime_id=expected_runtime_id,
+                        expected_audience=expected_audience,
+                    )
+                    verified_at = context.verified_at
+                    result = ExecutionContextAuthorityResult(
+                        context,
+                        200,
+                        "VERIFIED",
+                        verification_status="VERIFIED",
+                    )
+                except ExecutionContextValidationError as exc:
+                    status = "UNKNOWN" if exc.reason_code in UNKNOWN_REASONS else "REJECTED"
+                    result = ExecutionContextAuthorityResult(
+                        None,
+                        502,
+                        exc.reason_code,
+                        verification_status=status,
+                    )
+                except urllib.error.HTTPError as exc:
+                    result = ExecutionContextAuthorityResult(
+                        None,
+                        exc.code,
+                        "ISSUER_REJECTED",
+                        verification_status="UNKNOWN",
+                    )
+                except (urllib.error.URLError, TimeoutError):
+                    result = ExecutionContextAuthorityResult(
+                        None,
+                        None,
+                        "ISSUER_UNAVAILABLE",
+                        verification_status="UNKNOWN",
+                    )
+                except (ValueError, TypeError, json.JSONDecodeError):
+                    result = ExecutionContextAuthorityResult(
+                        None,
+                        502,
+                        "MALFORMED_CONTEXT",
+                        verification_status="REJECTED",
+                    )
+                except Exception:
+                    result = ExecutionContextAuthorityResult(
+                        None,
+                        None,
+                        "UNKNOWN",
+                        verification_status="UNKNOWN",
+                    )
+
+        if self.evidence_store:
+            signature = (
+                raw.get("signature")
+                if isinstance(raw, dict) and isinstance(raw.get("signature"), dict)
+                else {}
+            )
+            ref = self.evidence_store.record(
+                "execution-context-verification",
+                {
+                    "request_id": request_id,
+                    "context_id": raw.get("context_id") if isinstance(raw, dict) else None,
+                    "runtime_id": raw.get("runtime_id") if isinstance(raw, dict) else None,
+                    "installation_id": raw.get("installation_id") if isinstance(raw, dict) else None,
+                    "issuer": raw.get("issuer") if isinstance(raw, dict) else None,
+                    "audience": raw.get("audience") if isinstance(raw, dict) else None,
+                    "generation": raw.get("generation") if isinstance(raw, dict) else None,
+                    "trust_root_id": signature.get("trust_root_id"),
+                    "key_id": signature.get("key_id"),
+                    "algorithm": signature.get("algorithm"),
+                    "signed_claims_digest": signature.get("signed_claims_digest"),
+                    "verification_status": result.verification_status,
+                    "verification_reason": result.reason,
+                    "verified_at": verified_at,
+                },
+            )
+            result = ExecutionContextAuthorityResult(
+                result.context,
+                result.status_code,
+                result.reason,
+                evidence_ref=str(ref),
+                verification_status=result.verification_status,
+            )
+        return result
 
     def _parse_context(
         self,
@@ -212,61 +299,12 @@ class ExternalExecutionContextClient:
         expected_runtime_id: Optional[str] = None,
         expected_audience: Optional[str] = None,
     ) -> ExecutionContext:
-        if not isinstance(raw, dict):
-            raise ExecutionContextValidationError("Context response must be an object")
-        missing = [key for key in REQUIRED_CONTEXT_FIELDS if key not in raw]
-        if missing:
-            raise ExecutionContextValidationError("Missing required context fields: " + ",".join(missing))
-        if expected_installation_id is not None and raw["installation_id"] != expected_installation_id:
-            raise ExecutionContextValidationError("Issuer response installation_id mismatch")
-        if expected_runtime_id is not None and raw["runtime_id"] != expected_runtime_id:
-            raise ExecutionContextValidationError("Issuer response runtime_id mismatch")
-        if expected_audience is not None and raw["audience"] != expected_audience:
-            raise ExecutionContextValidationError("Issuer response audience mismatch")
-        signature = raw["signature"]
-        if not isinstance(signature, dict) or any(key not in signature for key in REQUIRED_SIGNATURE_FIELDS):
-            raise ExecutionContextValidationError("Missing required signature fields")
-        if not isinstance(raw["authorization_refs"], list) or not raw["authorization_refs"]:
-            raise ExecutionContextValidationError("authorization_refs must be non-empty")
-        if not isinstance(raw["policy_refs"], list) or not raw["policy_refs"]:
-            raise ExecutionContextValidationError("policy_refs must be non-empty")
-        if not isinstance(raw["evidence_correlation"], (dict, str)):
-            raise ExecutionContextValidationError("evidence_correlation is required")
-        scope = raw.get("workspace_or_resource_scope")
-        workspace_id = scope or raw.get("workspace_id")
-        issued_at = _parse_datetime(raw["issued_at"])
-        expires_at = _parse_datetime(raw["expires_at"])
-        if not isinstance(raw["generation"], int) or raw["generation"] < 1:
-            raise ExecutionContextValidationError("generation must be an externally issued positive integer")
-        capabilities = set(raw.get("capability_claims") or [])
-        if not all(isinstance(cap, str) for cap in capabilities):
-            raise ExecutionContextValidationError("capability_claims must be strings")
-        return ExecutionContext(
-            context_id=str(raw["context_id"]),
-            tenant_id=str(raw["tenant_id"]),
-            account_id=str(raw["account_id"]),
-            installation_id=str(raw["installation_id"]),
-            project_id=str(raw["project_id"]),
-            anny_instance_id=str(raw["principal"]),
-            runtime_id=str(raw["runtime_id"]),
-            session_id=str(raw["session_id"]),
-            actor_id=str(raw["actor_id"]),
-            operation_id=str(raw["operation_id"]),
-            execution_id=str(raw["execution_id"]),
-            generation=raw["generation"],
-            issued_at=issued_at,
-            expires_at=expires_at,
-            workspace_id=workspace_id,
-            capabilities=capabilities,
-            principal=str(raw["principal"]),
-            issuer=str(raw["issuer"]),
-            audience=str(raw["audience"]),
-            authorization_refs=tuple(str(x) for x in raw["authorization_refs"]),
-            policy_refs=tuple(str(x) for x in raw["policy_refs"]),
-            evidence_correlation=raw["evidence_correlation"],
-            signature=signature,
+        return self.verifier.verify(
+            raw,
+            expected_installation_id=expected_installation_id,
+            expected_runtime_id=expected_runtime_id,
+            expected_audience=expected_audience,
         )
-
 
 def _parse_datetime(value: Any) -> datetime:
     if not isinstance(value, str):
