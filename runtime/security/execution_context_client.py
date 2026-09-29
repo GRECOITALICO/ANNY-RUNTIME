@@ -124,8 +124,21 @@ class ExternalExecutionContextClient:
             expected_audience=audience,
         )
 
-    def get(self, context_id: str) -> ExecutionContextAuthorityResult:
-        return self._request(f"/v1/control/execution-contexts/{context_id}", None, method="GET")
+    def get(
+        self,
+        context_id: str,
+        installation_id: Optional[str] = None,
+        runtime_id: Optional[str] = None,
+        audience: Optional[str] = None,
+    ) -> ExecutionContextAuthorityResult:
+        return self._request(
+            f"/v1/control/execution-contexts/{context_id}",
+            None,
+            method="GET",
+            expected_installation_id=installation_id,
+            expected_runtime_id=runtime_id,
+            expected_audience=audience,
+        )
 
     def _request(
         self,
@@ -229,6 +242,7 @@ class ExternalExecutionContextClient:
         if not all(isinstance(cap, str) for cap in capabilities):
             raise ExecutionContextValidationError("capability_claims must be strings")
         return ExecutionContext(
+            context_id=str(raw["context_id"]),
             tenant_id=str(raw["tenant_id"]),
             account_id=str(raw["account_id"]),
             installation_id=str(raw["installation_id"]),

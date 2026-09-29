@@ -372,6 +372,7 @@ def _external_context(
     from runtime.security.execution_context import ExecutionContext
     now = datetime.now(timezone.utc)
     return ExecutionContext(
+        context_id="ctx-1",
         tenant_id="tenant-1",
         account_id="account-1",
         project_id="project-1",
@@ -557,10 +558,12 @@ def test_m8_evidence_store_is_append_only(tmp_path):
     second = store.record("trust-verification", {"authorization":"secret-b","value":2})
     assert first != second
     assert first.exists() and second.exists()
-    assert json.loads(first.read_text())["record_id"] != json.loads(second.read_text())["record_id"]
-    assert len(list(store.root.glob("trust-verification-*.json"))) == 2
     first_data = json.loads(first.read_text())
     second_data = json.loads(second.read_text())
+    assert first_data["record_id"] != second_data["record_id"]
+    assert first.stem == f"trust-verification-{first_data['record_id']}"
+    assert second.stem == f"trust-verification-{second_data['record_id']}"
+    assert len(list(store.root.glob("trust-verification-*.json"))) == 2
     assert first_data["value"] == 1
     assert second_data["value"] == 2
     assert first_data["authorization"] == "[REDACTED]"
@@ -572,6 +575,129 @@ def test_generation_audit_separates_internal_runtime_generation():
     local_generation = 3
     assert context.generation == 77
     assert local_generation != context.generation
+
+
+
+
+
+def test_execution_context_generation_is_external_not_runtime_generation():
+    from datetime import datetime, timezone
+    context = _external_context(generation=77)
+    now = datetime.now(timezone.utc)
+    assert context.generation == 77
+    assert context.matches_external_generation(77) is True
+    assert context.matches_external_generation(3) is False
+    assert context.is_valid(now) is True
+    # Internal RuntimeGeneration changes do not invalidate the external context.
+    assert 3 != context.generation
+    assert context.is_valid(now) is True
+
+
+def test_execution_context_expired_is_rejected(tmp_path):
+    from dataclasses import replace
+    from datetime import datetime, timezone, timedelta
+    from runtime.execution.manager import ExecutionManager
+
+    manager = object.__new__(ExecutionManager)
+    manager.runtime_engine = _authority_runtime_engine(tmp_path)
+    context = replace(
+        _external_context(),
+        expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+    )
+    try:
+        manager._validate_external_execution_context(
+            type("TaskLike", (), {"capability_id": "read_capability"})(),
+            context,
+        )
+    except PermissionError as exc:
+        assert "expired" in str(exc)
+    else:
+        raise AssertionError("expired M8 ExecutionContext must be rejected")
+
+
+def test_execution_manager_revalidates_external_context_at_execution_time(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import Mock, patch
+    from runtime.execution.manager import ExecutionManager
+    from runtime.identity.runtime_identity import RuntimeIdentity
+
+    manager = object.__new__(ExecutionManager)
+    engine = _authority_runtime_engine(tmp_path)
+    issuer = Mock()
+    stored = _external_context(generation=77)
+    issuer.get.return_value = SimpleNamespace(
+        context=_external_context(generation=78),
+        reason=None,
+    )
+    engine.execution_context_client = issuer
+    manager.runtime_engine = engine
+    manager._executions = {
+        "exec-1": SimpleNamespace(
+            external_execution_context=stored,
+            generation=1,
+        )
+    }
+    manager._tasks = {
+        "exec-1": SimpleNamespace(capability_id="read_capability")
+    }
+    with patch.object(RuntimeIdentity, "load", return_value=Mock(runtime_id="rt-1", installation_id="inst-1")):
+        try:
+            manager.execute_sync("exec-1")
+        except PermissionError as exc:
+            assert "external generation changed" in str(exc)
+        else:
+            raise AssertionError("execution must be blocked when external generation changes")
+
+
+def test_reconstructed_m8_context_without_external_authority_is_blocked(tmp_path):
+    from types import SimpleNamespace
+    from runtime.execution.manager import ExecutionManager
+
+    manager = object.__new__(ExecutionManager)
+    manager.runtime_engine = _authority_runtime_engine(tmp_path)
+    manager._executions = {}
+    manager.continuity_engine = Mock()
+    manager.continuity_engine.reconstruct_execution.return_value = {
+        "execution_id": "exec-1",
+        "task_id": "task-1",
+        "capability_id": "read_capability",
+        "status": "FAILED",
+        "routing_class": "DETERMINISTIC",
+        "executor_type": "DETERMINISTIC",
+        "executor_id": "exec-1",
+        "model_id": "model-1",
+        "generation": 1,
+    }
+    reconstructed = manager.get_execution("exec-1")
+    assert reconstructed.external_execution_context is None
+    manager._tasks = {"exec-1": SimpleNamespace(capability_id="read_capability")}
+    try:
+        manager.execute_sync("exec-1")
+    except PermissionError as exc:
+        assert "externally issued ExecutionContext" in str(exc)
+    else:
+        raise AssertionError("reconstructed M8 execution must remain blocked")
+
+
+def test_task_execution_context_carries_external_authority():
+    from runtime.execution.models import TaskExecutionContext
+    external = _external_context(generation=77)
+    context = TaskExecutionContext(
+        execution_id="exec-1",
+        task_id="task-1",
+        account_id=external.account_id,
+        project_id=external.project_id,
+        capability_id="read_capability",
+        workspace_path="",
+        environment={},
+        allowed_tools=[],
+        deadline=external.expires_at,
+        resource_limits={},
+        network_policy="none",
+        write_policy="none",
+        external_execution_context=external,
+    )
+    assert context.external_execution_context is external
 
 
 def test_gate_b_admission_remains_disabled():

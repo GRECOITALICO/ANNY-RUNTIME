@@ -1,4 +1,5 @@
 from typing import List, Dict, Optional
+from datetime import datetime, timezone
 import uuid
 
 from runtime.execution.models import Task, TaskExecutionContext, ExecutionStatus
@@ -87,6 +88,11 @@ class ExecutionManager:
             raise PermissionError("M8 ExecutionContext authorization references are incomplete")
         if not external_context.signature:
             raise PermissionError("M8 ExecutionContext signature is missing")
+        if not isinstance(external_context.generation, int) or external_context.generation < 1:
+            raise PermissionError("M8 ExecutionContext generation is invalid")
+        now = datetime.now(external_context.expires_at.tzinfo or timezone.utc)
+        if not external_context.is_valid(now):
+            raise PermissionError("M8 ExecutionContext is expired or not currently valid")
         if task.capability_id not in external_context.capabilities:
             raise PermissionError(
                 f"M8 ExecutionContext does not authorize capability {task.capability_id}"
@@ -102,6 +108,35 @@ class ExecutionManager:
         expected_audience = getattr(self.runtime_engine.config, "conrrad_audience", "")
         if expected_audience and external_context.audience != expected_audience:
             raise PermissionError("M8 ExecutionContext audience mismatch")
+
+    def _revalidate_m8_external_execution_context(
+        self,
+        task: Task,
+        external_context: Optional[ExecutionContext],
+    ) -> Optional[ExecutionContext]:
+        if not self._m8_external_context_required():
+            return external_context
+
+        self._validate_external_execution_context(task, external_context)
+        client = getattr(self.runtime_engine, "execution_context_client", None)
+        context_id = getattr(external_context, "context_id", None)
+        if client is None or not context_id:
+            raise PermissionError("M8 ExecutionContext cannot be revalidated against external issuer")
+
+        current = client.get(
+            context_id,
+            installation_id=external_context.installation_id,
+            runtime_id=external_context.runtime_id,
+            audience=external_context.audience,
+        )
+        if current.context is None:
+            raise PermissionError(
+                f"M8 ExecutionContext external revalidation failed: {current.reason or 'UNKNOWN'}"
+            )
+        if not external_context.matches_external_generation(current.context.generation):
+            raise PermissionError("M8 ExecutionContext external generation changed")
+        self._validate_external_execution_context(task, current.context)
+        return current.context
 
     def submit_task(
         self,
@@ -235,6 +270,12 @@ class ExecutionManager:
         task = self._tasks.get(execution_id)
         if not context or not task:
             raise ValueError("Execution not found")
+
+        if self._m8_external_context_required():
+            self._revalidate_m8_external_execution_context(
+                task,
+                getattr(context, "external_execution_context", None),
+            )
 
         cap = self.registry.get(task.capability_id)
         if not cap:

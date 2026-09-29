@@ -34,7 +34,8 @@ class M8EvidenceStore:
 
     def record(self, evidence_type: str, payload: Dict[str, Any]) -> Path:
         safe_payload = _safe(payload)
-        safe_payload["record_id"] = uuid.uuid4().hex
+        record_id = uuid.uuid4().hex
+        safe_payload["record_id"] = record_id
         safe_payload["recorded_at"] = datetime.now(timezone.utc).isoformat()
 
         safe_type = "".join(
@@ -42,15 +43,15 @@ class M8EvidenceStore:
             for character in str(evidence_type)
         ).strip("._-") or "evidence"
 
-        # Each event gets a unique destination. The temporary file is created
-        # in the same directory and atomically renamed, so a prior record is
-        # never replaced by a subsequent record.
-        while True:
+        # The persisted record_id and returned file reference identify the same record.
+        target = self.root / f"{safe_type}-{record_id}.json"
+        while target.exists():
             record_id = uuid.uuid4().hex
+            safe_payload["record_id"] = record_id
             target = self.root / f"{safe_type}-{record_id}.json"
-            if target.exists():
-                continue
-            fd, tmp_name = tempfile.mkstemp(prefix=".m8-", dir=str(self.root), text=True)
+
+        # The temporary file is created in the same directory and atomically renamed.
+        fd, tmp_name = tempfile.mkstemp(prefix=".m8-", dir=str(self.root), text=True)
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
                     json.dump(safe_payload, handle, sort_keys=True, indent=2)

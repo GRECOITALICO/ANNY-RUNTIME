@@ -20,6 +20,8 @@ class ExecutionContext:
     issued_at: datetime
     expires_at: datetime
 
+    # Required by the external issuer wire contract; preserved for execution-time revalidation.
+    context_id: Optional[str] = None
     workspace_id: Optional[str] = None
     capabilities: Set[str] = field(default_factory=set)
 
@@ -37,10 +39,16 @@ class ExecutionContext:
     def has_capability(self, capability: str) -> bool:
         return capability in self.capabilities
 
-    def is_valid(self, current_time: datetime, current_generation: int) -> bool:
-        """Local enforcement only: expiry and externally issued generation fence."""
-        if self.generation != current_generation:
-            return False
+    def matches_external_generation(self, expected_external_generation: int) -> bool:
+        """Compare only against another externally authoritative generation value."""
+        return (
+            isinstance(expected_external_generation, int)
+            and expected_external_generation >= 1
+            and self.generation == expected_external_generation
+        )
+
+    def is_valid(self, current_time: datetime) -> bool:
+        """Validate temporal validity only; never compare against RuntimeGeneration."""
         if current_time > self.expires_at:
             return False
         if current_time < self.issued_at:
