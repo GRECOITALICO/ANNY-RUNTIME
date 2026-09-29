@@ -78,6 +78,8 @@ class ExecutionManager:
             )
         if not isinstance(external_context, ExecutionContext):
             raise PermissionError("M8 execution context is invalid")
+        if external_context.verification_status != "VERIFIED":
+            raise PermissionError("M8 ExecutionContext cryptographic verification is required")
         if not external_context.installation_id or not external_context.runtime_id:
             raise PermissionError("M8 ExecutionContext identity binding is incomplete")
         if not external_context.principal or not external_context.actor_id or not external_context.session_id:
@@ -108,6 +110,9 @@ class ExecutionManager:
         expected_audience = getattr(self.runtime_engine.config, "conrrad_audience", "")
         if expected_audience and external_context.audience != expected_audience:
             raise PermissionError("M8 ExecutionContext audience mismatch")
+        expected_issuer = getattr(self.runtime_engine.config, "conrrad_trust_issuer", "")
+        if not expected_issuer or external_context.issuer != expected_issuer:
+            raise PermissionError("M8 ExecutionContext issuer mismatch")
 
     def _revalidate_m8_external_execution_context(
         self,
@@ -272,10 +277,11 @@ class ExecutionManager:
             raise ValueError("Execution not found")
 
         if self._m8_external_context_required():
-            self._revalidate_m8_external_execution_context(
+            verified_external_context = self._revalidate_m8_external_execution_context(
                 task,
                 getattr(context, "external_execution_context", None),
             )
+            context.external_execution_context = verified_external_context
 
         cap = self.registry.get(task.capability_id)
         if not cap:
