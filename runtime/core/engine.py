@@ -60,6 +60,10 @@ class RuntimeEngine:
             getattr(self.config, "execution_context_issuer_endpoint", ""),
             self.installation_auth,
             self.m8_evidence_store,
+            trust_material_backend=self._secret_backend,
+            trust_root_id=getattr(self.config, "conrrad_trust_root_id", ""),
+            trust_root_reference=getattr(self.config, "conrrad_trust_root_reference", ""),
+            expected_issuer=getattr(self.config, "conrrad_trust_issuer", ""),
         )
         self.conrrad_preflight = ConrradPreflight(
             getattr(self.config, "conrrad_preflight_endpoint", ""),
