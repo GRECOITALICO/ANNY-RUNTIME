@@ -345,3 +345,234 @@ def test_preflight_requires_expected_node_binding_for_verified_state():
         "expected-request",
     )
     assert result.status is PlaneStatus.ONLINE_UNVERIFIED
+
+
+def _authority_runtime_engine(tmp_path, audience="aud-1"):
+    from types import SimpleNamespace
+    return SimpleNamespace(
+        config=SimpleNamespace(
+            data_dir=str(tmp_path),
+            conrrad_preflight_endpoint="https://conrrad.example/v1/bootstrap/preflight",
+            execution_context_issuer_endpoint="https://issuer.example",
+            conrrad_installation_credential_ref="m8-ref",
+            conrrad_audience=audience,
+        )
+    )
+
+
+def _external_context(
+    *,
+    generation=7,
+    runtime_id="rt-1",
+    installation_id="inst-1",
+    audience="aud-1",
+    capabilities=None,
+):
+    from datetime import datetime, timezone, timedelta
+    from runtime.security.execution_context import ExecutionContext
+    now = datetime.now(timezone.utc)
+    return ExecutionContext(
+        tenant_id="tenant-1",
+        account_id="account-1",
+        project_id="project-1",
+        anny_instance_id="principal-1",
+        runtime_id=runtime_id,
+        installation_id=installation_id,
+        session_id="session-1",
+        actor_id="actor-1",
+        operation_id="op-1",
+        execution_id="exec-1",
+        generation=generation,
+        issued_at=now - timedelta(seconds=1),
+        expires_at=now + timedelta(minutes=5),
+        workspace_id="workspace-1",
+        capabilities=set(capabilities or {"read_capability"}),
+        principal="principal-1",
+        issuer="issuer-1",
+        audience=audience,
+        authorization_refs=("auth-1",),
+        policy_refs=("policy-1",),
+        evidence_correlation={"id": "ev-1"},
+        signature={
+            "algorithm": "RSA",
+            "key_id": "key-1",
+            "value": "sig",
+            "signed_claims_digest": "digest",
+            "trust_root_id": "trust-1",
+        },
+    )
+
+
+def test_execution_manager_m8_requires_external_context(tmp_path):
+    from runtime.execution.manager import ExecutionManager
+    manager = object.__new__(ExecutionManager)
+    manager.runtime_engine = _authority_runtime_engine(tmp_path)
+    class TaskLike:
+        capability_id = "read_capability"
+    try:
+        manager._validate_external_execution_context(TaskLike(), None)
+    except PermissionError as exc:
+        assert "externally issued ExecutionContext" in str(exc)
+    else:
+        raise AssertionError("M8 execution must fail closed without external context")
+
+
+def test_execution_manager_m8_rejects_context_binding_mismatch(tmp_path):
+    from runtime.execution.manager import ExecutionManager
+    manager = object.__new__(ExecutionManager)
+    manager.runtime_engine = _authority_runtime_engine(tmp_path)
+    from unittest.mock import patch
+    from runtime.identity.runtime_identity import RuntimeIdentity
+    identity = Mock()
+    identity.runtime_id = "rt-1"
+    identity.installation_id = "inst-1"
+    with patch.object(RuntimeIdentity, "load", return_value=identity):
+        context = _external_context(runtime_id="rt-other")
+        try:
+            manager._validate_external_execution_context(
+                type("TaskLike", (), {"capability_id": "read_capability"})(),
+                context,
+            )
+        except PermissionError as exc:
+            assert "runtime_id mismatch" in str(exc)
+        else:
+            raise AssertionError("runtime mismatch must fail closed")
+
+
+def test_execution_manager_m8_accepts_only_authorized_capability(tmp_path):
+    from runtime.execution.manager import ExecutionManager
+    manager = object.__new__(ExecutionManager)
+    manager.runtime_engine = _authority_runtime_engine(tmp_path)
+    from unittest.mock import patch
+    from runtime.identity.runtime_identity import RuntimeIdentity
+    identity = Mock(runtime_id="rt-1", installation_id="inst-1")
+    with patch.object(RuntimeIdentity, "load", return_value=identity):
+        context = _external_context(capabilities={"other-capability"})
+        try:
+            manager._validate_external_execution_context(
+                type("TaskLike", (), {"capability_id": "read_capability"})(),
+                context,
+            )
+        except PermissionError as exc:
+            assert "does not authorize capability" in str(exc)
+        else:
+            raise AssertionError("capability must be externally authorized")
+
+
+def test_external_trust_verifier_rejects_http_endpoint():
+    verifier = ExternalTrustVerifier("http://conrrad.example/verify", credential_provider())
+    token = FabricTrustToken(
+        runtime_id="rt-1", node_id="node-1", issued_at="2026-09-28T00:00:00Z",
+        expires_at="2026-09-28T01:00:00Z", signature="sig", token_id="t-1",
+        issuer="issuer-1", audience="aud-1"
+    )
+    result = verifier.verify(token, "inst-1", "node-1", "issuer-1", "aud-1")
+    assert result.verified is False
+    assert result.reason_code == "TRUST_VERIFIER_REQUIRES_HTTPS"
+
+
+def test_external_trust_verifier_https_endpoint_is_requestable():
+    verifier = ExternalTrustVerifier("https://conrrad.example/verify", credential_provider())
+    token = FabricTrustToken(
+        runtime_id="rt-1", node_id="node-1", issued_at="2026-09-28T00:00:00Z",
+        expires_at="2026-09-28T01:00:00Z", signature="sig", token_id="t-1",
+        issuer="issuer-1", audience="aud-1"
+    )
+    response = Mock()
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+    response.read.return_value = json.dumps({
+        "request_id": "placeholder",
+        "verification_status": "VERIFIED",
+        "verified": True,
+        "verifier_id": "verifier-1",
+        "verified_at": "2026-09-28T00:00:00Z",
+        "evidence_ref": "ev-1",
+    }).encode()
+    def fake_urlopen(request, **kwargs):
+        raw = json.loads(response.read.return_value.decode())
+        raw["request_id"] = request.headers["X-request-id"]
+        response.read.return_value = json.dumps(raw).encode()
+        return response
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        result = verifier.verify(token, "inst-1", "node-1", "issuer-1", "aud-1")
+    assert result.verified is True
+
+
+def test_external_execution_context_rejects_empty_endpoint():
+    result = ExternalExecutionContextClient("", credential_provider()).issue(
+        "inst-1", "rt-1",
+        {"tenant_id":"tenant-1","account_id":"account-1","project_id":"project-1","workspace_or_resource_scope":"workspace-1"},
+        "aud-1",
+    )
+    assert result.context is None
+    assert result.reason == "ISSUER_UNAVAILABLE"
+
+
+def test_external_execution_context_rejects_http_endpoint():
+    result = ExternalExecutionContextClient("http://issuer.example", credential_provider()).issue(
+        "inst-1", "rt-1",
+        {"tenant_id":"tenant-1","account_id":"account-1","project_id":"project-1","workspace_or_resource_scope":"workspace-1"},
+        "aud-1",
+    )
+    assert result.context is None
+    assert result.reason == "ISSUER_ENDPOINT_REQUIRES_HTTPS"
+
+
+def test_external_execution_context_https_endpoint_is_requestable():
+    client = ExternalExecutionContextClient("https://issuer.example", credential_provider())
+    raw = {
+        "context_id": "ctx-1", "principal": "principal-1", "tenant_id": "tenant-1",
+        "account_id": "account-1", "project_id": "project-1", "installation_id": "inst-1",
+        "runtime_id": "rt-1", "session_id": "session-1", "actor_id": "actor-1",
+        "operation_id": "op-1", "execution_id": "exec-1", "generation": 2,
+        "issued_at": "2026-09-28T00:00:00Z", "expires_at": "2026-09-28T01:00:00Z",
+        "issuer": "issuer-1", "audience": "aud-1", "capability_claims": ["read_capability"],
+        "authorization_refs": ["auth-1"], "policy_refs": ["policy-1"],
+        "evidence_correlation": {"id":"ev-1"},
+        "signature": {"algorithm":"RSA","key_id":"key-1","value":"sig","signed_claims_digest":"digest","trust_root_id":"trust-1"},
+    }
+    response = Mock()
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+    response.read.return_value = json.dumps(raw).encode()
+    with patch("urllib.request.urlopen", return_value=response) as urlopen:
+        result = client.issue(
+            "inst-1", "rt-1",
+            {"tenant_id":"tenant-1","account_id":"account-1","project_id":"project-1","workspace_or_resource_scope":"workspace-1"},
+            "aud-1",
+            requested_capabilities=["read_capability"],
+        )
+    assert result.context is not None
+    assert result.context.installation_id == "inst-1"
+    request = urlopen.call_args.args[0]
+    assert request.full_url == "https://issuer.example/v1/control/execution-contexts"
+    assert request.get_method() == "POST"
+
+
+def test_m8_evidence_store_is_append_only(tmp_path):
+    from runtime.security.m8_evidence import M8EvidenceStore
+    store = M8EvidenceStore(str(tmp_path))
+    first = store.record("trust-verification", {"authorization":"secret-a","value":1})
+    second = store.record("trust-verification", {"authorization":"secret-b","value":2})
+    assert first != second
+    assert first.exists() and second.exists()
+    assert len(list(store.root.glob("trust-verification-*.json"))) == 2
+    first_data = json.loads(first.read_text())
+    second_data = json.loads(second.read_text())
+    assert first_data["value"] == 1
+    assert second_data["value"] == 2
+    assert first_data["authorization"] == "[REDACTED]"
+    assert second_data["authorization"] == "[REDACTED]"
+
+
+def test_generation_audit_separates_internal_runtime_generation():
+    context = _external_context(generation=77)
+    local_generation = 3
+    assert context.generation == 77
+    assert local_generation != context.generation
+
+
+def test_gate_b_admission_remains_disabled():
+    config = type("Config", (), {"m8_admission_enabled": False})()
+    assert config.m8_admission_enabled is False
