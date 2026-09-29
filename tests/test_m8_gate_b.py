@@ -42,6 +42,8 @@ def test_preflight_rejects_non_live_evidence():
     payload = {
         "status": "ONLINE_VERIFIED",
         "evidence_status": "TEST_EVIDENCE_ONLY",
+        "request_id": "req-1",
+        "endpoint": "https://example.invalid",
         "dependency_registry": ["CONRRAD.REPOSITORY_FABRIC"],
         "binding": {
             "runtime_id": "rt-1", "installation_id": "inst-1", "node_id": "node-1",
@@ -49,6 +51,7 @@ def test_preflight_rejects_non_live_evidence():
             "project_id": "project-1", "workspace_or_resource_scope": "workspace-1",
             "source_reference": "authority-1",
         },
+        "reason": None,
     }
     result = preflight._parse_payload(payload, "rt-1", "inst-1", "req-1")
     assert result.status is PlaneStatus.ONLINE_UNVERIFIED
@@ -60,6 +63,8 @@ def test_preflight_binding_mismatch_blocks():
     payload = {
         "status": "ONLINE_VERIFIED",
         "evidence_status": "CERTIFIED_BY_LIVE_EVIDENCE",
+        "request_id": "req-1",
+        "endpoint": "https://example.invalid",
         "dependency_registry": ["CONRRAD.REPOSITORY_FABRIC"],
         "binding": {
             "runtime_id": "rt-other", "installation_id": "inst-1", "node_id": "node-1",
@@ -67,6 +72,7 @@ def test_preflight_binding_mismatch_blocks():
             "project_id": "project-1", "workspace_or_resource_scope": "workspace-1",
             "source_reference": "authority-1",
         },
+        "reason": None,
     }
     result = preflight._parse_payload(payload, "rt-1", "inst-1", "req-1")
     assert result.status is PlaneStatus.BLOCKED
@@ -102,7 +108,8 @@ def test_preflight_uses_canonical_post_wire_contract():
         response.read.return_value = json.dumps(payload).encode("utf-8")
         return response
 
-    with patch.dict("os.environ", {"M8_NODE_ID": "node-1"}, clear=False),             patch("urllib.request.urlopen", side_effect=correlated_payload) as urlopen:
+    with patch.dict("os.environ", {"M8_NODE_ID": "node-1"}, clear=False), \
+            patch("urllib.request.urlopen", side_effect=correlated_payload) as urlopen:
         result = preflight.run(
             "rt-1",
             "inst-1",
