@@ -345,6 +345,9 @@ class ExecutionContextVerifier:
             raise ExecutionContextValidationError("MALFORMED_SIGNATURE")
         if any(not isinstance(signature[field], str) for field in signature_required):
             raise ExecutionContextValidationError("MALFORMED_SIGNATURE")
+        if type(raw["generation"]) is not int or raw["generation"] < 1:
+            raise ExecutionContextValidationError("MALFORMED_CONTEXT")
+        _validate_json_value(raw)
 
 
 def canonicalize_signed_claims(raw: Dict[str, Any]) -> bytes:
