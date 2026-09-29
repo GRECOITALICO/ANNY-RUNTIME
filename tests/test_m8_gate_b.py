@@ -339,10 +339,10 @@ def _authority_runtime_engine(tmp_path, audience="aud-1"):
             conrrad_preflight_endpoint="https://conrrad.example/v1/bootstrap/preflight",
             execution_context_issuer_endpoint="https://issuer.example",
             conrrad_installation_credential_ref="m8-ref",
-            conrrad_audience=audience,
-        conrrad_trust_issuer="issuer-1",
-        conrrad_trust_root_id="trust-1",
-        conrrad_trust_root_reference="m8-trust-bundle",
+                conrrad_audience=audience,
+            conrrad_trust_issuer="issuer-1",
+            conrrad_trust_root_id="trust-1",
+            conrrad_trust_root_reference="m8-trust-bundle",
         )
     )
 
@@ -671,8 +671,9 @@ def _crypto_backend(*, trust_root_id="trust-1", key_id="key-1", status="ACTIVE",
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
     private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(1, 33)))
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     public_key = base64.urlsafe_b64encode(
-        private_key.public_key().public_bytes_raw()
+        private_key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
     ).decode("ascii").rstrip("=")
     now = datetime.now(timezone.utc)
     bundle = {
@@ -696,7 +697,7 @@ def _crypto_backend(*, trust_root_id="trust-1", key_id="key-1", status="ACTIVE",
     return TrustBackend(), private_key, trust_root_id, key_id
 
 
-def _crypto_client(*, trust_root_id="trust-1", trust_root_reference="m8-trust-bundle", expected_issuer="issuer-1"):
+def _crypto_client(*, trust_root_id="trust-1", trust_root_reference="m8-trust-bundle", expected_issuer="issuer-1", evidence_store=None):
     backend, _, _, _ = _crypto_backend(trust_root_id=trust_root_id)
     return ExternalExecutionContextClient(
         "https://issuer.example",
@@ -705,6 +706,7 @@ def _crypto_client(*, trust_root_id="trust-1", trust_root_reference="m8-trust-bu
         trust_root_id=trust_root_id,
         trust_root_reference=trust_root_reference,
         expected_issuer=expected_issuer,
+        evidence_store=evidence_store,
     )
 
 
@@ -1136,3 +1138,40 @@ def test_m8_evidence_contains_required_crypto_fields(tmp_path):
     assert "do-not-persist" not in ref.read_text()
 
 
+
+
+def test_m8_client_records_required_verification_evidence(tmp_path):
+    from runtime.security.m8_evidence import M8EvidenceStore
+
+    store = M8EvidenceStore(str(tmp_path))
+    client = _crypto_client(evidence_store=store)
+    raw = _signed_context_raw()
+    response = Mock()
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+    response.read.return_value = json.dumps(raw).encode("utf-8")
+    with patch("urllib.request.urlopen", return_value=response):
+        result = client.issue(
+            "inst-1",
+            "rt-1",
+            {
+                "tenant_id": "tenant-1",
+                "account_id": "account-1",
+                "project_id": "project-1",
+                "workspace_or_resource_scope": "workspace-1",
+            },
+            "aud-1",
+        )
+    assert result.verification_status == "VERIFIED"
+    assert result.evidence_ref is not None
+    evidence = json.loads(Path(result.evidence_ref).read_text())
+    for field in (
+        "request_id", "context_id", "runtime_id", "installation_id",
+        "issuer", "audience", "generation", "trust_root_id", "key_id",
+        "algorithm", "signed_claims_digest", "verification_status",
+        "verification_reason", "verified_at",
+    ):
+        assert field in evidence
+    assert evidence["verification_status"] == "VERIFIED"
+    assert "private_key" not in evidence
+    assert "authorization" not in evidence
