@@ -748,9 +748,9 @@ def _signed_context_raw(
         "expires_at": (now + timedelta(minutes=5)).isoformat(),
         "issuer": issuer,
         "audience": audience,
-        "capability_claims": list(capabilities or ["read_capability"]),
-        "authorization_refs": list(authorization_refs or ["auth-1"]),
-        "policy_refs": list(policy_refs or ["policy-1"]),
+        "capability_claims": list(["read_capability"] if capabilities is None else capabilities),
+        "authorization_refs": list(["auth-1"] if authorization_refs is None else authorization_refs),
+        "policy_refs": list(["policy-1"] if policy_refs is None else policy_refs),
         "evidence_correlation": {"id": "ev-1"},
         "signature": {
             "algorithm": algorithm,
@@ -821,7 +821,8 @@ def test_m8_altered_digest_is_rejected():
 def test_m8_altered_signature_is_rejected():
     client = _crypto_client()
     raw = _signed_context_raw()
-    raw["signature"]["value"] = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    import base64
+    raw["signature"]["value"] = base64.urlsafe_b64encode(b"\\x00" * 64).decode("ascii").rstrip("=")
     try:
         client._parse_context(raw)
     except ExecutionContextValidationError as exc:
@@ -1091,12 +1092,12 @@ def test_m8_verified_context_reaches_execution_boundary(tmp_path):
     manager.worker_manager.list_workers.return_value = [worker]
     manager.worker_manager.start_worker.side_effect = lambda worker_id, context, task, capability: setattr(context, "status", ExecutionStatus.SUCCEEDED)
     manager.worker_manager.terminate_worker.return_value = None
-    result = manager.execute_sync("exec-1")
+    manager.execute_sync("exec-1")
     manager.worker_manager.start_worker.assert_called_once()
     passed_context = manager.worker_manager.start_worker.call_args.args[1]
     assert passed_context.external_execution_context.verification_status == "VERIFIED"
     assert passed_context.external_execution_context.context_id == "ctx-1"
-    assert result.external_execution_context.verification_status == "VERIFIED"
+    assert manager._executions["exec-1"].external_execution_context.verification_status == "VERIFIED"
 
 
 def test_m8_evidence_contains_required_crypto_fields(tmp_path):
