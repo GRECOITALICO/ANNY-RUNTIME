@@ -599,7 +599,8 @@ def test_execution_manager_revalidates_external_context_at_execution_time(tmp_pa
     }
     with patch.object(RuntimeIdentity, "load", return_value=Mock(runtime_id="rt-1", installation_id="inst-1")):
         try:
-            manager.execute_sync("exec-1")
+            with patch.object(RuntimeIdentity, "load", return_value=identity):
+        manager.execute_sync("exec-1")
         except PermissionError as exc:
             assert "external generation changed" in str(exc)
         else:
