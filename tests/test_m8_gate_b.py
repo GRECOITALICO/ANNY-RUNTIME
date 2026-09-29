@@ -1129,6 +1129,7 @@ def test_m8_verified_context_reaches_execution_boundary(tmp_path):
     engine.generation = Mock()
     engine.generation.fence.return_value = None
     manager.runtime_engine = engine
+    manager.continuity_engine = None
     from runtime.identity.runtime_identity import RuntimeIdentity
     identity = Mock(runtime_id="rt-1", installation_id="inst-1")
     manager._executions = {
