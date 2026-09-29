@@ -7,6 +7,7 @@ import urllib.request
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from urllib.parse import urlparse
 from typing import Any, Dict, Optional
 
 from runtime.security.execution_context import ExecutionContext
@@ -50,6 +51,10 @@ class ExternalExecutionContextClient:
         self.credential_provider = credential_provider
         self.evidence_store = evidence_store
         self.timeout = timeout
+
+    def _endpoint_is_https(self) -> bool:
+        parsed = urlparse(self.endpoint)
+        return parsed.scheme.lower() == "https" and bool(parsed.netloc)
 
     def issue(
         self,
@@ -131,8 +136,13 @@ class ExternalExecutionContextClient:
         expected_runtime_id: Optional[str] = None,
         expected_audience: Optional[str] = None,
     ) -> ExecutionContextAuthorityResult:
+        if not self.endpoint:
+            return ExecutionContextAuthorityResult(None, None, "ISSUER_UNAVAILABLE")
+        if not self._endpoint_is_https():
+            return ExecutionContextAuthorityResult(None, 400, "ISSUER_ENDPOINT_REQUIRES_HTTPS")
+
         authorization = self.credential_provider.authorization_header()
-        if not self.endpoint or authorization is None:
+        if authorization is None:
             return ExecutionContextAuthorityResult(None, None, "ISSUER_UNAVAILABLE")
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
         req = urllib.request.Request(
@@ -221,6 +231,7 @@ class ExternalExecutionContextClient:
         return ExecutionContext(
             tenant_id=str(raw["tenant_id"]),
             account_id=str(raw["account_id"]),
+            installation_id=str(raw["installation_id"]),
             project_id=str(raw["project_id"]),
             anny_instance_id=str(raw["principal"]),
             runtime_id=str(raw["runtime_id"]),
