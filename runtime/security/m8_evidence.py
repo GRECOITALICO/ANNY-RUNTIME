@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
@@ -34,15 +35,28 @@ class M8EvidenceStore:
     def record(self, evidence_type: str, payload: Dict[str, Any]) -> Path:
         safe_payload = _safe(payload)
         safe_payload["recorded_at"] = datetime.now(timezone.utc).isoformat()
-        target = self.root / f"{evidence_type}.json"
-        fd, tmp_name = tempfile.mkstemp(prefix=".m8-", dir=str(self.root), text=True)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(safe_payload, handle, sort_keys=True, indent=2)
-                handle.flush()
-                os.fsync(handle.fileno())
-            os.replace(tmp_name, target)
-        finally:
-            if os.path.exists(tmp_name):
-                os.unlink(tmp_name)
-        return target
+
+        safe_type = "".join(
+            character if character.isalnum() or character in "._-" else "_"
+            for character in str(evidence_type)
+        ).strip("._-") or "evidence"
+
+        # Each event gets a unique destination. The temporary file is created
+        # in the same directory and atomically renamed, so a prior record is
+        # never replaced by a subsequent record.
+        while True:
+            record_id = uuid.uuid4().hex
+            target = self.root / f"{safe_type}-{record_id}.json"
+            if target.exists():
+                continue
+            fd, tmp_name = tempfile.mkstemp(prefix=".m8-", dir=str(self.root), text=True)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    json.dump(safe_payload, handle, sort_keys=True, indent=2)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(tmp_name, target)
+                return target
+            finally:
+                if os.path.exists(tmp_name):
+                    os.unlink(tmp_name)
