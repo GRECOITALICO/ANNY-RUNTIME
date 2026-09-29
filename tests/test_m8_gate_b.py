@@ -976,6 +976,75 @@ def test_m8_expired_context_is_rejected():
         raise AssertionError("expired context must fail closed")
 
 
+def test_m8_not_yet_valid_context_is_rejected():
+    from datetime import datetime, timezone, timedelta
+    from runtime.security.execution_context_verifier import ExecutionContextVerifier, TrustMaterialResolver
+
+    raw = _signed_context_raw()
+    future = datetime.now(timezone.utc) + timedelta(minutes=5)
+    raw["issued_at"] = future.isoformat()
+    verifier = ExecutionContextVerifier(
+        TrustMaterialResolver(_crypto_backend()[0], "trust-1", "m8-trust-bundle"),
+        expected_issuer="issuer-1",
+        expected_audience="aud-1",
+    )
+    from runtime.security.execution_context_verifier import canonicalize_signed_claims
+    import base64, hashlib
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(1, 33)))
+    canonical = canonicalize_signed_claims(raw)
+    digest = hashlib.sha256(canonical).digest()
+    raw["signature"]["signed_claims_digest"] = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    raw["signature"]["value"] = base64.urlsafe_b64encode(private_key.sign(canonical)).decode("ascii").rstrip("=")
+    try:
+        verifier.verify(
+            raw,
+            expected_installation_id="inst-1",
+            expected_runtime_id="rt-1",
+            expected_audience="aud-1",
+        )
+    except ExecutionContextValidationError as exc:
+        assert exc.reason_code == "NOT_YET_VALID_CONTEXT"
+    else:
+        raise AssertionError("not-yet-valid context must fail closed")
+
+
+def test_m8_expired_context_result_preserves_expired_status(tmp_path):
+    from datetime import datetime, timezone, timedelta
+    store = __import__("runtime.security.m8_evidence", fromlist=["M8EvidenceStore"]).M8EvidenceStore(str(tmp_path))
+    client = _crypto_client(evidence_store=store)
+    raw = _signed_context_raw()
+    raw["issued_at"] = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    raw["expires_at"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    from runtime.security.execution_context_verifier import canonicalize_signed_claims
+    import base64, hashlib
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    private_key = Ed25519PrivateKey.from_private_bytes(bytes(range(1, 33)))
+    canonical = canonicalize_signed_claims(raw)
+    digest = hashlib.sha256(canonical).digest()
+    raw["signature"]["signed_claims_digest"] = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    raw["signature"]["value"] = base64.urlsafe_b64encode(private_key.sign(canonical)).decode("ascii").rstrip("=")
+    response = Mock()
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+    response.read.return_value = json.dumps(raw).encode("utf-8")
+    with patch("urllib.request.urlopen", return_value=response):
+        result = client.issue(
+            "inst-1",
+            "rt-1",
+            {
+                "tenant_id": "tenant-1",
+                "account_id": "account-1",
+                "project_id": "project-1",
+                "workspace_or_resource_scope": "workspace-1",
+            },
+            "aud-1",
+        )
+    assert result.context is None
+    assert result.verification_status == "EXPIRED"
+    assert result.reason == "EXPIRED_CONTEXT"
+
+
 def test_m8_stale_external_generation_blocks_execution():
     from types import SimpleNamespace
     from runtime.execution.manager import ExecutionManager
