@@ -259,8 +259,6 @@ def test_issuer_response_installation_runtime_audience_mismatch_rejected():
     client = _crypto_client()
     raw = _signed_context_raw(
         installation_id="inst-other",
-        runtime_id="rt-other",
-        audience="other-audience",
     )
     try:
         client._parse_context(
@@ -825,7 +823,7 @@ def test_m8_altered_signature_is_rejected():
     client = _crypto_client()
     raw = _signed_context_raw()
     import base64
-    raw["signature"]["value"] = base64.urlsafe_b64encode(b"\\x00" * 64).decode("ascii").rstrip("=")
+    raw["signature"]["value"] = base64.urlsafe_b64encode(b"\x00" * 64).decode("ascii").rstrip("=")
     try:
         client._parse_context(raw)
     except ExecutionContextValidationError as exc:
@@ -1062,6 +1060,8 @@ def test_m8_verified_context_reaches_execution_boundary(tmp_path):
     engine.generation = Mock()
     engine.generation.fence.return_value = None
     manager.runtime_engine = engine
+    from runtime.identity.runtime_identity import RuntimeIdentity
+    identity = Mock(runtime_id="rt-1", installation_id="inst-1")
     manager._executions = {
         "exec-1": SimpleNamespace(
             external_execution_context=verified,
