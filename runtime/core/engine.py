@@ -63,7 +63,11 @@ class RuntimeEngine:
         self.conrrad_preflight = ConrradPreflight(
             getattr(self.config, "conrrad_preflight_endpoint", ""),
             self.installation_auth,
-        ).run(identity.runtime_id, identity.installation_id)
+        ).run(
+            identity.runtime_id,
+            identity.installation_id,
+            expected_node_id=os.environ.get("M8_NODE_ID", "").strip() or None,
+        )
         return identity, auth_status
         
     @property
