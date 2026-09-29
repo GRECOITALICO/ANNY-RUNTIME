@@ -222,7 +222,12 @@ class ExternalExecutionContextClient:
                         verification_status="VERIFIED",
                     )
                 except ExecutionContextValidationError as exc:
-                    status = "UNKNOWN" if exc.reason_code in UNKNOWN_REASONS else "REJECTED"
+                    if exc.reason_code in UNKNOWN_REASONS:
+                        status = "UNKNOWN"
+                    elif exc.reason_code == "EXPIRED_CONTEXT":
+                        status = "EXPIRED"
+                    else:
+                        status = "REJECTED"
                     result = ExecutionContextAuthorityResult(
                         None,
                         502,
