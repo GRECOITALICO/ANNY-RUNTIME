@@ -34,6 +34,7 @@ class M8EvidenceStore:
 
     def record(self, evidence_type: str, payload: Dict[str, Any]) -> Path:
         safe_payload = _safe(payload)
+        safe_payload["record_id"] = uuid.uuid4().hex
         safe_payload["recorded_at"] = datetime.now(timezone.utc).isoformat()
 
         safe_type = "".join(
