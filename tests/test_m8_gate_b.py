@@ -557,6 +557,7 @@ def test_m8_evidence_store_is_append_only(tmp_path):
     second = store.record("trust-verification", {"authorization":"secret-b","value":2})
     assert first != second
     assert first.exists() and second.exists()
+    assert json.loads(first.read_text())["record_id"] != json.loads(second.read_text())["record_id"]
     assert len(list(store.root.glob("trust-verification-*.json"))) == 2
     first_data = json.loads(first.read_text())
     second_data = json.loads(second.read_text())
