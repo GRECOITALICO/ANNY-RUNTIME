@@ -2,6 +2,7 @@ from typing import List, Dict, Optional
 import uuid
 
 from runtime.execution.models import Task, TaskExecutionContext, ExecutionStatus
+from runtime.security.execution_context import ExecutionContext
 from runtime.workspace.ephemeral import EphemeralWorkspaceManager
 from runtime.execution.capability import CapabilityRegistry
 from runtime.execution.policy import RuntimePolicy
@@ -50,8 +51,65 @@ class ExecutionManager:
             telemetry_collector=self.telemetry_collector
         )
 
-    def submit_task(self, task: Task) -> TaskExecutionContext:
+    def _m8_external_context_required(self) -> bool:
+        config = getattr(self.runtime_engine, "config", None) if self.runtime_engine else None
+        if config is None:
+            return False
+        return any(
+            bool(getattr(config, field, ""))
+            for field in (
+                "conrrad_preflight_endpoint",
+                "execution_context_issuer_endpoint",
+                "conrrad_installation_credential_ref",
+            )
+        )
+
+    def _validate_external_execution_context(
+        self,
+        task: Task,
+        external_context: Optional[ExecutionContext],
+    ) -> None:
+        if not self._m8_external_context_required():
+            return
+        if external_context is None:
+            raise PermissionError(
+                "M8 execution requires an externally issued ExecutionContext"
+            )
+        if not isinstance(external_context, ExecutionContext):
+            raise PermissionError("M8 execution context is invalid")
+        if not external_context.installation_id or not external_context.runtime_id:
+            raise PermissionError("M8 ExecutionContext identity binding is incomplete")
+        if not external_context.principal or not external_context.actor_id or not external_context.session_id:
+            raise PermissionError("M8 ExecutionContext authority identity is incomplete")
+        if not external_context.issuer or not external_context.audience:
+            raise PermissionError("M8 ExecutionContext issuer/audience is incomplete")
+        if not external_context.authorization_refs or not external_context.policy_refs:
+            raise PermissionError("M8 ExecutionContext authorization references are incomplete")
+        if not external_context.signature:
+            raise PermissionError("M8 ExecutionContext signature is missing")
+        if task.capability_id not in external_context.capabilities:
+            raise PermissionError(
+                f"M8 ExecutionContext does not authorize capability {task.capability_id}"
+            )
+
+        from runtime.identity.runtime_identity import RuntimeIdentity
+        identity = RuntimeIdentity.load(self.runtime_engine.config.data_dir)
+        if external_context.runtime_id != identity.runtime_id:
+            raise PermissionError("M8 ExecutionContext runtime_id mismatch")
+        if external_context.installation_id != identity.installation_id:
+            raise PermissionError("M8 ExecutionContext installation_id mismatch")
+
+        expected_audience = getattr(self.runtime_engine.config, "conrrad_audience", "")
+        if expected_audience and external_context.audience != expected_audience:
+            raise PermissionError("M8 ExecutionContext audience mismatch")
+
+    def submit_task(
+        self,
+        task: Task,
+        external_context: Optional[ExecutionContext] = None,
+    ) -> TaskExecutionContext:
         execution_id = str(uuid.uuid4())
+        self._validate_external_execution_context(task, external_context)
         if self.telemetry_collector:
             envelope = TelemetryEnvelope.create(
                 component="manager",
@@ -73,8 +131,18 @@ class ExecutionManager:
             raise ValueError(f"Deterministic write capability requires a governed write executor: {task.capability_id}")
 
         selection = self.selector.select(task, cap, self.policy)
+        authoritative_project_id = (
+            external_context.project_id
+            if self._m8_external_context_required() and external_context is not None
+            else task.project_id
+        )
+        authoritative_account_id = (
+            external_context.account_id
+            if self._m8_external_context_required() and external_context is not None
+            else task.account_id
+        )
         try:
-            workspace_path = self.workspace_manager.create_workspace(execution_id, task.project_id)
+            workspace_path = self.workspace_manager.create_workspace(execution_id, authoritative_project_id)
         except Exception as exc:
             raise RuntimeError(f"Failed to create workspace: {exc}") from exc
 
@@ -82,8 +150,8 @@ class ExecutionManager:
         context = TaskExecutionContext(
             execution_id=execution_id,
             task_id=task.task_id,
-            account_id=task.account_id,
-            project_id=task.project_id,
+            account_id=authoritative_account_id,
+            project_id=authoritative_project_id,
             capability_id=task.capability_id,
             workspace_path=workspace_path,
             environment={},
@@ -103,7 +171,11 @@ class ExecutionManager:
         context.model_id = selection.model_id
         context.model_version = selection.model_version
         context.policy_version = selection.policy_version
+        # RuntimeGeneration is an internal process/restart fence. In M8 it is
+        # deliberately distinct from external_context.generation, which remains
+        # authoritative data carried from the external issuer.
         context.generation = self.runtime_engine.generation.current if self.runtime_engine else 1
+        context.external_execution_context = external_context if self._m8_external_context_required() else None
 
         self._tasks[execution_id] = task
         self._executions[execution_id] = context
