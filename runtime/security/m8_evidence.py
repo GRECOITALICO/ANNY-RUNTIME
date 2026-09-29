@@ -52,13 +52,13 @@ class M8EvidenceStore:
 
         # The temporary file is created in the same directory and atomically renamed.
         fd, tmp_name = tempfile.mkstemp(prefix=".m8-", dir=str(self.root), text=True)
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    json.dump(safe_payload, handle, sort_keys=True, indent=2)
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                os.replace(tmp_name, target)
-                return target
-            finally:
-                if os.path.exists(tmp_name):
-                    os.unlink(tmp_name)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(safe_payload, handle, sort_keys=True, indent=2)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_name, target)
+            return target
+        finally:
+            if os.path.exists(tmp_name):
+                os.unlink(tmp_name)
