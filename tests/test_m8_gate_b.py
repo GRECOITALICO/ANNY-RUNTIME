@@ -102,14 +102,28 @@ def test_preflight_uses_canonical_post_wire_contract():
         response.read.return_value = json.dumps(payload).encode("utf-8")
         return response
 
-    with patch("urllib.request.urlopen", side_effect=correlated_payload) as urlopen:
-        result = preflight.run("rt-1", "inst-1")
+    with patch.dict("os.environ", {"M8_NODE_ID": "node-1"}, clear=False),             patch("urllib.request.urlopen", side_effect=correlated_payload) as urlopen:
+        result = preflight.run(
+            "rt-1",
+            "inst-1",
+            requested_scope={
+                "tenant_id": "tenant-1",
+                "project_id": "project-1",
+                "workspace_or_resource_scope": "workspace-1",
+            },
+        )
 
     assert result.passed is True
     request = urlopen.call_args.args[0]
     assert request.get_method() == "POST"
     assert json.loads(request.data.decode("utf-8")) == {
-        "runtime_id": "rt-1", "installation_id": "inst-1"
+        "runtime_id": "rt-1",
+        "installation_id": "inst-1",
+        "requested_scope": {
+            "tenant_id": "tenant-1",
+            "project_id": "project-1",
+            "workspace_or_resource_scope": "workspace-1",
+        },
     }
     assert request.headers["Content-type"] == "application/json"
     assert request.headers["Authorization"] == "Bearer value"
@@ -267,3 +281,60 @@ def test_issuer_response_installation_runtime_audience_mismatch_rejected():
         assert "installation_id" in str(exc)
     else:
         raise AssertionError("expected issuer identity mismatch")
+
+
+def test_preflight_rejects_non_https_endpoint():
+    preflight = ConrradPreflight("http://conrrad.example/v1/bootstrap/preflight", credential_provider())
+    result = preflight.run("rt-1", "inst-1")
+    assert result.status is PlaneStatus.NOT_CONFIGURED
+
+
+def test_preflight_rejects_node_binding_mismatch():
+    preflight = ConrradPreflight("https://conrrad.example/v1/bootstrap/preflight", credential_provider())
+    payload = {
+        "status": "ONLINE_VERIFIED",
+        "evidence_status": "CERTIFIED_BY_LIVE_EVIDENCE",
+        "request_id": "expected-request",
+        "endpoint": "https://conrrad.example/v1/bootstrap/preflight",
+        "dependency_registry": ["CONRRAD.REPOSITORY_FABRIC"],
+        "binding": {
+            "runtime_id": "rt-1", "installation_id": "inst-1", "node_id": "node-other",
+            "trust_authority": "trust-1", "issuer_id": "issuer-1", "tenant_id": "tenant-1",
+            "project_id": "project-1", "workspace_or_resource_scope": "workspace-1",
+            "source_reference": "authority-1",
+        },
+        "reason": None,
+    }
+    result = preflight._parse_payload(
+        payload,
+        "rt-1",
+        "inst-1",
+        "expected-request",
+        expected_node_id="node-1",
+    )
+    assert result.status is PlaneStatus.BLOCKED
+
+
+def test_preflight_requires_expected_node_binding_for_verified_state():
+    preflight = ConrradPreflight("https://conrrad.example/v1/bootstrap/preflight", credential_provider())
+    payload = {
+        "status": "ONLINE_VERIFIED",
+        "evidence_status": "CERTIFIED_BY_LIVE_EVIDENCE",
+        "request_id": "expected-request",
+        "endpoint": "https://conrrad.example/v1/bootstrap/preflight",
+        "dependency_registry": [],
+        "binding": {
+            "runtime_id": "rt-1", "installation_id": "inst-1", "node_id": "node-1",
+            "trust_authority": "trust-1", "issuer_id": "issuer-1", "tenant_id": "tenant-1",
+            "project_id": "project-1", "workspace_or_resource_scope": "workspace-1",
+            "source_reference": "authority-1",
+        },
+        "reason": None,
+    }
+    result = preflight._parse_payload(
+        payload,
+        "rt-1",
+        "inst-1",
+        "expected-request",
+    )
+    assert result.status is PlaneStatus.ONLINE_UNVERIFIED
