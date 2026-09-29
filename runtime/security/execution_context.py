@@ -35,6 +35,10 @@ class ExecutionContext:
     policy_refs: Tuple[str, ...] = field(default_factory=tuple)
     evidence_correlation: Any = None
     signature: Dict[str, str] = field(default_factory=dict)
+    # Set only by the Runtime-side cryptographic verifier; default is fail-closed.
+    verification_status: str = "UNVERIFIED"
+    verification_reason: Optional[str] = None
+    verified_at: Optional[datetime] = None
 
     def has_capability(self, capability: str) -> bool:
         return capability in self.capabilities
