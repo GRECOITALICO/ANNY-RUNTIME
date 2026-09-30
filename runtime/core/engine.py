@@ -1,3 +1,4 @@
+import os
 from enum import Enum, auto
 from typing import Dict, Any
 from pathlib import Path
@@ -23,11 +24,56 @@ class RuntimeState(Enum):
 class RuntimeEngine:
     """The main runtime core engine."""
 
-    def __init__(self, config: RuntimeConfig):
+    def __init__(self, config: RuntimeConfig, secret_backend=None):
         self._config = config
+        self._secret_backend = secret_backend
         self._state = RuntimeState.STOPPED
         self._generation = RuntimeGeneration(config.data_dir)
         self.bootstrap_report = None
+        self.conrrad_preflight = None
+        self.installation_auth = None
+        self.m8_evidence_store = None
+        self.external_trust_verifier = None
+        self.execution_context_client = None
+
+    def _prepare_m8_authority_clients(self):
+        from runtime.identity.runtime_identity import RuntimeIdentity
+        from runtime.security.installation_auth import InstallationCredentialProvider
+        from runtime.security.m8_evidence import M8EvidenceStore
+        from runtime.fabric.trust_verifier import ExternalTrustVerifier
+        from runtime.security.execution_context_client import ExternalExecutionContextClient
+        from runtime.conrrad.preflight import ConrradPreflight
+
+        identity = RuntimeIdentity.load(self.config.data_dir)
+        self.installation_auth = InstallationCredentialProvider(
+            self._secret_backend,
+            getattr(self.config, "conrrad_installation_credential_ref", ""),
+        )
+        auth_status = self.installation_auth.status()
+        self.m8_evidence_store = M8EvidenceStore(self.data_dir)
+        self.external_trust_verifier = ExternalTrustVerifier(
+            getattr(self.config, "fabric_trust_verifier_endpoint", ""),
+            self.installation_auth,
+            self.m8_evidence_store,
+        )
+        self.execution_context_client = ExternalExecutionContextClient(
+            getattr(self.config, "execution_context_issuer_endpoint", ""),
+            self.installation_auth,
+            self.m8_evidence_store,
+            trust_material_backend=self._secret_backend,
+            trust_root_id=getattr(self.config, "conrrad_trust_root_id", ""),
+            trust_root_reference=getattr(self.config, "conrrad_trust_root_reference", ""),
+            expected_issuer=getattr(self.config, "conrrad_trust_issuer", ""),
+        )
+        self.conrrad_preflight = ConrradPreflight(
+            getattr(self.config, "conrrad_preflight_endpoint", ""),
+            self.installation_auth,
+        ).run(
+            identity.runtime_id,
+            identity.installation_id,
+            expected_node_id=os.environ.get("M8_NODE_ID", "").strip() or None,
+        )
+        return identity, auth_status
         
     @property
     def config(self) -> RuntimeConfig:
@@ -81,7 +127,10 @@ class RuntimeEngine:
                 logger.warning("Abnormal termination detected! Requires reconciliation.")
                 # We do not assume success or automatically erase evidence.
             
-            # 7. Run Three-Plane Bootstrap
+            # 7. CONRRAD preflight MUST precede any GitHub/Fabric use.
+            identity, auth_status = self._prepare_m8_authority_clients()
+
+            # 8. Run Three-Plane Bootstrap only after CONRRAD preflight succeeds.
             from runtime.bootstrap.planes import ThreePlaneBootstrap
             bootstrap = ThreePlaneBootstrap(
                 data_dir=self.config.data_dir,
@@ -89,8 +138,12 @@ class RuntimeEngine:
                 fabric_client=fabric_client,
                 continuity_engine=self.continuity_engine,
                 config=self._config,
+                preflight_result=self.conrrad_preflight,
+                installation_auth=self.installation_auth,
+                external_trust_verifier=self.external_trust_verifier,
             )
             self.bootstrap_report = bootstrap.resolve()
+            self.bootstrap_report.runtime_installation_auth_status = auth_status.status.value
             
             # 8. Derive current runtime state
             if self.bootstrap_report.anny_ready:
@@ -112,6 +165,7 @@ class RuntimeEngine:
         self._persist_state(clean_shutdown=False)
         
         try:
+            identity, auth_status = self._prepare_m8_authority_clients()
             from runtime.bootstrap.planes import ThreePlaneBootstrap
             bootstrap = ThreePlaneBootstrap(
                 data_dir=self.config.data_dir,
@@ -119,8 +173,12 @@ class RuntimeEngine:
                 fabric_client=fabric_client,
                 continuity_engine=getattr(self, 'continuity_engine', None),
                 config=self._config,
+                preflight_result=self.conrrad_preflight,
+                installation_auth=self.installation_auth,
+                external_trust_verifier=self.external_trust_verifier,
             )
             self.bootstrap_report = bootstrap.resolve()
+            self.bootstrap_report.runtime_installation_auth_status = auth_status.status.value
             
             if self.bootstrap_report.anny_ready:
                 self._state = RuntimeState.WAITING_FOR_SESSION

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict
 
 from runtime.security.execution_context import ExecutionContext
@@ -27,7 +27,7 @@ class AuthorizedExecutionPipeline:
         self.tool_registry = tool_registry
 
     def execute(self, context: ExecutionContext, tool_name: str, tool_args: Dict[str, Any]) -> ExecutionReceipt:
-        now = datetime.utcnow()
+        now = datetime.now(context.expires_at.tzinfo or timezone.utc)
         
         # 1. Context Integrity
         if not context:
@@ -41,10 +41,11 @@ class AuthorizedExecutionPipeline:
         if context.tenant_id != self.runtime_identity.get_tenant_id():
             raise SecurityViolationError(f"Tenant Binding failure: {context.tenant_id}")
 
-        # 3. Session Validity & 5. Generation Fencing
-        # Validates expiration, issuance, and generation match
-        if not context.is_valid(now, self.runtime_identity.get_current_generation()):
-            raise SecurityViolationError("Session expired or generation stale")
+        # 3. Session Validity
+        # ExecutionContext generation is externally authoritative; this legacy
+        # pipeline must never compare it against RuntimeGeneration.
+        if not context.is_valid(now):
+            raise SecurityViolationError("Session expired or not currently valid")
 
         # 4. Runtime Identity
         if context.runtime_id != self.runtime_identity.get_runtime_id():

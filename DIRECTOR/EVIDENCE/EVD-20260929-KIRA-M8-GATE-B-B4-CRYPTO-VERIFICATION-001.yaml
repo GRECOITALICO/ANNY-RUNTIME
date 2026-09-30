@@ -1,0 +1,170 @@
+schema_version: "1.0"
+record_type: KIRA_M8_GATE_B_B4_EXECUTION_CONTEXT_CRYPTO_VERIFICATION_EVIDENCE
+evidence_id: EVD-20260929-KIRA-M8-GATE-B-B4-CRYPTO-VERIFICATION-001
+timestamp_utc: "2026-09-29T19:00:00Z"
+actor: KIRA
+mission_id: MISSION-059-CONTROL-PLANE-RECONCILIATION-005
+task_id: M8-GATE-B-B4-EXECUTION-CONTEXT-CRYPTO-VERIFICATION
+founder_decision: DEC-20260929-FOUNDER-M8-EXECUTION-CONTEXT-CRYPTO-VERIFICATION-004
+repository: GRECOITALICO/ANNY-RUNTIME
+branch: codex/m8-gate-b-b1-20260928-001
+previous_head: 3aa8be4a66646b35c164a16b8251c2ebebe90fc7
+new_head: 4973cb869d8a690ce15d457106fead43e7378f08
+
+reconciliation:
+  supplied_current_head: f2f45fabee288ed5243ccbc9d783b2e084e10166
+  supplied_head_status: ANCESTOR_OF_LIVE_PR_HEAD
+  live_pr_head_before_evidence: 4973cb869d8a690ce15d457106fead43e7378f08
+  note: "GitHub PR #68 was verified OPEN/DRAFT/NOT_MERGED at the live PR head. The supplied f2f45f... is 16 commits behind 3aa8be4... and was not used as the mutable base."
+
+trust_material_implementation:
+  status: IMPLEMENTED
+  mechanism: EXISTING_SECRET_BACKEND
+  trust_root_resolution: "ExecutionContext signature.trust_root_id must equal the explicitly configured Runtime trust-root id; bundle is retrieved only through configured SecretBackend reference."
+  key_resolution: "signature.key_id must resolve to an active public verification key contained in the trusted bundle."
+  forbidden_inputs: "ExecutionContext cannot supply or elevate trust roots or public verification keys."
+  fallback: "NONE"
+  unavailable_material: "FAIL_CLOSED"
+
+cryptographic_verification:
+  status: IMPLEMENTED
+  algorithm: Ed25519
+  digest: SHA-256
+  signature_encoding: "base64url without padding; decoded length exactly 64 bytes"
+  signed_claims_digest_encoding: "base64url without padding"
+  canonical_claims: "All issued_context fields except signature; UTF-8 JSON; lexicographically sorted object keys; no whitespace; arrays retain issuer order; float/NaN/Infinity/non-JSON values rejected."
+  verification_order: "schema -> algorithm -> trust root -> key/status/window -> canonicalization -> digest -> signature -> runtime/install identity -> issuer/audience -> time -> external generation -> capabilities/auth refs/policy refs -> carry verified context to execution"
+
+failure_semantics:
+  status: FAIL_CLOSED
+  implemented_reasons:
+    - UNKNOWN_TRUST_ROOT
+    - UNKNOWN_KEY
+    - TRUST_MATERIAL_UNAVAILABLE
+    - UNSUPPORTED_ALGORITHM
+    - REVOKED_KEY
+    - EXPIRED_KEY
+    - DIGEST_MISMATCH
+    - INVALID_SIGNATURE
+    - MALFORMED_SIGNATURE
+    - EXPIRED_CONTEXT
+    - NOT_YET_VALID_CONTEXT
+    - WRONG_RUNTIME
+    - WRONG_INSTALLATION
+    - WRONG_ISSUER
+    - WRONG_AUDIENCE
+    - STALE_GENERATION
+  unknown_never_promoted_to_verified: true
+  structural_only_fallback: false
+
+generation_invariant:
+  runtime_generation: "Internal RuntimeGeneration fence only."
+  execution_context_generation: "Externally authoritative generation."
+  equivalence: false
+  stale_external_generation: "ExecutionManager compares stored context generation with freshly revalidated external context generation and blocks on change."
+
+execution_boundary:
+  status: ENFORCED
+  execute_sync_revalidation: "Present before worker start."
+  requirements: "Cryptographically verified, identity-bound, audience-bound, issuer-bound, capability-authorized, temporally valid, and externally generation-valid context."
+  local_continuity_fabrication: "Cannot produce an authoritative ExecutionContext."
+  admission: DISABLED
+  admission_activation: NOT_EXECUTED
+
+implementation_hardening:
+  files:
+    - runtime/security/execution_context_verifier.py
+    - runtime/security/execution_context_client.py
+    - runtime/security/execution_context.py
+    - runtime/execution/manager.py
+    - runtime/core/engine.py
+    - runtime/security/m8_evidence.py
+    - tests/test_m8_gate_b.py
+  delta_at_new_head:
+    - "M8 execution now fails closed when configured audience authority is absent."
+    - "Regression coverage added for missing configured audience authority."
+  no_new_contract: true
+  no_new_endpoint: true
+  no_new_algorithm: true
+  no_new_authority: true
+
+test_results:
+  m8_gate_b_run: 43
+  m8_gate_b_job: m8-gate-b
+  m8_gate_b_result: SUCCESS
+  m8_gate_b_tests: "58 passed; bootstrap gate/admin subset 17 passed"
+  coverage_included:
+    - valid_ed25519_signature
+    - altered_claims
+    - altered_digest
+    - altered_signature
+    - unknown_key
+    - unknown_trust_root
+    - unsupported_algorithm
+    - revoked_key
+    - expired_key
+    - malformed_signature_encoding
+    - wrong_runtime
+    - wrong_installation
+    - wrong_issuer
+    - wrong_audience
+    - expired_context
+    - not_yet_valid_context
+    - stale_external_generation
+    - missing_trust_material
+    - structural_only_fallback
+    - execution_block_after_crypto_failure
+    - verified_context_execution_boundary
+    - evidence_fields_and_secret_redaction
+    - admission_disabled
+    - missing_configured_audience_authority
+
+ci_results:
+  status: SUCCESS
+  workflows:
+    - workflow: "M8 Gate B integration regression"
+      run: 36650581901
+      run_number: 43
+      result: SUCCESS
+    - workflow: "fabric-config-binding-regression"
+      run: 36650581882
+      run_number: 186
+      result: SUCCESS
+    - workflow: "legacy root cleanup regression"
+      run: 36650581971
+      run_number: 384
+      result: SUCCESS
+    - workflow: "distributable authentication hardening"
+      run: 36650581983
+      run_number: 328
+      result: SUCCESS
+    - workflow: "bootstrap port regression"
+      run: 36650581926
+      run_number: 233
+      result: SUCCESS
+  checkout: "GitHub Actions actions/checkout@v4"
+  compile: SUCCESS
+  required_regression_workflows: SUCCESS
+
+new_normative_issue:
+  status: NONE
+  value: "No additional algorithm, trust-root transport, key-distribution endpoint, authority, contract, or Admission semantics were introduced."
+
+safety:
+  pr_68: OPEN_DRAFT_NOT_MERGED
+  pr_53: UNTOUCHED
+  activation: NONE
+  live_authority: NONE
+  admission: NOT_EXECUTED
+  production: NONE
+  repository_inspect: NONE
+  phase_b: NOT_EXECUTED
+
+remaining_blockers:
+  - "Live trust-root material and live ExecutionContext authority remain unverified external state."
+  - "Runtime binding and Admission remain subject to the separate M8 gates; crypto verification alone does not certify or activate Runtime."
+  - "PR #68 remains pending separate merge authorization."
+
+next_action:
+  owner: ANNY
+  action: "Independent gate review/decision; keep PR #68 OPEN/DRAFT/NOT_MERGED until separately authorized."

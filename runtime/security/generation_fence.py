@@ -1,5 +1,3 @@
-from runtime.security.execution_context import ExecutionContext
-
 class GenerationFence:
     def __init__(self, initial_generation: int = 1):
         self._current = initial_generation
@@ -11,5 +9,6 @@ class GenerationFence:
     def advance(self) -> None:
         self._current += 1
         
-    def validate(self, context: ExecutionContext) -> bool:
-        return context.generation == self._current
+    def validate(self, runtime_generation: int) -> bool:
+        """Validate only the local RuntimeGeneration fence value."""
+        return isinstance(runtime_generation, int) and runtime_generation == self._current

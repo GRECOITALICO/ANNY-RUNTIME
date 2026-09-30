@@ -10,6 +10,7 @@ import logging
 import hmac
 import hashlib
 import time
+import uuid
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime, timezone, timedelta
 
@@ -284,14 +285,30 @@ class GitHubFabricAdapter:
         raise FabricError("PROVENANCE_NOT_FOUND", f"Provenance {provenance_id} not found")
 
 
-    def issue_trust_token(self, runtime_id: str, private_key: bytes) -> FabricTrustToken:
-        """Issues an offline trust token using HMAC over GitHub token + Private Key."""
+    def issue_trust_token(
+        self,
+        runtime_id: str,
+        private_key: bytes,
+        issuer: str = "",
+        audience: str = "",
+    ) -> FabricTrustToken:
+        """Construct a complete local token, but never mark it externally verified.
+
+        This method is retained for compatibility. The local signature is only an
+        issued/unverified candidate; authoritative trust comes exclusively from the
+        external verifier.
+        """
+        if not issuer or not audience:
+            raise FabricError(
+                "FABRIC_TRUST_CONFIG_MISSING",
+                "issuer and audience are required for a complete trust token",
+            )
+
         try:
             gh_token = self.gh._get_token()
         except Exception:
-            raise FabricError("FABRIC_AUTH_ERROR", "No GitHub token available for trust generation")
+            raise FabricError("FABRIC_AUTH_ERROR", "No GitHub token available for token construction")
 
-        # Read actual node_id from Fabric rather than hardcoding
         try:
             node = self.read_node_config()
             node_id = node.node_id
@@ -300,11 +317,10 @@ class GitHubFabricAdapter:
 
         now = datetime.now(timezone.utc)
         expires = now + timedelta(hours=1)
-
         issued_at_str = now.isoformat()
         expires_at_str = expires.isoformat()
-
-        message = f"{runtime_id}:{node_id}:{issued_at_str}:{gh_token}".encode('utf-8')
+        token_id = str(uuid.uuid4())
+        message = f"{token_id}:{runtime_id}:{node_id}:{issued_at_str}:{expires_at_str}:{issuer}:{audience}:{gh_token}".encode("utf-8")
         signature = hmac.new(private_key, message, hashlib.sha256).hexdigest()
 
         return FabricTrustToken(
@@ -313,7 +329,11 @@ class GitHubFabricAdapter:
             issued_at=issued_at_str,
             expires_at=expires_at_str,
             signature=signature,
-            verified=True
+            token_id=token_id,
+            issuer=issuer,
+            audience=audience,
+            verification_status="UNVERIFIED",
+            verified=False,
         )
 
     def read_policy(self) -> Dict[str, Any]:

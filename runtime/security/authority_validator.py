@@ -13,13 +13,17 @@ class AuthorityValidator:
         self.auth_store = auth_store
         self.gen_fence = gen_fence
 
-    def validate_context(self, context: ExecutionContext) -> ExecutionContext:
-        if context.generation != self.gen_fence.current:
-            raise SecurityViolationError("Context generation mismatch.")
-            
+    def validate_context(
+        self,
+        context: ExecutionContext,
+        expected_external_generation: int | None = None,
+    ) -> ExecutionContext:
+        if expected_external_generation is not None and not context.matches_external_generation(expected_external_generation):
+            raise SecurityViolationError("External ExecutionContext generation mismatch.")
+
         now = datetime.datetime.now(context.expires_at.tzinfo)
-        if now > context.expires_at:
-            raise SecurityViolationError("Context has expired.")
+        if not context.is_valid(now):
+            raise SecurityViolationError("Context has expired or is not currently valid.")
             
         valid_capabilities = set()
         for cap in context.capabilities:

@@ -49,6 +49,9 @@ class ThreePlaneBootstrap:
         tool_registry=None,
         model_registry=None,
         worker_manager=None,
+        preflight_result=None,
+        installation_auth=None,
+        external_trust_verifier=None,
     ):
         self.data_dir = data_dir
         self.github = github_client
@@ -69,6 +72,9 @@ class ThreePlaneBootstrap:
         self._tool_registry = tool_registry
         self._model_registry = model_registry
         self._worker_manager = worker_manager
+        self.preflight_result = preflight_result
+        self.installation_auth = installation_auth
+        self.external_trust_verifier = external_trust_verifier
 
     def _admin_url(self, path: str) -> str:
         """Return the configured local admin URL used by Runtime probes."""
@@ -80,6 +86,34 @@ class ThreePlaneBootstrap:
         ANNY_READY is True ONLY if ALL mandatory gates pass.
         """
         report = BootstrapReport(anny_ready=False, runtime_id="UNKNOWN", fabric_node="UNKNOWN")
+
+        if self.preflight_result is not None:
+            report.conrrad_preflight_status = self.preflight_result.status.value
+            report.conrrad_evidence_status = self.preflight_result.evidence_status.value
+            if not self.preflight_result.passed:
+                report.runtime_installation_auth_status = (
+                    self.installation_auth.status().status.value
+                    if self.installation_auth is not None else "UNKNOWN"
+                )
+                detail = self.preflight_result.reason or "CONRRAD preflight blocked"
+                report.add_result(GateResult(ReadinessGate.RUNTIME_IDENTITY, False, "CONRRAD preflight blocked: " + detail))
+                for gate in (
+                    ReadinessGate.GITHUB_CONNECTED, ReadinessGate.GITHUB_ORG_BOUND,
+                    ReadinessGate.FABRIC_REACHABLE, ReadinessGate.FABRIC_IDENTITY_VERIFIED,
+                    ReadinessGate.FABRIC_TRUST_VERIFIED, ReadinessGate.FABRIC_TENANT_BOUND,
+                    ReadinessGate.FABRIC_STATE_READABLE, ReadinessGate.FABRIC_PROVENANCE_VALID,
+                    ReadinessGate.FABRIC_NODE_AT_REMOTE_HEAD, ReadinessGate.RUNTIME_REACHABLE,
+                    ReadinessGate.RUNTIME_HEALTH_VERIFIED, ReadinessGate.RUNTIME_BINDING_VERIFIED,
+                    ReadinessGate.RUNTIME_ADMITTED, ReadinessGate.PLANE_RECONCILIATION,
+                    ReadinessGate.POLICY_SNAPSHOT_FRESH, ReadinessGate.CONTRACTS_DISCOVERED,
+                    ReadinessGate.CAPABILITIES_INVENTORIED, ReadinessGate.TOOLS_INVENTORIED,
+                    ReadinessGate.MODELS_INVENTORIED, ReadinessGate.WORKERS_INVENTORIED,
+                    ReadinessGate.CONNECTORS_INVENTORIED, ReadinessGate.CRITICAL_ACCESS_VERIFIED,
+                    ReadinessGate.DELEGATION_CONTEXT_BUILT, ReadinessGate.CONTINUITY_COHERENT,
+                ):
+                    report.add_result(GateResult(gate, False, "CONRRAD preflight blocked"))
+                report.finish(ready=False)
+                return report
 
         # ---------------------------------------------------------
         # PLANE 1: Local Runtime Identity
@@ -321,16 +355,38 @@ class ThreePlaneBootstrap:
         if not can_proceed or not self.fabric or not ident:
             report.add_result(GateResult(ReadinessGate.FABRIC_TRUST_VERIFIED, False, "Prerequisites not met"))
             return False
-
+        if self.external_trust_verifier is None:
+            report.add_result(GateResult(ReadinessGate.FABRIC_TRUST_VERIFIED, False, "External Trust verifier not configured"))
+            return False
+        issuer = getattr(self.config, "conrrad_trust_issuer", "") if self.config else ""
+        audience = getattr(self.config, "conrrad_audience", "") if self.config else ""
+        if not issuer or not audience or self.installation_auth is None:
+            report.add_result(GateResult(ReadinessGate.FABRIC_TRUST_VERIFIED, False, "External Trust configuration incomplete"))
+            return False
         try:
-            token = self.fabric.issue_trust_token(ident.runtime_id, ident._private_key)
+            token = self.fabric.issue_trust_token(
+                ident.runtime_id, ident._private_key, issuer=issuer, audience=audience
+            )
+            result = self.external_trust_verifier.verify(
+                token=token,
+                installation_id=ident.installation_id,
+                expected_node_id=token.node_id,
+                expected_issuer=issuer,
+                expected_audience=audience,
+            )
+            passed = result.verified and result.verification_status == "VERIFIED"
             report.add_result(GateResult(
-                ReadinessGate.FABRIC_TRUST_VERIFIED, True,
-                "Trust token issued", token.signature[:8] + "..."
+                ReadinessGate.FABRIC_TRUST_VERIFIED,
+                passed,
+                f"External verifier status={result.verification_status}, reason={result.reason_code}",
+                result.evidence_ref,
             ))
-            return True
+            return passed
         except Exception as e:
-            report.add_result(GateResult(ReadinessGate.FABRIC_TRUST_VERIFIED, False, str(e)))
+            report.add_result(GateResult(
+                ReadinessGate.FABRIC_TRUST_VERIFIED, False,
+                f"External Trust verification failed: {type(e).__name__}"
+            ))
             return False
 
     def _gate_fabric_tenant_bound(
@@ -499,6 +555,33 @@ class ThreePlaneBootstrap:
             ))
             return False
 
+        if self.preflight_result is not None:
+            binding = self.preflight_result.binding
+            if binding is None:
+                report.add_result(GateResult(
+                    ReadinessGate.RUNTIME_BINDING_VERIFIED, False,
+                    "No authoritative CONRRAD binding in preflight"
+                ))
+                return False
+            if not ident or binding.runtime_id != ident.runtime_id or binding.installation_id != ident.installation_id:
+                report.add_result(GateResult(
+                    ReadinessGate.RUNTIME_BINDING_VERIFIED, False,
+                    "Runtime/installation mismatch in authoritative binding"
+                ))
+                return False
+            if not binding.node_id or not binding.trust_authority or not binding.issuer_id:
+                report.add_result(GateResult(
+                    ReadinessGate.RUNTIME_BINDING_VERIFIED, False,
+                    "Authoritative binding incomplete"
+                ))
+                return False
+            report.add_result(GateResult(
+                ReadinessGate.RUNTIME_BINDING_VERIFIED, True,
+                "Authoritative CONRRAD runtime/installation/node binding resolved",
+                f"{binding.runtime_id}/{binding.installation_id}/{binding.node_id}"
+            ))
+            return True
+
         try:
             url = self._admin_url("/api/status")
             req = urllib.request.Request(url, method="GET")
@@ -534,6 +617,13 @@ class ThreePlaneBootstrap:
         """
         if not can_proceed or not self.fabric or not ident:
             report.add_result(GateResult(ReadinessGate.RUNTIME_ADMITTED, False, "Prerequisites not met"))
+            return False
+
+        if not bool(getattr(self.config, "m8_admission_enabled", False)):
+            report.add_result(GateResult(
+                ReadinessGate.RUNTIME_ADMITTED, False,
+                "Admission intentionally disabled during Gate B integration"
+            ))
             return False
 
         admission = self.fabric.check_admission(ident.runtime_id)
