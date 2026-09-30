@@ -108,7 +108,9 @@ class ExecutionManager:
             raise PermissionError("M8 ExecutionContext installation_id mismatch")
 
         expected_audience = getattr(self.runtime_engine.config, "conrrad_audience", "")
-        if expected_audience and external_context.audience != expected_audience:
+        if not expected_audience:
+            raise PermissionError("M8 ExecutionContext audience authority is not configured")
+        if external_context.audience != expected_audience:
             raise PermissionError("M8 ExecutionContext audience mismatch")
         expected_issuer = getattr(self.runtime_engine.config, "conrrad_trust_issuer", "")
         if not expected_issuer or external_context.issuer != expected_issuer:
