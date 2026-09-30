@@ -377,6 +377,26 @@ def test_execution_manager_m8_requires_external_context(tmp_path):
         raise AssertionError("M8 execution must fail closed without external context")
 
 
+def test_execution_manager_m8_rejects_missing_audience_authority(tmp_path):
+    from runtime.execution.manager import ExecutionManager
+    manager = object.__new__(ExecutionManager)
+    manager.runtime_engine = _authority_runtime_engine(tmp_path, audience="")
+    from unittest.mock import patch
+    from runtime.identity.runtime_identity import RuntimeIdentity
+    identity = Mock(runtime_id="rt-1", installation_id="inst-1")
+    with patch.object(RuntimeIdentity, "load", return_value=identity):
+        context = _external_context()
+        try:
+            manager._validate_external_execution_context(
+                type("TaskLike", (), {"capability_id": "read_capability"})(),
+                context,
+            )
+        except PermissionError as exc:
+            assert "audience authority is not configured" in str(exc)
+        else:
+            raise AssertionError("missing configured audience authority must fail closed")
+
+
 def test_execution_manager_m8_rejects_context_binding_mismatch(tmp_path):
     from runtime.execution.manager import ExecutionManager
     manager = object.__new__(ExecutionManager)
