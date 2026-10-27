@@ -31,7 +31,7 @@ def cmd_status(args):
     print(f"Runtime Dir:     {get_runtime_dir()}")
     print(f"Admin Port:      {get_admin_port()}")
     print()
-    
+
     # Identity
     if identity_file.exists():
         with open(identity_file) as f:
@@ -57,6 +57,32 @@ def cmd_status(args):
         print(f"  Fabric:          NOT CONNECTED")
     
     print()
+
+
+def cmd_native_demo(args):
+    from runtime.execution.local_native import LocalNativeTaskExecutor
+    from runtime.execution.local_task_specs import safe_slug_task_spec
+    result = LocalNativeTaskExecutor(get_data_dir()).execute(safe_slug_task_spec())
+    print(json.dumps(result, sort_keys=True))
+
+
+def cmd_native_manifest_demo(args):
+    from runtime.execution.local_native import LocalNativeTaskExecutor
+    from runtime.execution.local_task_specs import json_manifest_validation_task_spec
+    result = LocalNativeTaskExecutor(get_data_dir()).execute(json_manifest_validation_task_spec())
+    print(json.dumps(result, sort_keys=True))
+
+
+def cmd_native_repository_demo(args):
+    from runtime.execution.local_native import LocalNativeTaskExecutor
+    from runtime.execution.local_task_specs import repository_change_task_spec
+    result = LocalNativeTaskExecutor(get_data_dir()).execute(repository_change_task_spec())
+    print(json.dumps(result, sort_keys=True))
+
+
+def cmd_local_planner_status(args):
+    from runtime.planning.local_planner import inspect_local_model_runtime, persist_discovery
+    print(json.dumps(persist_discovery(get_data_dir(), inspect_local_model_runtime()), sort_keys=True))
 
 
 def cmd_doctor(args):
@@ -308,6 +334,10 @@ def main():
     
     subparsers.add_parser("version", help="Show version").set_defaults(func=cmd_version)
     subparsers.add_parser("status", help="Show runtime status").set_defaults(func=cmd_status)
+    subparsers.add_parser("native-demo", help="Run the authorized native local safe_slug demonstration").set_defaults(func=cmd_native_demo)
+    subparsers.add_parser("native-manifest-demo", help="Run the authorized native JSON-manifest validation demonstration").set_defaults(func=cmd_native_manifest_demo)
+    subparsers.add_parser("native-repository-demo", help="Run the authorized isolated repository-change demonstration").set_defaults(func=cmd_native_repository_demo)
+    subparsers.add_parser("local-planner-status", help="Inspect installed local-model runtimes without starting or downloading anything").set_defaults(func=cmd_local_planner_status)
     subparsers.add_parser("doctor", help="Run diagnostics").set_defaults(func=cmd_doctor)
     subparsers.add_parser("install", help="Install ANNY Runtime").set_defaults(func=cmd_install)
     
