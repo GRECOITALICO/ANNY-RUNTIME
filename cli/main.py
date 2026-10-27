@@ -99,6 +99,11 @@ def cmd_local_plan(args):
     print(json.dumps(result, sort_keys=True))
 
 
+def cmd_local_planner_capacity(args):
+    from runtime.planning.local_capacity import collect_local_capacity, persist_capacity
+    print(json.dumps(persist_capacity(get_data_dir(), collect_local_capacity()), sort_keys=True))
+
+
 def cmd_doctor(args):
     import platform
     results = []
@@ -355,6 +360,7 @@ def main():
     local_plan = subparsers.add_parser("local-plan", help="Plan and execute an authorized fixture change only through verified local Ollama inference")
     local_plan.add_argument("request", help="Natural-language engineering request for the registered isolated fixture")
     local_plan.set_defaults(func=cmd_local_plan)
+    subparsers.add_parser("local-planner-capacity", help="Collect a sanitized read-only local-model capacity inventory").set_defaults(func=cmd_local_planner_capacity)
     subparsers.add_parser("doctor", help="Run diagnostics").set_defaults(func=cmd_doctor)
     subparsers.add_parser("install", help="Install ANNY Runtime").set_defaults(func=cmd_install)
     
