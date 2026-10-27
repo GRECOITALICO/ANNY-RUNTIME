@@ -89,7 +89,9 @@ def inspect_local_model_runtime(*, timeout_seconds: float = 2.0) -> LocalModelDi
             if len(body) > MAX_MODEL_RESPONSE_BYTES:
                 raise RuntimeError("OLLAMA_TAGS_RESPONSE_TOO_LARGE")
             payload = json.loads(body.decode("utf-8"))
-    except (HTTPError, URLError, OSError, ValueError, RuntimeError, json.JSONDecodeError):
+    except (HTTPError, ValueError, RuntimeError, json.JSONDecodeError):
+        return LocalModelDiscovery(LOCAL_MODEL_UNVERIFIED, "ollama", version, OLLAMA_LOOPBACK, (), ("OLLAMA_TAGS_UNVERIFIED",), checked_at)
+    except (URLError, OSError):
         return LocalModelDiscovery(LOCAL_RUNTIME_WITHOUT_MODEL, "ollama", version, OLLAMA_LOOPBACK, (), ("OLLAMA_CLIENT_PRESENT", "OLLAMA_LOOPBACK_UNAVAILABLE"), checked_at)
     models = payload.get("models") if isinstance(payload, dict) else None
     if not isinstance(models, list):

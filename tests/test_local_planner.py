@@ -73,6 +73,20 @@ def test_detected_ollama_model_is_unverified_until_explicit_inference(monkeypatc
     assert discovery.inference_status == "NOT_ATTEMPTED"
 
 
+def test_invalid_or_oversized_ollama_catalog_is_not_a_ready_model(monkeypatch):
+    class _Version:
+        stdout, stderr = "ollama version is 0.32.5\n", ""
+    class _Opener:
+        def __init__(self, response): self.response = response
+        def open(self, request, timeout): return self.response
+    monkeypatch.setattr(local_planner_module.shutil, "which", lambda name: "/usr/local/bin/ollama")
+    monkeypatch.setattr(local_planner_module.subprocess, "run", lambda *args, **kwargs: _Version())
+    monkeypatch.setattr(local_planner_module, "build_opener", lambda *args: _Opener(_Response(b'{"models":"wrong"}', url="http://127.0.0.1:11434/api/tags")))
+    assert inspect_local_model_runtime().status == "LOCAL_MODEL_UNVERIFIED"
+    monkeypatch.setattr(local_planner_module, "build_opener", lambda *args: _Opener(_Response(b"x" * (MAX_MODEL_RESPONSE_BYTES + 1), url="http://127.0.0.1:11434/api/tags")))
+    assert inspect_local_model_runtime().status == "LOCAL_MODEL_UNVERIFIED"
+
+
 def test_inference_verification_requires_expected_structured_response(monkeypatch):
     class _VerifiedProvider:
         def __init__(self, model_id): self.model_id = model_id
@@ -81,6 +95,11 @@ def test_inference_verification_requires_expected_structured_response(monkeypatc
     detected = LocalModelDiscovery("LOCAL_MODEL_UNVERIFIED", "ollama", "0.32.5", "http://127.0.0.1:11434", ("fixture-model",), (), "now")
     verified = verify_local_inference(detected)
     assert verified.status == LOCAL_MODEL_READY and verified.inference_status == "VERIFIED"
+    class _FailingProvider(_VerifiedProvider):
+        def complete(self, prompt, *, timeout_seconds): return "not-json"
+    monkeypatch.setattr(local_planner_module, "OllamaLocalProvider", _FailingProvider)
+    failed = verify_local_inference(detected)
+    assert failed.status == "LOCAL_MODEL_UNVERIFIED" and failed.inference_status == "FAILED"
 
 
 def test_malformed_error_and_timeout_responses_do_not_execute(tmp_path):
