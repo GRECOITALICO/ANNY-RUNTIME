@@ -30,6 +30,8 @@ OLLAMA_LOOPBACK = "http://127.0.0.1:11434"
 OLLAMA_TAGS_PATH = "/api/tags"
 OLLAMA_GENERATE_PATH = "/api/generate"
 MAX_MODEL_RESPONSE_BYTES = 64 * 1024
+MAX_INFERENCE_TIMEOUT_SECONDS = 60
+LOCAL_INFERENCE_TASK_ID = "ANNY-RUNTIME-LOCAL-INFERENCE-008"
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -65,6 +67,43 @@ class LocalModelDiscovery:
             "models": list(self.models), "evidence": list(self.evidence),
             "checked_at": self.checked_at, "inference_status": self.inference_status,
             "inference_checked_at": self.inference_checked_at,
+        }
+
+
+@dataclass(frozen=True)
+class LocalInferenceVerification:
+    """Sanitized result of one explicit, non-planning local inference probe."""
+
+    discovery: LocalModelDiscovery
+    task_id: str
+    model_id: str
+    initial_discovery: dict[str, Any]
+    started_at: str
+    completed_at: str
+    duration_ms: int
+    timeout_seconds: float
+    http_status: int | None
+    validation: str
+    response_hash: str | None
+    failure_reason: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "provider_id": self.discovery.provider_id,
+            "model_id": self.model_id,
+            "initial_discovery": self.initial_discovery,
+            "inference_status": self.discovery.inference_status,
+            "inference_checked_at": self.discovery.inference_checked_at,
+            "http_status": self.http_status,
+            "validation": self.validation,
+            "duration_ms": self.duration_ms,
+            "timeout_seconds": self.timeout_seconds,
+            "response_hash": self.response_hash,
+            "failure_reason": self.failure_reason,
+            "started_at": self.started_at,
+            "completed_at": self.completed_at,
+            "discovery": self.discovery.to_dict(),
         }
 
 
@@ -125,6 +164,28 @@ def load_discovery(data_dir: str | Path) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def persist_inference_verification(data_dir: str | Path, verification: LocalInferenceVerification) -> dict[str, Any]:
+    """Persist probe evidence without retaining its prompt or raw model output."""
+    root = Path(data_dir) / "native-executions" / "planning"
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / "local-inference-verification.json"
+    payload = verification.to_dict()
+    payload["evidence_ref"] = "local://native-executions/planning/local-inference-verification.json"
+    payload["result_hash"] = _hash(payload)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    path.chmod(0o600)
+    return payload
+
+
+def load_inference_verification(data_dir: str | Path) -> dict[str, Any] | None:
+    path = Path(data_dir) / "native-executions" / "planning" / "local-inference-verification.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 class OllamaLocalProvider:
     """Bounded Ollama adapter for the fixed local loopback API only."""
     provider_id = "ollama"
@@ -134,6 +195,7 @@ class OllamaLocalProvider:
             raise ValueError("Ollama model_id must be a non-empty local catalog name")
         self.model_id = model_id
         self._opener = build_opener(_NoRedirect())
+        self.last_http_status: int | None = None
 
     @staticmethod
     def _read_json(response: Any) -> dict[str, Any]:
@@ -152,8 +214,9 @@ class OllamaLocalProvider:
         return value
 
     def complete(self, prompt: str, *, timeout_seconds: float) -> str:
-        if not isinstance(prompt, str) or not prompt or timeout_seconds <= 0 or timeout_seconds > 15:
+        if not isinstance(prompt, str) or not prompt or timeout_seconds <= 0 or timeout_seconds > MAX_INFERENCE_TIMEOUT_SECONDS:
             raise ValueError("Invalid bounded local-model request")
+        self.last_http_status = None
         payload = json.dumps({
             "model": self.model_id, "prompt": prompt, "stream": False,
             "format": "json", "options": {"num_predict": 256, "temperature": 0},
@@ -164,10 +227,12 @@ class OllamaLocalProvider:
         )
         try:
             with self._opener.open(request, timeout=timeout_seconds) as response:
+                self.last_http_status = response.status
                 if response.status != 200 or response.geturl() != OLLAMA_LOOPBACK + OLLAMA_GENERATE_PATH:
                     raise RuntimeError(f"OLLAMA_HTTP_{response.status}")
                 value = self._read_json(response)
         except HTTPError as exc:
+            self.last_http_status = exc.code
             raise RuntimeError(f"OLLAMA_HTTP_{exc.code}") from exc
         except URLError as exc:
             raise RuntimeError("OLLAMA_CONNECTION_ERROR") from exc
@@ -179,20 +244,71 @@ class OllamaLocalProvider:
         return answer
 
 
+def verify_local_inference_attempt(
+    discovery: LocalModelDiscovery,
+    *,
+    model_id: str,
+    timeout_seconds: float = MAX_INFERENCE_TIMEOUT_SECONDS,
+) -> LocalInferenceVerification:
+    """Probe one catalogued model without proposing or executing any task."""
+    started_at = _now()
+    started = datetime.now(timezone.utc)
+    initial_discovery = discovery.to_dict()
+    http_status: int | None = None
+    response_hash: str | None = None
+    validation = "NOT_RUN"
+    failure_reason: str | None = None
+
+    if not isinstance(model_id, str) or not model_id.strip():
+        failure_reason = "MODEL_ID_REQUIRED"
+    elif not isinstance(timeout_seconds, (int, float)) or not 0 < timeout_seconds <= MAX_INFERENCE_TIMEOUT_SECONDS:
+        failure_reason = "INVALID_TIMEOUT"
+    elif discovery.provider_id != "ollama" or discovery.status != LOCAL_MODEL_UNVERIFIED:
+        failure_reason = "LOCAL_RUNTIME_NOT_READY"
+    elif model_id not in discovery.models:
+        failure_reason = "MODEL_NOT_FOUND_IN_LOCAL_CATALOG"
+    else:
+        provider = OllamaLocalProvider(model_id)
+        try:
+            response = provider.complete('Return exactly {"ok":true}.', timeout_seconds=float(timeout_seconds))
+            http_status = getattr(provider, "last_http_status", None)
+            response_hash = hashlib.sha256(response.encode("utf-8")).hexdigest()
+            structured = json.loads(response)
+            if structured != {"ok": True}:
+                raise RuntimeError("OLLAMA_INFERENCE_RESPONSE_NOT_EXPECTED_JSON")
+            validation = "JSON_EXACT_OK"
+        except Exception as exc:
+            http_status = getattr(provider, "last_http_status", None)
+            failure_reason = str(exc) if str(exc).startswith("OLLAMA_") else type(exc).__name__
+
+    completed_at = _now()
+    duration_ms = max(0, int((datetime.now(timezone.utc) - started).total_seconds() * 1000))
+    if validation == "JSON_EXACT_OK":
+        result = LocalModelDiscovery(
+            LOCAL_MODEL_READY, discovery.provider_id, discovery.client_version, discovery.endpoint,
+            discovery.models, discovery.evidence + (f"OLLAMA_INFERENCE_VERIFIED:{model_id}",),
+            discovery.checked_at, "VERIFIED", completed_at,
+        )
+    else:
+        result = LocalModelDiscovery(
+            LOCAL_MODEL_UNVERIFIED if model_id in discovery.models else discovery.status,
+            discovery.provider_id, discovery.client_version, discovery.endpoint, discovery.models,
+            discovery.evidence + ((f"OLLAMA_INFERENCE_FAILED:{failure_reason}",) if failure_reason else ()),
+            discovery.checked_at, "FAILED", completed_at,
+        )
+    return LocalInferenceVerification(
+        discovery=result, task_id=LOCAL_INFERENCE_TASK_ID, model_id=model_id,
+        initial_discovery=initial_discovery, started_at=started_at, completed_at=completed_at,
+        duration_ms=duration_ms, timeout_seconds=float(timeout_seconds), http_status=http_status,
+        validation=validation, response_hash=response_hash, failure_reason=failure_reason,
+    )
+
+
 def verify_local_inference(discovery: LocalModelDiscovery) -> LocalModelDiscovery:
-    """Perform one small explicit inference; discovery itself never calls this."""
+    """Backward-compatible small explicit probe used by the planning entry point."""
     if discovery.status != LOCAL_MODEL_UNVERIFIED or not discovery.models or discovery.provider_id != "ollama":
         return discovery
-    checked_at = _now()
-    provider = OllamaLocalProvider(discovery.models[0])
-    try:
-        response = provider.complete('Return exactly {"ok":true}.', timeout_seconds=8)
-        structured = json.loads(response)
-        if structured != {"ok": True}:
-            raise RuntimeError("OLLAMA_INFERENCE_RESPONSE_NOT_EXPECTED_JSON")
-    except Exception as exc:
-        return LocalModelDiscovery(LOCAL_MODEL_UNVERIFIED, discovery.provider_id, discovery.client_version, discovery.endpoint, discovery.models, discovery.evidence + (f"OLLAMA_INFERENCE_FAILED:{type(exc).__name__}",), discovery.checked_at, "FAILED", checked_at)
-    return LocalModelDiscovery(LOCAL_MODEL_READY, discovery.provider_id, discovery.client_version, discovery.endpoint, discovery.models, discovery.evidence + ("OLLAMA_INFERENCE_VERIFIED",), discovery.checked_at, "VERIFIED", checked_at)
+    return verify_local_inference_attempt(discovery, model_id=discovery.models[0], timeout_seconds=8).discovery
 
 
 class LocalModelProvider(Protocol):

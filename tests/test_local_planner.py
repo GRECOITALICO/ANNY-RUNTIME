@@ -17,10 +17,14 @@ from runtime.planning.local_planner import (
     LocalPlanningOrchestrator,
     OllamaLocalProvider,
     MAX_MODEL_RESPONSE_BYTES,
+    LOCAL_INFERENCE_TASK_ID,
     load_discovery,
+    load_inference_verification,
     persist_discovery,
+    persist_inference_verification,
     inspect_local_model_runtime,
     verify_local_inference,
+    verify_local_inference_attempt,
 )
 import runtime.planning.local_planner as local_planner_module
 
@@ -100,6 +104,64 @@ def test_inference_verification_requires_expected_structured_response(monkeypatc
     monkeypatch.setattr(local_planner_module, "OllamaLocalProvider", _FailingProvider)
     failed = verify_local_inference(detected)
     assert failed.status == "LOCAL_MODEL_UNVERIFIED" and failed.inference_status == "FAILED"
+
+
+def test_explicit_inference_requires_exact_catalogued_model_and_never_executes(tmp_path, monkeypatch):
+    detected = LocalModelDiscovery("LOCAL_MODEL_UNVERIFIED", "ollama", "0.32.5", "http://127.0.0.1:11434", ("fixture-model",), (), "now")
+    unknown = verify_local_inference_attempt(detected, model_id="unknown-model")
+    assert unknown.discovery.status == "LOCAL_MODEL_UNVERIFIED"
+    assert unknown.failure_reason == "MODEL_NOT_FOUND_IN_LOCAL_CATALOG"
+    assert unknown.validation == "NOT_RUN"
+    assert not (tmp_path / "native-executions" / "workspaces").exists()
+
+    unavailable = LocalModelDiscovery(LOCAL_RUNTIME_WITHOUT_MODEL, "ollama", "0.32.5", "http://127.0.0.1:11434", (), (), "now")
+    absent = verify_local_inference_attempt(unavailable, model_id="fixture-model")
+    assert absent.failure_reason == "LOCAL_RUNTIME_NOT_READY"
+    assert absent.discovery.status == LOCAL_RUNTIME_WITHOUT_MODEL
+    assert not (tmp_path / "native-executions" / "workspaces").exists()
+
+
+def test_explicit_inference_persists_valid_and_invalid_json_evidence(tmp_path, monkeypatch):
+    class _VerifiedProvider:
+        def __init__(self, model_id): self.model_id, self.last_http_status = model_id, 200
+        def complete(self, prompt, *, timeout_seconds):
+            assert prompt == 'Return exactly {"ok":true}.' and timeout_seconds == 60
+            return '{"ok":true}'
+    monkeypatch.setattr(local_planner_module, "OllamaLocalProvider", _VerifiedProvider)
+    detected = LocalModelDiscovery("LOCAL_MODEL_UNVERIFIED", "ollama", "0.32.5", "http://127.0.0.1:11434", ("fixture-model",), (), "now")
+    verified = verify_local_inference_attempt(detected, model_id="fixture-model")
+    assert verified.task_id == LOCAL_INFERENCE_TASK_ID
+    assert verified.discovery.status == LOCAL_MODEL_READY
+    assert verified.http_status == 200 and verified.validation == "JSON_EXACT_OK"
+    persisted = persist_inference_verification(tmp_path, verified)
+    assert persisted["response_hash"] == hashlib.sha256(b'{"ok":true}').hexdigest()
+    assert load_inference_verification(tmp_path)["result_hash"] == persisted["result_hash"]
+
+    class _InvalidProvider(_VerifiedProvider):
+        def complete(self, prompt, *, timeout_seconds): return '{"ok":false}'
+    monkeypatch.setattr(local_planner_module, "OllamaLocalProvider", _InvalidProvider)
+    invalid = verify_local_inference_attempt(detected, model_id="fixture-model")
+    assert invalid.discovery.status == "LOCAL_MODEL_UNVERIFIED"
+    assert invalid.failure_reason == "OLLAMA_INFERENCE_RESPONSE_NOT_EXPECTED_JSON"
+    assert invalid.response_hash is not None
+
+
+def test_explicit_inference_records_timeout_and_http_error_without_workspace(tmp_path, monkeypatch):
+    class _TimeoutProvider:
+        def __init__(self, model_id): self.last_http_status = None
+        def complete(self, prompt, *, timeout_seconds): raise TimeoutError()
+    monkeypatch.setattr(local_planner_module, "OllamaLocalProvider", _TimeoutProvider)
+    detected = LocalModelDiscovery("LOCAL_MODEL_UNVERIFIED", "ollama", "0.32.5", "http://127.0.0.1:11434", ("fixture-model",), (), "now")
+    timeout = verify_local_inference_attempt(detected, model_id="fixture-model", timeout_seconds=1)
+    assert timeout.failure_reason == "TimeoutError" and timeout.http_status is None
+
+    class _HttpProvider(_TimeoutProvider):
+        def __init__(self, model_id): self.last_http_status = 503
+        def complete(self, prompt, *, timeout_seconds): raise RuntimeError("OLLAMA_HTTP_503")
+    monkeypatch.setattr(local_planner_module, "OllamaLocalProvider", _HttpProvider)
+    http_error = verify_local_inference_attempt(detected, model_id="fixture-model", timeout_seconds=1)
+    assert http_error.failure_reason == "OLLAMA_HTTP_503" and http_error.http_status == 503
+    assert not (tmp_path / "native-executions" / "workspaces").exists()
 
 
 def test_malformed_error_and_timeout_responses_do_not_execute(tmp_path):

@@ -104,6 +104,21 @@ def cmd_local_planner_capacity(args):
     print(json.dumps(persist_capacity(get_data_dir(), collect_local_capacity()), sort_keys=True))
 
 
+def cmd_local_planner_verify(args):
+    from runtime.planning.local_planner import (
+        inspect_local_model_runtime,
+        persist_discovery,
+        persist_inference_verification,
+        verify_local_inference_attempt,
+    )
+    verification = verify_local_inference_attempt(
+        inspect_local_model_runtime(), model_id=args.model_id, timeout_seconds=args.timeout_seconds,
+    )
+    discovery = persist_discovery(get_data_dir(), verification.discovery)
+    evidence = persist_inference_verification(get_data_dir(), verification)
+    print(json.dumps({"discovery": discovery, "verification": evidence}, sort_keys=True))
+
+
 def cmd_doctor(args):
     import platform
     results = []
@@ -361,6 +376,10 @@ def main():
     local_plan.add_argument("request", help="Natural-language engineering request for the registered isolated fixture")
     local_plan.set_defaults(func=cmd_local_plan)
     subparsers.add_parser("local-planner-capacity", help="Collect a sanitized read-only local-model capacity inventory").set_defaults(func=cmd_local_planner_capacity)
+    local_verify = subparsers.add_parser("local-planner-verify", help="Verify one explicit local Ollama model with a bounded JSON-only probe")
+    local_verify.add_argument("--model-id", required=True, help="Exact model identifier reported by the local Ollama catalog")
+    local_verify.add_argument("--timeout-seconds", type=float, default=60, help="Bounded probe timeout from 0 to 60 seconds")
+    local_verify.set_defaults(func=cmd_local_planner_verify)
     subparsers.add_parser("doctor", help="Run diagnostics").set_defaults(func=cmd_doctor)
     subparsers.add_parser("install", help="Install ANNY Runtime").set_defaults(func=cmd_install)
     
