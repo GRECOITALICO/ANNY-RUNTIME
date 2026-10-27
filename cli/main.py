@@ -88,15 +88,21 @@ def cmd_local_planner_status(args):
 def cmd_local_plan(args):
     from runtime.planning.local_planner import (
         LOCAL_MODEL_READY, LocalPlanValidator, LocalPlanner, LocalPlanningOrchestrator,
-        OllamaLocalProvider, inspect_local_model_runtime, persist_discovery, verify_local_inference,
+        OllamaLocalProvider, inspect_local_model_runtime, persist_discovery, persist_plan_attempt, verify_local_inference,
     )
     discovery = inspect_local_model_runtime()
     # This is the explicit operational inference check. Status/dashboard reads never call it.
     discovery = verify_local_inference(discovery)
     persist_discovery(get_data_dir(), discovery)
-    provider = OllamaLocalProvider(discovery.models[0]) if discovery.status == LOCAL_MODEL_READY and discovery.models else None
+    provider = OllamaLocalProvider(discovery.models[0], max_tokens=1024) if discovery.status == LOCAL_MODEL_READY and discovery.models else None
     result = LocalPlanningOrchestrator(LocalPlanner(discovery, provider), LocalPlanValidator(get_data_dir(), discovery)).plan_and_execute(args.request)
-    print(json.dumps(result, sort_keys=True))
+    print(json.dumps({"result": result, "evidence": persist_plan_attempt(get_data_dir(), result)}, sort_keys=True))
+
+
+def cmd_local_plan_task_009(args):
+    from runtime.planning.local_planner import LOCAL_PLAN_REQUEST
+    args.request = LOCAL_PLAN_REQUEST
+    return cmd_local_plan(args)
 
 
 def cmd_local_planner_capacity(args):
@@ -375,6 +381,7 @@ def main():
     local_plan = subparsers.add_parser("local-plan", help="Plan and execute an authorized fixture change only through verified local Ollama inference")
     local_plan.add_argument("request", help="Natural-language engineering request for the registered isolated fixture")
     local_plan.set_defaults(func=cmd_local_plan)
+    subparsers.add_parser("local-plan-task-009", help="Run the one authorized content-only local-model fixture task").set_defaults(func=cmd_local_plan_task_009)
     subparsers.add_parser("local-planner-capacity", help="Collect a sanitized read-only local-model capacity inventory").set_defaults(func=cmd_local_planner_capacity)
     local_verify = subparsers.add_parser("local-planner-verify", help="Verify one explicit local Ollama model with a bounded JSON-only probe")
     local_verify.add_argument("--model-id", required=True, help="Exact model identifier reported by the local Ollama catalog")

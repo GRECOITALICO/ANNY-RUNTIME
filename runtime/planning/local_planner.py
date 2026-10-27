@@ -32,6 +32,15 @@ OLLAMA_GENERATE_PATH = "/api/generate"
 MAX_MODEL_RESPONSE_BYTES = 64 * 1024
 MAX_INFERENCE_TIMEOUT_SECONDS = 60
 LOCAL_INFERENCE_TASK_ID = "ANNY-RUNTIME-LOCAL-INFERENCE-008"
+LOCAL_PLAN_TASK_ID_PREFIX = "ANNY-RUNTIME-LOCAL-PLAN-009"
+LOCAL_PLAN_MAX_TOKENS = 1024
+LOCAL_PLAN_FILE_MAX_BYTES = 16 * 1024
+LOCAL_PLAN_REQUEST = (
+    "Implementar initials(value: str) -> str: debe devolver en mayúsculas la primera letra de cada palabra, "
+    "ignorar espacios iniciales, finales y repetidos, devolver una cadena vacía cuando la entrada esté vacía "
+    "o contenga solamente espacios y lanzar TypeError para valores que no sean cadenas. Añadir pruebas "
+    "unitarias para todos esos casos y conservar las pruebas preexistentes."
+)
 
 
 class _NoRedirect(HTTPRedirectHandler):
@@ -190,10 +199,13 @@ class OllamaLocalProvider:
     """Bounded Ollama adapter for the fixed local loopback API only."""
     provider_id = "ollama"
 
-    def __init__(self, model_id: str) -> None:
+    def __init__(self, model_id: str, *, max_tokens: int = 256) -> None:
         if not isinstance(model_id, str) or not model_id.strip():
             raise ValueError("Ollama model_id must be a non-empty local catalog name")
+        if not isinstance(max_tokens, int) or not 1 <= max_tokens <= LOCAL_PLAN_MAX_TOKENS:
+            raise ValueError("Ollama max_tokens is outside the bounded local contract")
         self.model_id = model_id
+        self.max_tokens = max_tokens
         self._opener = build_opener(_NoRedirect())
         self.last_http_status: int | None = None
 
@@ -219,7 +231,7 @@ class OllamaLocalProvider:
         self.last_http_status = None
         payload = json.dumps({
             "model": self.model_id, "prompt": prompt, "stream": False,
-            "format": "json", "options": {"num_predict": 256, "temperature": 0},
+            "format": "json", "options": {"num_predict": self.max_tokens, "temperature": 0},
         }).encode("utf-8")
         request = Request(
             OLLAMA_LOOPBACK + OLLAMA_GENERATE_PATH, data=payload, method="POST",
@@ -318,8 +330,54 @@ class LocalModelProvider(Protocol):
     def complete(self, prompt: str, *, timeout_seconds: float) -> str: ...
 
 
+def _fixture_plan_prompt(request: str) -> str:
+    """Give the model only immutable fixture facts and a content-only contract."""
+    from runtime.execution.local_repository_fixtures import get_fixture
+    fixture = get_fixture("local.python.text-normalizer.fixture.v1")
+    assert fixture is not None
+    initial = fixture["files"]
+    hashes = {path: hashlib.sha256(content.encode()).hexdigest() for path, content in initial.items()}
+    return (
+        "Return JSON only, with exactly this shape: "
+        '{"summary":"short description","changes":[{"path":"text_normalizer.py","content":"..."},'
+        '{"path":"test_text_normalizer.py","content":"..."}]}. '
+        "Do not return a task_spec, commands, permissions, markdown, or extra keys. Preserve the existing "
+        "test_collapses_whitespace test and add real unittest coverage for the request. Both files must be complete.\n"
+        f"REQUEST:\n{request}\nFIXTURE_ID: {fixture['id']}\nFIXTURE_INITIAL_HASH: {fixture['initial_hash']}\n"
+        f"INITIAL_FILE_SHA256: {json.dumps(hashes, sort_keys=True)}\n"
+        f"INITIAL text_normalizer.py:\n{initial['text_normalizer.py']}\n"
+        f"INITIAL test_text_normalizer.py:\n{initial['test_text_normalizer.py']}"
+    )
+
+
+def _build_authorized_spec(request: str, proposal: dict[str, Any]) -> dict[str, Any]:
+    """Runtime, never the model, owns every executable field of the plan."""
+    from runtime.execution.local_repository_fixtures import get_fixture
+    fixture = get_fixture("local.python.text-normalizer.fixture.v1")
+    assert fixture is not None
+    task_id = f"{LOCAL_PLAN_TASK_ID_PREFIX}-{hashlib.sha256((request + fixture['initial_hash']).encode()).hexdigest()[:16]}"
+    changes = [{"path": item["path"], "expected_sha256": hashlib.sha256(fixture["files"][item["path"]].encode()).hexdigest(), "content": item["content"]} for item in proposal["changes"]]
+    paths = ["text_normalizer.py", "test_text_normalizer.py"]
+    return {
+        "task_id": task_id, "request": request, "objective": proposal["summary"],
+        "execution_profile": PROFILE, "requested_capabilities": ["experimental.local.repository_change.v1"],
+        "fixture_id": fixture["id"], "fixture_initial_hash": fixture["initial_hash"], "changes": changes,
+        "execution_limits": {"timeout_seconds": 30, "memory_mb": 256, "cpus": 1, "pids": 64},
+        "steps": [
+            {"operation": "create_fixture", "arguments": {"fixture_id": fixture["id"], "initial_hash": fixture["initial_hash"]}},
+            *[{"operation": "apply_patch", "arguments": change} for change in changes],
+            {"operation": "read_file", "arguments": {"path": "text_normalizer.py"}},
+            {"operation": "inspect_structure", "arguments": {"paths": paths}},
+            {"operation": "sha256", "arguments": {"paths": paths}},
+            {"operation": "run_tests", "arguments": {"command": "python-unittest-q"}},
+        ], "allowed_files": paths, "allowed_test_commands": ["python-unittest-q"],
+        "acceptance_criteria": ["Existing whitespace test remains", "Initials behavior has real unit tests", "Containerized unittest runner passes"],
+        "evidence_references": [f"local://native-executions/{task_id}.json"], "planner": LOCAL_MODEL_PLANNER,
+    }
+
+
 class LocalPlanner:
-    """Obtain a proposal from a verified local provider, never an execution."""
+    """Obtain a bounded content proposal from a verified local provider."""
 
     def __init__(self, discovery: LocalModelDiscovery, provider: LocalModelProvider | None = None) -> None:
         self.discovery, self.provider = discovery, provider
@@ -329,27 +387,27 @@ class LocalPlanner:
             return {"status": "PLANNER_INVALID_REQUEST", "reason": "REQUEST_MUST_BE_NON_EMPTY"}
         if self.discovery.status != LOCAL_MODEL_READY or self.discovery.inference_status != "VERIFIED" or self.provider is None:
             return {"status": PLANNER_UNAVAILABLE, "reason": self.discovery.status, "discovery": self.discovery.to_dict()}
-        prompt = (
-            "Return JSON only: {\"task_spec\": {...}}. The task_spec must be a bounded "
-            "experimental.local.repository_change.v1 plan. Never request credentials, network, "
-            "remote repositories, shell commands, or paths outside its fixture workspace. The allowed "
-            "test command is python-unittest-q and fixed limits are timeout_seconds=30,memory_mb=256,"
-            "cpus=1,pids=64. Request: " + request
-        )
         try:
-            raw = self.provider.complete(prompt, timeout_seconds=15)
+            raw = self.provider.complete(_fixture_plan_prompt(request), timeout_seconds=60)
         except TimeoutError:
             return {"status": "PLANNER_ERROR", "reason": "LOCAL_MODEL_TIMEOUT", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id}
         except Exception as exc:
             return {"status": "PLANNER_ERROR", "reason": f"LOCAL_MODEL_ERROR:{type(exc).__name__}", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id}
+        raw_hash = hashlib.sha256(raw.encode()).hexdigest()
+        if len(raw.encode()) > MAX_MODEL_RESPONSE_BYTES:
+            return {"status": "PLANNER_ERROR", "reason": "MODEL_OUTPUT_TOO_LARGE", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output_hash": raw_hash}
         try:
-            payload = json.loads(raw)
-            task_spec = payload["task_spec"]
-        except (TypeError, KeyError, json.JSONDecodeError):
-            return {"status": "PLANNER_ERROR", "reason": "MALFORMED_LOCAL_MODEL_RESPONSE", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output_hash": hashlib.sha256(str(raw).encode()).hexdigest()}
-        if not isinstance(task_spec, dict):
-            return {"status": "PLANNER_ERROR", "reason": "MODEL_PLAN_NOT_OBJECT", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output_hash": hashlib.sha256(raw.encode()).hexdigest()}
-        return {"status": "PROPOSED", "request": request, "task_spec": task_spec, "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output": raw, "raw_output_hash": hashlib.sha256(raw.encode()).hexdigest(), "raw_task_spec_hash": _hash(task_spec)}
+            content_proposal = json.loads(raw)
+        except json.JSONDecodeError:
+            return {"status": "PLANNER_ERROR", "reason": "MALFORMED_LOCAL_MODEL_RESPONSE", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output_hash": raw_hash}
+        if not isinstance(content_proposal, dict) or set(content_proposal) != {"summary", "changes"} or not isinstance(content_proposal["summary"], str) or not content_proposal["summary"].strip():
+            return {"status": "PLANNER_ERROR", "reason": "MODEL_PROPOSAL_CONTRACT_INVALID", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output_hash": raw_hash}
+        changes = content_proposal["changes"]
+        if not isinstance(changes, list) or len(changes) != 2 or any(not isinstance(item, dict) or set(item) != {"path", "content"} or not isinstance(item["path"], str) or not isinstance(item["content"], str) or not item["content"].strip() or len(item["content"].encode()) > LOCAL_PLAN_FILE_MAX_BYTES for item in changes):
+            return {"status": "PLANNER_ERROR", "reason": "MODEL_PROPOSAL_FILES_INVALID", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output_hash": raw_hash}
+        if {item["path"] for item in changes} != {"text_normalizer.py", "test_text_normalizer.py"}:
+            return {"status": "PLANNER_ERROR", "reason": "MODEL_PROPOSAL_FILES_NOT_ALLOWLISTED", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output_hash": raw_hash}
+        return {"status": "PROPOSED", "request": request, "content_proposal": content_proposal, "task_spec": _build_authorized_spec(request, content_proposal), "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output": raw, "raw_output_hash": raw_hash, "raw_task_spec_hash": _hash(content_proposal)}
 
 
 class LocalPlanValidator:
@@ -360,7 +418,7 @@ class LocalPlanValidator:
         self.discovery = discovery
 
     def validate(self, proposal: dict[str, Any]) -> dict[str, Any]:
-        required = {"status", "request", "task_spec", "provider_id", "model_id", "raw_output", "raw_output_hash", "raw_task_spec_hash"}
+        required = {"status", "request", "content_proposal", "task_spec", "provider_id", "model_id", "raw_output", "raw_output_hash", "raw_task_spec_hash"}
         if not isinstance(proposal, dict) or not required.issubset(proposal) or proposal.get("status") != "PROPOSED" or not isinstance(proposal.get("task_spec"), dict):
             return {"decision": "DENY", "reason": "NO_VALID_PROPOSAL"}
         if not isinstance(proposal["raw_output"], str) or len(proposal["raw_output"].encode("utf-8")) > MAX_MODEL_RESPONSE_BYTES:
@@ -368,11 +426,22 @@ class LocalPlanValidator:
         if hashlib.sha256(proposal["raw_output"].encode()).hexdigest() != proposal["raw_output_hash"]:
             return {"decision": "DENY", "reason": "MODEL_OUTPUT_HASH_MISMATCH"}
         try:
-            raw_task_spec = json.loads(proposal["raw_output"])["task_spec"]
-        except (KeyError, TypeError, json.JSONDecodeError):
-            return {"decision": "DENY", "reason": "MODEL_OUTPUT_NO_TASK_SPEC"}
-        if not isinstance(raw_task_spec, dict) or _hash(raw_task_spec) != proposal["raw_task_spec_hash"] or _hash(raw_task_spec) != _hash(proposal["task_spec"]):
-            return {"decision": "DENY", "reason": "MODEL_OUTPUT_AND_SUBMITTED_PLAN_DIFFER"}
+            raw_content = json.loads(proposal["raw_output"])
+        except (TypeError, json.JSONDecodeError):
+            return {"decision": "DENY", "reason": "MODEL_OUTPUT_NOT_JSON"}
+        if raw_content != proposal["content_proposal"] or _hash(raw_content) != proposal["raw_task_spec_hash"]:
+            return {"decision": "DENY", "reason": "MODEL_OUTPUT_AND_SUBMITTED_PROPOSAL_DIFFER"}
+        changes = raw_content.get("changes") if isinstance(raw_content, dict) else None
+        if not isinstance(changes, list) or {item.get("path") for item in changes if isinstance(item, dict)} != {"text_normalizer.py", "test_text_normalizer.py"} or len(changes) != 2:
+            return {"decision": "DENY", "reason": "MODEL_PROPOSAL_FILES_NOT_ALLOWLISTED"}
+        proposed_tests = next((item["content"] for item in changes if item["path"] == "test_text_normalizer.py"), "")
+        if "test_collapses_whitespace" not in proposed_tests:
+            return {"decision": "DENY", "reason": "MODEL_PROPOSAL_REMOVES_EXISTING_TEST"}
+        if "initials(" not in proposed_tests:
+            return {"decision": "DENY", "reason": "MODEL_PROPOSAL_LACKS_INITIALS_TEST"}
+        expected_spec = _build_authorized_spec(proposal["request"], raw_content)
+        if _hash(expected_spec) != _hash(proposal["task_spec"]):
+            return {"decision": "DENY", "reason": "RUNTIME_PLAN_DOES_NOT_MATCH_CONTENT_PROPOSAL"}
         if self.discovery is not None and (
             self.discovery.status != LOCAL_MODEL_READY or self.discovery.inference_status != "VERIFIED"
             or proposal["provider_id"] != self.discovery.provider_id or proposal["model_id"] not in self.discovery.models
@@ -412,3 +481,36 @@ class LocalPlanningOrchestrator:
             return {"status": "BLOCKED", "proposal": proposal, "validation": validation, "execution": None}
         result = self.validator.executor.execute(validation["task_spec"])
         return {"status": result["status"], "proposal": proposal, "validation": validation, "execution": result}
+
+
+def persist_plan_attempt(data_dir: str | Path, result: dict[str, Any]) -> dict[str, Any]:
+    """Durably retain either an allowed execution or a blocked model proposal."""
+    root = Path(data_dir) / "native-executions" / "planning"
+    root.mkdir(parents=True, exist_ok=True)
+    proposal = result.get("proposal", {})
+    request = proposal.get("request", LOCAL_PLAN_REQUEST)
+    task_id = proposal.get("task_spec", {}).get("task_id") if isinstance(proposal, dict) else None
+    if not isinstance(task_id, str) or not task_id.startswith(f"{LOCAL_PLAN_TASK_ID_PREFIX}-"):
+        task_id = f"{LOCAL_PLAN_TASK_ID_PREFIX}-{hashlib.sha256(str(request).encode()).hexdigest()[:16]}"
+    path = root / f"{task_id}.json"
+    payload = {
+        "task_id": task_id, "attempt_status": result.get("status"), "request_hash": hashlib.sha256(str(request).encode()).hexdigest(),
+        "proposal": result.get("proposal"), "validator": result.get("validation"), "execution": result.get("execution"),
+        "evidence_ref": f"local://native-executions/planning/{task_id}.json", "completed_at": _now(),
+    }
+    payload["result_hash"] = _hash(payload)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    path.chmod(0o600)
+    return payload
+
+
+def load_plan_attempt(data_dir: str | Path) -> dict[str, Any] | None:
+    root = Path(data_dir) / "native-executions" / "planning"
+    candidates = sorted(root.glob(f"{LOCAL_PLAN_TASK_ID_PREFIX}-*.json"))
+    if not candidates:
+        return None
+    try:
+        value = json.loads(candidates[-1].read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None

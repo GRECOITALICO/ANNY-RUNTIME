@@ -75,6 +75,7 @@ class AdminRouter:
             '/api/operational-state': self.handle_operational_state,
             '/api/conrrad/simulator': self.handle_conrrad_simulator,
             '/api/local-planner/status': self.handle_local_planner_status,
+            '/api/local-plan-attempt/latest': self.handle_local_plan_attempt_latest,
             '/api/local-executions': self.handle_local_execution_results,
             '/api/local-executions/latest': self.handle_local_execution_latest,
             '/api/control-center/projections': self.handle_control_center_projections,
@@ -678,6 +679,16 @@ class AdminRouter:
         if payload is None:
             payload = persist_discovery(data_dir, inspect_local_model_runtime())
         self.context['direct_json_response'] = payload
+        return '/'
+
+    def handle_local_plan_attempt_latest(self, parsed) -> str:
+        """Read model-plan evidence without starting inference or execution."""
+        from runtime.core.config import get_data_dir
+        from runtime.planning.local_planner import load_plan_attempt
+        self.context['direct_json_response'] = load_plan_attempt(get_data_dir()) or {
+            'attempt_status': 'UNKNOWN', 'execution': None,
+            'evidence_ref': 'local://native-executions/planning/',
+        }
         return '/'
 
     def _get_fabric_client(self):

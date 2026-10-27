@@ -4,6 +4,7 @@ import hashlib
 import json
 
 from runtime.execution.local_task_specs import repository_change_task_spec
+from runtime.execution.local_repository_fixtures import get_fixture
 from runtime.admin.routes import AdminRouter
 from runtime.admin.templates_cc import control_center_page
 from runtime.planning.local_planner import (
@@ -22,6 +23,8 @@ from runtime.planning.local_planner import (
     load_inference_verification,
     persist_discovery,
     persist_inference_verification,
+    persist_plan_attempt,
+    load_plan_attempt,
     inspect_local_model_runtime,
     verify_local_inference,
     verify_local_inference_attempt,
@@ -43,10 +46,19 @@ class _Provider:
 
     def complete(self, prompt: str, *, timeout_seconds: float) -> str:
         self.calls += 1
-        assert "credentials" in prompt and timeout_seconds == 15
+        assert "FIXTURE_INITIAL_HASH" in prompt and timeout_seconds == 60
         if isinstance(self.response, Exception):
             raise self.response
         return self.response
+
+
+def _content_payload() -> dict:
+    fixture = get_fixture("local.python.text-normalizer.fixture.v1")
+    assert fixture is not None
+    module = fixture["files"]["text_normalizer.py"] + "\n\ndef initials(value: str) -> str:\n    if not isinstance(value, str):\n        raise TypeError('value must be a string')\n    return ''.join(word[0].upper() for word in value.split())\n"
+    test = fixture["files"]["test_text_normalizer.py"].replace("from text_normalizer import normalize_title", "from text_normalizer import initials, normalize_title")
+    test = test.replace("\nif __name__", "\n    def test_initials(self):\n        self.assertEqual(initials('  anny   runtime '), 'AR')\n        self.assertEqual(initials(''), '')\n        self.assertEqual(initials('   '), '')\n        with self.assertRaises(TypeError):\n            initials(None)\n\nif __name__")
+    return {"summary": "Add initials and its tests.", "changes": [{"path": "text_normalizer.py", "content": module}, {"path": "test_text_normalizer.py", "content": test}]}
 
 
 def test_unavailable_local_runtime_is_explicit_and_never_calls_provider(tmp_path):
@@ -187,8 +199,7 @@ def test_independent_validator_blocks_model_permission_expansion_without_executi
 
 
 def test_valid_mocked_local_model_plan_is_validated_then_uses_existing_dispatcher(tmp_path):
-    spec = repository_change_task_spec()
-    raw = json.dumps({"task_spec": spec})
+    raw = json.dumps(_content_payload())
     orchestrator = LocalPlanningOrchestrator(LocalPlanner(_ready(), _Provider(raw)), LocalPlanValidator(tmp_path))
 
     result = orchestrator.plan_and_execute("Add display-name normalization to the isolated Python fixture.")
@@ -201,14 +212,33 @@ def test_valid_mocked_local_model_plan_is_validated_then_uses_existing_dispatche
 
 
 def test_model_cannot_select_unknown_capability_or_remote_command(tmp_path):
-    unknown = repository_change_task_spec()
-    unknown["requested_capabilities"] = ["remote.shell.v1"]
-    raw = json.dumps({"task_spec": unknown})
+    unknown = _content_payload()
+    unknown["changes"][0]["path"] = "remote.shell.v1"
+    raw = json.dumps(unknown)
     result = LocalPlanningOrchestrator(LocalPlanner(_ready(), _Provider(raw)), LocalPlanValidator(tmp_path)).plan_and_execute("unsafe")
 
     assert result["status"] == "BLOCKED"
     assert result["execution"] is None
     assert not list((tmp_path / "native-executions" / "workspaces").iterdir())
+
+
+def test_content_contract_rejects_duplicate_or_missing_files_and_removed_existing_test(tmp_path):
+    duplicate = _content_payload()
+    duplicate["changes"][1]["path"] = "text_normalizer.py"
+    assert LocalPlanner(_ready(), _Provider(json.dumps(duplicate))).propose("fixture change")["reason"] == "MODEL_PROPOSAL_FILES_NOT_ALLOWLISTED"
+
+    removed = _content_payload()
+    removed["changes"][1]["content"] = removed["changes"][1]["content"].replace("test_collapses_whitespace", "test_removed")
+    proposal = LocalPlanner(_ready(), _Provider(json.dumps(removed))).propose("fixture change")
+    assert LocalPlanValidator(tmp_path, _ready()).validate(proposal)["reason"] == "MODEL_PROPOSAL_REMOVES_EXISTING_TEST"
+    assert not list((tmp_path / "native-executions" / "workspaces").iterdir())
+
+
+def test_blocked_plan_attempt_is_persisted_without_execution(tmp_path):
+    blocked = {"status": "BLOCKED", "proposal": {"request": "fixture change", "raw_output_hash": "abc"}, "validation": {"decision": "DENY", "reason": "TEST"}, "execution": None}
+    persisted = persist_plan_attempt(tmp_path, blocked)
+    recovered = load_plan_attempt(tmp_path)
+    assert persisted["execution"] is None and recovered["validator"]["decision"] == "DENY"
 
 
 def test_control_center_exposes_persisted_planner_state_without_starting_a_model(tmp_path, monkeypatch):
@@ -257,13 +287,12 @@ def test_ollama_adapter_uses_fixed_loopback_json_contract_and_bounds_response(mo
 
 
 def test_validator_rejects_tampered_model_plan_or_unverified_provider_before_workspace(tmp_path):
-    spec = repository_change_task_spec()
-    raw = json.dumps({"task_spec": spec})
+    raw = json.dumps(_content_payload())
     proposal = LocalPlanner(_ready(), _Provider(raw)).propose("fixture change")
-    proposal["task_spec"] = repository_change_task_spec()
+    proposal["task_spec"] = dict(proposal["task_spec"])
     proposal["task_spec"]["request"] = "tampered after inference"
     decision = LocalPlanValidator(tmp_path, _ready()).validate(proposal)
-    assert decision["reason"] == "MODEL_OUTPUT_AND_SUBMITTED_PLAN_DIFFER"
+    assert decision["reason"] == "RUNTIME_PLAN_DOES_NOT_MATCH_CONTENT_PROPOSAL"
     assert not list((tmp_path / "native-executions" / "workspaces").iterdir())
 
     proposal = LocalPlanner(_ready(), _Provider(raw)).propose("fixture change")
