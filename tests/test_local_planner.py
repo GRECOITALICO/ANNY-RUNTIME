@@ -19,6 +19,7 @@ from runtime.planning.local_planner import (
     OllamaLocalProvider,
     MAX_MODEL_RESPONSE_BYTES,
     LOCAL_INFERENCE_TASK_ID,
+    LOCAL_PLAN_010_TASK_ID_PREFIX,
     load_discovery,
     load_inference_verification,
     persist_discovery,
@@ -57,7 +58,7 @@ def _content_payload() -> dict:
     assert fixture is not None
     module = fixture["files"]["text_normalizer.py"] + "\n\ndef initials(value: str) -> str:\n    if not isinstance(value, str):\n        raise TypeError('value must be a string')\n    return ''.join(word[0].upper() for word in value.split())\n"
     test = fixture["files"]["test_text_normalizer.py"].replace("from text_normalizer import normalize_title", "from text_normalizer import initials, normalize_title")
-    test = test.replace("\nif __name__", "\n    def test_initials(self):\n        self.assertEqual(initials('  anny   runtime '), 'AR')\n        self.assertEqual(initials(''), '')\n        self.assertEqual(initials('   '), '')\n        with self.assertRaises(TypeError):\n            initials(None)\n\nif __name__")
+    test = test.replace("\nif __name__", "\n    def test_initials(self):\n        self.assertEqual(initials('ANNY Runtime'), 'AR')\n        self.assertEqual(initials('  anny   runtime '), 'AR')\n        self.assertEqual(initials(''), '')\n        self.assertEqual(initials('   '), '')\n        with self.assertRaises(TypeError):\n            initials(None)\n\nif __name__")
     return {"summary": "Add initials and its tests.", "changes": [{"path": "text_normalizer.py", "content": module}, {"path": "test_text_normalizer.py", "content": test}]}
 
 
@@ -239,6 +240,53 @@ def test_blocked_plan_attempt_is_persisted_without_execution(tmp_path):
     persisted = persist_plan_attempt(tmp_path, blocked)
     recovered = load_plan_attempt(tmp_path)
     assert persisted["execution"] is None and recovered["validator"]["decision"] == "DENY"
+
+
+class _SequenceProvider:
+    provider_id = "mock-local"
+    model_id = "fixture-model"
+
+    def __init__(self, responses):
+        self.responses, self.calls, self.prompts = list(responses), 0, []
+
+    def complete(self, prompt, *, timeout_seconds):
+        self.calls += 1
+        self.prompts.append(prompt)
+        return self.responses.pop(0)
+
+
+def test_one_corrective_generation_can_execute_only_after_fresh_validation(tmp_path):
+    invalid = _content_payload()
+    invalid["changes"][1]["content"] = invalid["changes"][1]["content"].replace("initials('ANNY Runtime')", "normalize_title('ANNY Runtime')")
+    provider = _SequenceProvider([json.dumps(invalid), json.dumps(_content_payload())])
+    result = LocalPlanningOrchestrator(
+        LocalPlanner(_ready(), provider, task_id_prefix=LOCAL_PLAN_010_TASK_ID_PREFIX),
+        LocalPlanValidator(tmp_path, _ready(), task_id_prefix=LOCAL_PLAN_010_TASK_ID_PREFIX),
+    ).plan_and_execute("fixture change", allow_one_correction=True)
+    assert provider.calls == 2 and "RUNTIME CORRECTION REQUIRED" in provider.prompts[1]
+    assert result["attempts"][0]["validation"]["reason"] == "MODEL_PROPOSAL_LACKS_NORMAL_WORDS_TEST"
+    assert result["validation"]["decision"] == "ALLOW" and result["execution"]["test"]["exit_code"] == 0
+
+
+def test_two_invalid_generations_stop_without_workspace(tmp_path):
+    invalid = _content_payload()
+    invalid["changes"][1]["content"] = invalid["changes"][1]["content"].replace("initials('ANNY Runtime')", "normalize_title('ANNY Runtime')")
+    provider = _SequenceProvider([json.dumps(invalid), json.dumps(invalid)])
+    result = LocalPlanningOrchestrator(
+        LocalPlanner(_ready(), provider, task_id_prefix=LOCAL_PLAN_010_TASK_ID_PREFIX),
+        LocalPlanValidator(tmp_path, _ready(), task_id_prefix=LOCAL_PLAN_010_TASK_ID_PREFIX),
+    ).plan_and_execute("fixture change", allow_one_correction=True)
+    assert result["status"] == "BLOCKED" and result["execution"] is None and provider.calls == 2
+    assert not list((tmp_path / "native-executions" / "workspaces").iterdir())
+
+
+def test_valid_first_proposal_never_requests_a_correction(tmp_path):
+    provider = _SequenceProvider([json.dumps(_content_payload())])
+    result = LocalPlanningOrchestrator(
+        LocalPlanner(_ready(), provider, task_id_prefix=LOCAL_PLAN_010_TASK_ID_PREFIX),
+        LocalPlanValidator(tmp_path, _ready(), task_id_prefix=LOCAL_PLAN_010_TASK_ID_PREFIX),
+    ).plan_and_execute("fixture change", allow_one_correction=True)
+    assert result["validation"]["decision"] == "ALLOW" and provider.calls == 1
 
 
 def test_control_center_exposes_persisted_planner_state_without_starting_a_model(tmp_path, monkeypatch):

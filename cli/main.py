@@ -105,6 +105,34 @@ def cmd_local_plan_task_009(args):
     return cmd_local_plan(args)
 
 
+def cmd_local_plan_task_010(args):
+    from runtime.planning.local_planner import (
+        LOCAL_MODEL_READY, LOCAL_PLAN_010_TASK_ID_PREFIX, LOCAL_PLAN_REQUEST,
+        LocalPlanValidator, LocalPlanner, LocalPlanningOrchestrator, OllamaLocalProvider,
+        inspect_local_model_runtime, load_plan_attempt, persist_discovery, persist_plan_attempt,
+        verify_local_inference,
+    )
+    existing = load_plan_attempt(get_data_dir(), LOCAL_PLAN_010_TASK_ID_PREFIX)
+    if existing is not None:
+        print(json.dumps({"result": "IDEMPOTENT_REUSE", "evidence": existing}, sort_keys=True))
+        return
+    discovery = verify_local_inference(inspect_local_model_runtime())
+    persist_discovery(get_data_dir(), discovery)
+    provider = OllamaLocalProvider(discovery.models[0], max_tokens=1024) if discovery.status == LOCAL_MODEL_READY and discovery.models else None
+    try:
+        result = LocalPlanningOrchestrator(
+            LocalPlanner(discovery, provider, task_id_prefix=LOCAL_PLAN_010_TASK_ID_PREFIX),
+            LocalPlanValidator(get_data_dir(), discovery, task_id_prefix=LOCAL_PLAN_010_TASK_ID_PREFIX),
+        ).plan_and_execute(LOCAL_PLAN_REQUEST, allow_one_correction=True)
+    except Exception as exc:
+        result = {
+            "status": "BLOCKED", "proposal": {"request": LOCAL_PLAN_REQUEST},
+            "validation": {"decision": "DENY", "reason": f"LOCAL_PLAN_ORCHESTRATOR_ERROR:{type(exc).__name__}"},
+            "execution": None, "attempts": [],
+        }
+    print(json.dumps({"result": result, "evidence": persist_plan_attempt(get_data_dir(), result, task_id_prefix=LOCAL_PLAN_010_TASK_ID_PREFIX)}, sort_keys=True))
+
+
 def cmd_local_planner_capacity(args):
     from runtime.planning.local_capacity import collect_local_capacity, persist_capacity
     print(json.dumps(persist_capacity(get_data_dir(), collect_local_capacity()), sort_keys=True))
@@ -382,6 +410,7 @@ def main():
     local_plan.add_argument("request", help="Natural-language engineering request for the registered isolated fixture")
     local_plan.set_defaults(func=cmd_local_plan)
     subparsers.add_parser("local-plan-task-009", help="Run the one authorized content-only local-model fixture task").set_defaults(func=cmd_local_plan_task_009)
+    subparsers.add_parser("local-plan-task-010", help="Run the one authorized local model task with at most one content correction").set_defaults(func=cmd_local_plan_task_010)
     subparsers.add_parser("local-planner-capacity", help="Collect a sanitized read-only local-model capacity inventory").set_defaults(func=cmd_local_planner_capacity)
     local_verify = subparsers.add_parser("local-planner-verify", help="Verify one explicit local Ollama model with a bounded JSON-only probe")
     local_verify.add_argument("--model-id", required=True, help="Exact model identifier reported by the local Ollama catalog")
