@@ -85,6 +85,20 @@ def cmd_local_planner_status(args):
     print(json.dumps(persist_discovery(get_data_dir(), inspect_local_model_runtime()), sort_keys=True))
 
 
+def cmd_local_plan(args):
+    from runtime.planning.local_planner import (
+        LOCAL_MODEL_READY, LocalPlanValidator, LocalPlanner, LocalPlanningOrchestrator,
+        OllamaLocalProvider, inspect_local_model_runtime, persist_discovery, verify_local_inference,
+    )
+    discovery = inspect_local_model_runtime()
+    # This is the explicit operational inference check. Status/dashboard reads never call it.
+    discovery = verify_local_inference(discovery)
+    persist_discovery(get_data_dir(), discovery)
+    provider = OllamaLocalProvider(discovery.models[0]) if discovery.status == LOCAL_MODEL_READY and discovery.models else None
+    result = LocalPlanningOrchestrator(LocalPlanner(discovery, provider), LocalPlanValidator(get_data_dir(), discovery)).plan_and_execute(args.request)
+    print(json.dumps(result, sort_keys=True))
+
+
 def cmd_doctor(args):
     import platform
     results = []
@@ -338,6 +352,9 @@ def main():
     subparsers.add_parser("native-manifest-demo", help="Run the authorized native JSON-manifest validation demonstration").set_defaults(func=cmd_native_manifest_demo)
     subparsers.add_parser("native-repository-demo", help="Run the authorized isolated repository-change demonstration").set_defaults(func=cmd_native_repository_demo)
     subparsers.add_parser("local-planner-status", help="Inspect installed local-model runtimes without starting or downloading anything").set_defaults(func=cmd_local_planner_status)
+    local_plan = subparsers.add_parser("local-plan", help="Plan and execute an authorized fixture change only through verified local Ollama inference")
+    local_plan.add_argument("request", help="Natural-language engineering request for the registered isolated fixture")
+    local_plan.set_defaults(func=cmd_local_plan)
     subparsers.add_parser("doctor", help="Run diagnostics").set_defaults(func=cmd_doctor)
     subparsers.add_parser("install", help="Install ANNY Runtime").set_defaults(func=cmd_install)
     

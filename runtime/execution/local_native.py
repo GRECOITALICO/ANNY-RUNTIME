@@ -126,11 +126,15 @@ class LocalNativeTaskExecutor:
             self._deny(task_id, "Task requests a profile or planner outside the active local contract")
         if spec["planner"] == "LOCAL_MODEL_INFERENCE":
             evidence = spec.get("planning_evidence")
-            expected = {"provider_id", "model_id", "raw_output", "raw_output_hash", "validator", "decision"}
+            expected = {"provider_id", "model_id", "raw_output", "raw_output_hash", "task_spec_hash", "validator", "decision"}
             if not isinstance(evidence, dict) or set(evidence) != expected or evidence.get("decision") != "ALLOW" or evidence.get("validator") != "LOCAL_PLAN_VALIDATOR_V1" or not all(isinstance(evidence.get(key), str) and evidence[key] for key in expected - {"decision", "validator"}):
                 self._deny(task_id, "Local-model plan is missing independently validated planning evidence")
             if hashlib.sha256(evidence["raw_output"].encode()).hexdigest() != evidence["raw_output_hash"]:
                 self._deny(task_id, "Local-model planning evidence hash does not match its output")
+            plan_without_evidence = dict(spec)
+            plan_without_evidence.pop("planning_evidence", None)
+            if _json_hash(plan_without_evidence) != evidence["task_spec_hash"]:
+                self._deny(task_id, "Local-model planning evidence hash does not match its validated plan")
         elif "planning_evidence" in spec:
             self._deny(task_id, "Planning evidence is reserved for independently validated local-model plans")
         caps = spec["requested_capabilities"]

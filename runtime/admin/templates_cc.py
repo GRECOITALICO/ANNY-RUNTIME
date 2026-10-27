@@ -396,6 +396,8 @@ def control_center_page(csrf_token: str) -> str:
         <div class="kv"><span class="lbl">PROVIDER</span><span class="val mono" id="planner-provider">--</span></div>
         <div class="kv"><span class="lbl">CLIENT</span><span class="val mono" id="planner-client">--</span></div>
         <div class="kv"><span class="lbl">LOCAL MODELS</span><span class="val mono" id="planner-models">--</span></div>
+        <div class="kv"><span class="lbl">INFERENCE</span><span class="val" id="planner-inference">--</span></div>
+        <div class="kv"><span class="lbl">PLANNER AVAILABLE</span><span class="val" id="planner-available">--</span></div>
         <div class="kv"><span class="lbl">EVIDENCE</span><span class="val mono" id="planner-evidence">--</span></div>
     </div>
     <p style="color:var(--text-secondary);font-size:.78rem">A local runtime alone does not imply model inference. Model output is never authorized directly.</p>
@@ -820,6 +822,8 @@ async function fetchLocalPlannerStatus() {
         setText('planner-provider', planner.provider_id);
         setText('planner-client', planner.client_version);
         setText('planner-models', planner.models);
+        setInner('planner-inference', badge(planner.inference_status));
+        setInner('planner-available', badge(planner.status === 'LOCAL_MODEL_READY' && planner.inference_status === 'VERIFIED' ? 'AVAILABLE' : 'UNAVAILABLE'));
         setText('planner-evidence', planner.evidence_ref || planner.evidence);
     } catch (e) { console.error('Local planner status fetch failed:', e); }
 }

@@ -39,8 +39,9 @@ the existing native executions retain `PLANNER=STRUCTURED_AUTHORIZED_PLAN` and
 
 ## If a model becomes available
 
-`LocalPlanner` accepts a provider only after discovery yields
-`LOCAL_MODEL_READY`. Provider output must be JSON containing a task
+`LocalPlanner` accepts a provider only after an explicit inference probe yields
+`LOCAL_MODEL_READY` with `inference_status=VERIFIED`. A model listed by
+discovery remains `LOCAL_MODEL_UNVERIFIED`. Provider output must be JSON containing a task
 specification. `LocalPlanValidator` validates that data independently under
 the existing dispatcher contract, attaches hashed provider evidence, and only
 then permits `LocalPlanningOrchestrator` to invoke the same native executor.

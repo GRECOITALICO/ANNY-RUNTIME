@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import copy
+import hashlib
 import json
 
 from runtime.execution.local_task_specs import repository_change_task_spec
@@ -15,13 +15,18 @@ from runtime.planning.local_planner import (
     LocalPlanValidator,
     LocalPlanner,
     LocalPlanningOrchestrator,
+    OllamaLocalProvider,
+    MAX_MODEL_RESPONSE_BYTES,
     load_discovery,
     persist_discovery,
+    inspect_local_model_runtime,
+    verify_local_inference,
 )
+import runtime.planning.local_planner as local_planner_module
 
 
 def _ready() -> LocalModelDiscovery:
-    return LocalModelDiscovery(LOCAL_MODEL_READY, "mock-local", "test", "http://127.0.0.1:9999", ("fixture-model",), ("MOCK_ONLY",), "2026-10-27T00:00:00+00:00")
+    return LocalModelDiscovery(LOCAL_MODEL_READY, "mock-local", "test", "http://127.0.0.1:9999", ("fixture-model",), ("MOCK_ONLY",), "2026-10-27T00:00:00+00:00", "VERIFIED", "2026-10-27T00:00:01+00:00")
 
 
 class _Provider:
@@ -52,6 +57,32 @@ def test_unavailable_local_runtime_is_explicit_and_never_calls_provider(tmp_path
     assert load_discovery(tmp_path)["result_hash"] == persisted["result_hash"]
 
 
+def test_detected_ollama_model_is_unverified_until_explicit_inference(monkeypatch):
+    class _Version:
+        stdout, stderr = "ollama version is 0.32.5\n", ""
+    class _Tags(_Response):
+        def __init__(self): super().__init__(b'{"models":[{"name":"fixture-model"}]}', url="http://127.0.0.1:11434/api/tags")
+    class _Opener:
+        def open(self, request, timeout): return _Tags()
+    monkeypatch.setattr(local_planner_module.shutil, "which", lambda name: "/usr/local/bin/ollama")
+    monkeypatch.setattr(local_planner_module.subprocess, "run", lambda *args, **kwargs: _Version())
+    monkeypatch.setattr(local_planner_module, "build_opener", lambda *args: _Opener())
+    discovery = inspect_local_model_runtime()
+    assert discovery.status == "LOCAL_MODEL_UNVERIFIED"
+    assert discovery.models == ("fixture-model",)
+    assert discovery.inference_status == "NOT_ATTEMPTED"
+
+
+def test_inference_verification_requires_expected_structured_response(monkeypatch):
+    class _VerifiedProvider:
+        def __init__(self, model_id): self.model_id = model_id
+        def complete(self, prompt, *, timeout_seconds): return '{"ok":true}'
+    monkeypatch.setattr(local_planner_module, "OllamaLocalProvider", _VerifiedProvider)
+    detected = LocalModelDiscovery("LOCAL_MODEL_UNVERIFIED", "ollama", "0.32.5", "http://127.0.0.1:11434", ("fixture-model",), (), "now")
+    verified = verify_local_inference(detected)
+    assert verified.status == LOCAL_MODEL_READY and verified.inference_status == "VERIFIED"
+
+
 def test_malformed_error_and_timeout_responses_do_not_execute(tmp_path):
     planner = LocalPlanner(_ready(), _Provider("not json"))
     malformed = planner.propose("Change fixture")
@@ -66,7 +97,8 @@ def test_malformed_error_and_timeout_responses_do_not_execute(tmp_path):
 def test_independent_validator_blocks_model_permission_expansion_without_execution(tmp_path):
     spec = repository_change_task_spec()
     spec["allowed_files"][0] = "../../escape.py"
-    proposal = {"status": "PROPOSED", "task_spec": spec, "provider_id": "mock-local", "model_id": "fixture-model", "raw_output": "{}", "raw_output_hash": __import__("hashlib").sha256(b"{}").hexdigest()}
+    raw = json.dumps({"task_spec": spec})
+    proposal = {"status": "PROPOSED", "request": "test", "task_spec": spec, "provider_id": "mock-local", "model_id": "fixture-model", "raw_output": raw, "raw_output_hash": hashlib.sha256(raw.encode()).hexdigest(), "raw_task_spec_hash": hashlib.sha256(json.dumps(spec, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
     decision = LocalPlanValidator(tmp_path).validate(proposal)
 
     assert decision["decision"] == "DENY"
@@ -105,3 +137,54 @@ def test_control_center_exposes_persisted_planner_state_without_starting_a_model
 
     assert router.context["direct_json_response"]["status"] in {"LOCAL_RUNTIME_WITHOUT_MODEL", "LOCAL_MODEL_UNAVAILABLE", "LOCAL_MODEL_UNVERIFIED", "LOCAL_MODEL_READY"}
     assert "/api/local-planner/status" in control_center_page("csrf-test")
+
+
+class _Response:
+    def __init__(self, body: bytes, *, status: int = 200, url: str = "http://127.0.0.1:11434/api/generate", length: str | None = None) -> None:
+        self._body, self.status, self._url = body, status, url
+        self.headers = {} if length is None else {"Content-Length": length}
+
+    def read(self, size: int = -1) -> bytes:
+        return self._body if size < 0 else self._body[:size]
+
+    def geturl(self) -> str:
+        return self._url
+
+    def __enter__(self): return self
+    def __exit__(self, *args): return False
+
+
+def test_ollama_adapter_uses_fixed_loopback_json_contract_and_bounds_response(monkeypatch):
+    provider = OllamaLocalProvider("fixture-model")
+    seen = {}
+    def open_request(request, timeout):
+        seen["url"], seen["timeout"], seen["body"] = request.full_url, timeout, json.loads(request.data)
+        return _Response(b'{"response":"{\\"ok\\": true}"}')
+    monkeypatch.setattr(provider._opener, "open", open_request)
+
+    assert provider.complete("small prompt", timeout_seconds=8) == '{"ok": true}'
+    assert seen["url"] == "http://127.0.0.1:11434/api/generate"
+    assert seen["timeout"] == 8
+    assert seen["body"] == {"model": "fixture-model", "prompt": "small prompt", "stream": False, "format": "json", "options": {"num_predict": 256, "temperature": 0}}
+
+    monkeypatch.setattr(provider._opener, "open", lambda *args, **kwargs: _Response(b"{}", status=302, url="http://example.invalid/"))
+    with __import__("pytest").raises(RuntimeError, match="OLLAMA_HTTP_302"):
+        provider.complete("small prompt", timeout_seconds=8)
+    monkeypatch.setattr(provider._opener, "open", lambda *args, **kwargs: _Response(b"{}", length=str(MAX_MODEL_RESPONSE_BYTES + 1)))
+    with __import__("pytest").raises(RuntimeError, match="TOO_LARGE"):
+        provider.complete("small prompt", timeout_seconds=8)
+
+
+def test_validator_rejects_tampered_model_plan_or_unverified_provider_before_workspace(tmp_path):
+    spec = repository_change_task_spec()
+    raw = json.dumps({"task_spec": spec})
+    proposal = LocalPlanner(_ready(), _Provider(raw)).propose("fixture change")
+    proposal["task_spec"] = repository_change_task_spec()
+    proposal["task_spec"]["request"] = "tampered after inference"
+    decision = LocalPlanValidator(tmp_path, _ready()).validate(proposal)
+    assert decision["reason"] == "MODEL_OUTPUT_AND_SUBMITTED_PLAN_DIFFER"
+    assert not list((tmp_path / "native-executions" / "workspaces").iterdir())
+
+    proposal = LocalPlanner(_ready(), _Provider(raw)).propose("fixture change")
+    wrong = LocalModelDiscovery(LOCAL_MODEL_READY, "ollama", "x", "http://127.0.0.1:11434", ("other",), (), "now", "VERIFIED", "now")
+    assert LocalPlanValidator(tmp_path, wrong).validate(proposal)["reason"] == "PROVIDER_OR_MODEL_NOT_VERIFIED_BY_DISCOVERY"

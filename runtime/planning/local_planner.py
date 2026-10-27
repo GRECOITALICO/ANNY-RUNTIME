@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
-from urllib.error import URLError
-from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from runtime.execution.local_native import LocalNativeTaskError, LocalNativeTaskExecutor, PROFILE
 
@@ -26,6 +26,16 @@ LOCAL_MODEL_UNAVAILABLE = "LOCAL_MODEL_UNAVAILABLE"
 LOCAL_MODEL_UNVERIFIED = "LOCAL_MODEL_UNVERIFIED"
 PLANNER_UNAVAILABLE = "PLANNER_UNAVAILABLE"
 LOCAL_MODEL_PLANNER = "LOCAL_MODEL_INFERENCE"
+OLLAMA_LOOPBACK = "http://127.0.0.1:11434"
+OLLAMA_TAGS_PATH = "/api/tags"
+OLLAMA_GENERATE_PATH = "/api/generate"
+MAX_MODEL_RESPONSE_BYTES = 64 * 1024
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    """Return redirect responses to the caller instead of following them."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401
+        return None
 
 
 def _now() -> str:
@@ -45,13 +55,16 @@ class LocalModelDiscovery:
     models: tuple[str, ...]
     evidence: tuple[str, ...]
     checked_at: str
+    inference_status: str = "NOT_ATTEMPTED"
+    inference_checked_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "status": self.status, "provider_id": self.provider_id,
             "client_version": self.client_version, "endpoint": self.endpoint,
             "models": list(self.models), "evidence": list(self.evidence),
-            "checked_at": self.checked_at,
+            "checked_at": self.checked_at, "inference_status": self.inference_status,
+            "inference_checked_at": self.inference_checked_at,
         }
 
 
@@ -66,20 +79,26 @@ def inspect_local_model_runtime(*, timeout_seconds: float = 2.0) -> LocalModelDi
         version = (version_process.stdout or version_process.stderr).strip().splitlines()[-1][:120] or None
     except (OSError, subprocess.SubprocessError):
         return LocalModelDiscovery(LOCAL_MODEL_UNVERIFIED, "ollama", None, "http://127.0.0.1:11434", (), ("OLLAMA_VERSION_CHECK_FAILED",), checked_at)
-    endpoint = "http://127.0.0.1:11434/api/tags"
+    endpoint = OLLAMA_LOOPBACK + OLLAMA_TAGS_PATH
     request = Request(endpoint, headers={"Accept": "application/json"}, method="GET")
     try:
-        with urlopen(request, timeout=timeout_seconds) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except (URLError, OSError, ValueError, json.JSONDecodeError):
-        return LocalModelDiscovery(LOCAL_RUNTIME_WITHOUT_MODEL, "ollama", version, "http://127.0.0.1:11434", (), ("OLLAMA_CLIENT_PRESENT", "OLLAMA_LOOPBACK_UNAVAILABLE"), checked_at)
+        with build_opener(_NoRedirect()).open(request, timeout=timeout_seconds) as response:
+            if response.status != 200 or response.geturl() != endpoint:
+                raise RuntimeError("OLLAMA_TAGS_REDIRECT_OR_BAD_STATUS")
+            body = response.read(MAX_MODEL_RESPONSE_BYTES + 1)
+            if len(body) > MAX_MODEL_RESPONSE_BYTES:
+                raise RuntimeError("OLLAMA_TAGS_RESPONSE_TOO_LARGE")
+            payload = json.loads(body.decode("utf-8"))
+    except (HTTPError, URLError, OSError, ValueError, RuntimeError, json.JSONDecodeError):
+        return LocalModelDiscovery(LOCAL_RUNTIME_WITHOUT_MODEL, "ollama", version, OLLAMA_LOOPBACK, (), ("OLLAMA_CLIENT_PRESENT", "OLLAMA_LOOPBACK_UNAVAILABLE"), checked_at)
     models = payload.get("models") if isinstance(payload, dict) else None
     if not isinstance(models, list):
-        return LocalModelDiscovery(LOCAL_MODEL_UNVERIFIED, "ollama", version, "http://127.0.0.1:11434", (), ("OLLAMA_TAGS_RESPONSE_INVALID",), checked_at)
+        return LocalModelDiscovery(LOCAL_MODEL_UNVERIFIED, "ollama", version, OLLAMA_LOOPBACK, (), ("OLLAMA_TAGS_RESPONSE_INVALID",), checked_at)
     names = tuple(str(item.get("name")) for item in models if isinstance(item, dict) and isinstance(item.get("name"), str))
     if not names:
-        return LocalModelDiscovery(LOCAL_RUNTIME_WITHOUT_MODEL, "ollama", version, "http://127.0.0.1:11434", (), ("OLLAMA_NO_LOCAL_MODELS",), checked_at)
-    return LocalModelDiscovery(LOCAL_MODEL_READY, "ollama", version, "http://127.0.0.1:11434", names, ("OLLAMA_LOOPBACK_MODELS_LISTED",), checked_at)
+        return LocalModelDiscovery(LOCAL_RUNTIME_WITHOUT_MODEL, "ollama", version, OLLAMA_LOOPBACK, (), ("OLLAMA_NO_LOCAL_MODELS",), checked_at)
+    # A listed model is only detected.  It has not proved that it can infer.
+    return LocalModelDiscovery(LOCAL_MODEL_UNVERIFIED, "ollama", version, OLLAMA_LOOPBACK, names, ("OLLAMA_LOOPBACK_MODELS_LISTED",), checked_at)
 
 
 def persist_discovery(data_dir: str | Path, discovery: LocalModelDiscovery) -> dict[str, Any]:
@@ -104,6 +123,76 @@ def load_discovery(data_dir: str | Path) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+class OllamaLocalProvider:
+    """Bounded Ollama adapter for the fixed local loopback API only."""
+    provider_id = "ollama"
+
+    def __init__(self, model_id: str) -> None:
+        if not isinstance(model_id, str) or not model_id.strip():
+            raise ValueError("Ollama model_id must be a non-empty local catalog name")
+        self.model_id = model_id
+        self._opener = build_opener(_NoRedirect())
+
+    @staticmethod
+    def _read_json(response: Any) -> dict[str, Any]:
+        length = response.headers.get("Content-Length")
+        if length and (not length.isdigit() or int(length) > MAX_MODEL_RESPONSE_BYTES):
+            raise RuntimeError("OLLAMA_RESPONSE_TOO_LARGE")
+        body = response.read(MAX_MODEL_RESPONSE_BYTES + 1)
+        if len(body) > MAX_MODEL_RESPONSE_BYTES:
+            raise RuntimeError("OLLAMA_RESPONSE_TOO_LARGE")
+        try:
+            value = json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("OLLAMA_INVALID_JSON") from exc
+        if not isinstance(value, dict):
+            raise RuntimeError("OLLAMA_RESPONSE_NOT_OBJECT")
+        return value
+
+    def complete(self, prompt: str, *, timeout_seconds: float) -> str:
+        if not isinstance(prompt, str) or not prompt or timeout_seconds <= 0 or timeout_seconds > 15:
+            raise ValueError("Invalid bounded local-model request")
+        payload = json.dumps({
+            "model": self.model_id, "prompt": prompt, "stream": False,
+            "format": "json", "options": {"num_predict": 256, "temperature": 0},
+        }).encode("utf-8")
+        request = Request(
+            OLLAMA_LOOPBACK + OLLAMA_GENERATE_PATH, data=payload, method="POST",
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+        )
+        try:
+            with self._opener.open(request, timeout=timeout_seconds) as response:
+                if response.status != 200 or response.geturl() != OLLAMA_LOOPBACK + OLLAMA_GENERATE_PATH:
+                    raise RuntimeError(f"OLLAMA_HTTP_{response.status}")
+                value = self._read_json(response)
+        except HTTPError as exc:
+            raise RuntimeError(f"OLLAMA_HTTP_{exc.code}") from exc
+        except URLError as exc:
+            raise RuntimeError("OLLAMA_CONNECTION_ERROR") from exc
+        answer = value.get("response")
+        if not isinstance(answer, str) or not answer.strip():
+            raise RuntimeError("OLLAMA_EMPTY_RESPONSE")
+        if len(answer.encode("utf-8")) > MAX_MODEL_RESPONSE_BYTES:
+            raise RuntimeError("OLLAMA_RESPONSE_TOO_LARGE")
+        return answer
+
+
+def verify_local_inference(discovery: LocalModelDiscovery) -> LocalModelDiscovery:
+    """Perform one small explicit inference; discovery itself never calls this."""
+    if discovery.status != LOCAL_MODEL_UNVERIFIED or not discovery.models or discovery.provider_id != "ollama":
+        return discovery
+    checked_at = _now()
+    provider = OllamaLocalProvider(discovery.models[0])
+    try:
+        response = provider.complete('Return exactly {"ok":true}.', timeout_seconds=8)
+        structured = json.loads(response)
+        if structured != {"ok": True}:
+            raise RuntimeError("OLLAMA_INFERENCE_RESPONSE_NOT_EXPECTED_JSON")
+    except Exception as exc:
+        return LocalModelDiscovery(LOCAL_MODEL_UNVERIFIED, discovery.provider_id, discovery.client_version, discovery.endpoint, discovery.models, discovery.evidence + (f"OLLAMA_INFERENCE_FAILED:{type(exc).__name__}",), discovery.checked_at, "FAILED", checked_at)
+    return LocalModelDiscovery(LOCAL_MODEL_READY, discovery.provider_id, discovery.client_version, discovery.endpoint, discovery.models, discovery.evidence + ("OLLAMA_INFERENCE_VERIFIED",), discovery.checked_at, "VERIFIED", checked_at)
+
+
 class LocalModelProvider(Protocol):
     provider_id: str
     model_id: str
@@ -120,12 +209,14 @@ class LocalPlanner:
     def propose(self, request: str) -> dict[str, Any]:
         if not isinstance(request, str) or not request.strip():
             return {"status": "PLANNER_INVALID_REQUEST", "reason": "REQUEST_MUST_BE_NON_EMPTY"}
-        if self.discovery.status != LOCAL_MODEL_READY or self.provider is None:
+        if self.discovery.status != LOCAL_MODEL_READY or self.discovery.inference_status != "VERIFIED" or self.provider is None:
             return {"status": PLANNER_UNAVAILABLE, "reason": self.discovery.status, "discovery": self.discovery.to_dict()}
         prompt = (
             "Return JSON only: {\"task_spec\": {...}}. The task_spec must be a bounded "
             "experimental.local.repository_change.v1 plan. Never request credentials, network, "
-            "remote repositories, shell commands, or paths outside its fixture workspace. Request: " + request
+            "remote repositories, shell commands, or paths outside its fixture workspace. The allowed "
+            "test command is python-unittest-q and fixed limits are timeout_seconds=30,memory_mb=256,"
+            "cpus=1,pids=64. Request: " + request
         )
         try:
             raw = self.provider.complete(prompt, timeout_seconds=15)
@@ -140,18 +231,35 @@ class LocalPlanner:
             return {"status": "PLANNER_ERROR", "reason": "MALFORMED_LOCAL_MODEL_RESPONSE", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output_hash": hashlib.sha256(str(raw).encode()).hexdigest()}
         if not isinstance(task_spec, dict):
             return {"status": "PLANNER_ERROR", "reason": "MODEL_PLAN_NOT_OBJECT", "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output_hash": hashlib.sha256(raw.encode()).hexdigest()}
-        return {"status": "PROPOSED", "request": request, "task_spec": task_spec, "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output": raw, "raw_output_hash": hashlib.sha256(raw.encode()).hexdigest()}
+        return {"status": "PROPOSED", "request": request, "task_spec": task_spec, "provider_id": self.provider.provider_id, "model_id": self.provider.model_id, "raw_output": raw, "raw_output_hash": hashlib.sha256(raw.encode()).hexdigest(), "raw_task_spec_hash": _hash(task_spec)}
 
 
 class LocalPlanValidator:
     """Independently validate a proposal against the existing dispatcher contract."""
 
-    def __init__(self, data_dir: str | Path) -> None:
+    def __init__(self, data_dir: str | Path, discovery: LocalModelDiscovery | None = None) -> None:
         self.executor = LocalNativeTaskExecutor(data_dir)
+        self.discovery = discovery
 
     def validate(self, proposal: dict[str, Any]) -> dict[str, Any]:
-        if proposal.get("status") != "PROPOSED" or not isinstance(proposal.get("task_spec"), dict):
+        required = {"status", "request", "task_spec", "provider_id", "model_id", "raw_output", "raw_output_hash", "raw_task_spec_hash"}
+        if not isinstance(proposal, dict) or not required.issubset(proposal) or proposal.get("status") != "PROPOSED" or not isinstance(proposal.get("task_spec"), dict):
             return {"decision": "DENY", "reason": "NO_VALID_PROPOSAL"}
+        if not isinstance(proposal["raw_output"], str) or len(proposal["raw_output"].encode("utf-8")) > MAX_MODEL_RESPONSE_BYTES:
+            return {"decision": "DENY", "reason": "MODEL_OUTPUT_NOT_BOUNDED"}
+        if hashlib.sha256(proposal["raw_output"].encode()).hexdigest() != proposal["raw_output_hash"]:
+            return {"decision": "DENY", "reason": "MODEL_OUTPUT_HASH_MISMATCH"}
+        try:
+            raw_task_spec = json.loads(proposal["raw_output"])["task_spec"]
+        except (KeyError, TypeError, json.JSONDecodeError):
+            return {"decision": "DENY", "reason": "MODEL_OUTPUT_NO_TASK_SPEC"}
+        if not isinstance(raw_task_spec, dict) or _hash(raw_task_spec) != proposal["raw_task_spec_hash"] or _hash(raw_task_spec) != _hash(proposal["task_spec"]):
+            return {"decision": "DENY", "reason": "MODEL_OUTPUT_AND_SUBMITTED_PLAN_DIFFER"}
+        if self.discovery is not None and (
+            self.discovery.status != LOCAL_MODEL_READY or self.discovery.inference_status != "VERIFIED"
+            or proposal["provider_id"] != self.discovery.provider_id or proposal["model_id"] not in self.discovery.models
+        ):
+            return {"decision": "DENY", "reason": "PROVIDER_OR_MODEL_NOT_VERIFIED_BY_DISCOVERY"}
         spec = dict(proposal["task_spec"])
         # Validate all executable fields under the pre-existing closed contract
         # before attaching provenance controlled by this boundary.
@@ -165,7 +273,7 @@ class LocalPlanValidator:
         validated["planner"] = LOCAL_MODEL_PLANNER
         validated["planning_evidence"] = {
             "provider_id": proposal["provider_id"], "model_id": proposal["model_id"],
-            "raw_output": proposal["raw_output"], "raw_output_hash": proposal["raw_output_hash"],
+            "raw_output": proposal["raw_output"], "raw_output_hash": proposal["raw_output_hash"], "task_spec_hash": _hash(validated),
             "validator": "LOCAL_PLAN_VALIDATOR_V1", "decision": "ALLOW",
         }
         return {"decision": "ALLOW", "task_spec": validated, "specification_hash": spec_hash}
@@ -179,6 +287,8 @@ class LocalPlanningOrchestrator:
 
     def plan_and_execute(self, request: str) -> dict[str, Any]:
         proposal = self.planner.propose(request)
+        if proposal.get("status") == PLANNER_UNAVAILABLE:
+            return {"status": PLANNER_UNAVAILABLE, "proposal": proposal, "validation": None, "execution": None}
         validation = self.validator.validate(proposal)
         if validation["decision"] != "ALLOW":
             return {"status": "BLOCKED", "proposal": proposal, "validation": validation, "execution": None}
