@@ -59,6 +59,21 @@ dispatcher can create a private fixture workspace and run Podman.
 
 ## Current machine evidence
 
-Task 008 records real machine evidence only after its dedicated local verification
-command completes. It is intentionally distinct from unit tests and does not
-certify planning or engineering-task execution.
+On 2026-10-27, Task `ANNY-RUNTIME-LOCAL-INFERENCE-008` verified the locally
+installed `qwen2.5-coder:1.5b` catalog entry (986 MB) through the fixed
+loopback adapter. The one JSON-only probe completed in 3,351 ms with HTTP 200
+and `JSON_EXACT_OK`, resulting in `LOCAL_MODEL_READY` and
+`inference_status=VERIFIED`.
+
+The durable local evidence is mode `0600` under ANNY Runtime's data directory:
+
+- `native-executions/planning/local-model-discovery.json` — result hash
+  `0fbbfe815ec4fde0753f5226086037ffa5c7a8a35823607ddf001f65d298b93e`.
+- `native-executions/planning/local-inference-verification.json` — response
+  hash `4062edaf750fb8074e7e83e0c9028c94e32468a8b6f1614774328ef045150f93`
+  and result hash
+  `eeb664ec394abbfd7c8cf432c0197102817d84e1b62b5aea88df86d2501a0b71`.
+
+This is real local-inference evidence, distinct from unit tests. It does not
+certify planning or engineering-task execution; Task 008 did not invoke
+`local-plan`, create a task workspace, or alter the dispatcher or runner.
