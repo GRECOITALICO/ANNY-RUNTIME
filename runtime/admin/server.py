@@ -261,10 +261,22 @@ def build_github_auth_manager(secret_backend, config):
 def build_fabric_client(github_client, config):
     """Build the provider-neutral Repository Fabric adapter from RuntimeConfig.
 
-    Missing Fabric configuration must fail closed in GitHubFabricAdapter; this helper
-    only wires the canonical RuntimeConfig into the adapter and never invents values.
+    An absent binding leaves Fabric unavailable to the local admin/runtime path.
+    Fabric-dependent operations remain fail-closed when no client is present.
     """
     if github_client is None:
+        return None
+    fabric_org = getattr(config, "fabric_org", None) if config else None
+    fabric_repo = getattr(config, "fabric_repo", None) if config else None
+    if (
+        not isinstance(fabric_org, str)
+        or not fabric_org.strip()
+        or not isinstance(fabric_repo, str)
+        or not fabric_repo.strip()
+    ):
+        logger.info(
+            "Repository Fabric NOT_CONFIGURED: fabric_org/fabric_repo binding is absent"
+        )
         return None
     from runtime.fabric.github_adapter import GitHubFabricAdapter
     return GitHubFabricAdapter(github_client=github_client, config=config)

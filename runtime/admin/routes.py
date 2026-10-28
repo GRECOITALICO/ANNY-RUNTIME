@@ -708,16 +708,21 @@ class AdminRouter:
         secret_backend = self.context.get('secret_backend')
         if not gh_mgr or not gh_mgr.has_token():
             return None
-        try:
-            from runtime.github.client import GitHubClient
-            from runtime.fabric.github_adapter import GitHubFabricAdapter
-            gh_client = GitHubClient(secret_backend=secret_backend)
-            engine = self.context.get('runtime_engine')
-            config = engine.config if engine else None
-            return GitHubFabricAdapter(github_client=gh_client, config=config)
-        except Exception as e:
-            logger.warning(f"Could not create GitHubFabricAdapter: {e}")
+        engine = self.context.get('runtime_engine')
+        config = engine.config if engine else None
+        fabric_org = getattr(config, 'fabric_org', None)
+        fabric_repo = getattr(config, 'fabric_repo', None)
+        if (
+            not isinstance(fabric_org, str)
+            or not fabric_org.strip()
+            or not isinstance(fabric_repo, str)
+            or not fabric_repo.strip()
+        ):
+            logger.info("Repository Fabric NOT_CONFIGURED: fabric_org/fabric_repo binding is absent")
             return None
+        from runtime.github.client import GitHubClient
+        from runtime.fabric.github_adapter import GitHubFabricAdapter
+        return GitHubFabricAdapter(github_client=GitHubClient(secret_backend=secret_backend), config=config)
 
     def _get_continuity_dto(self) -> ContinuityDTO:
         gh_mgr = self.context.get('github_manager')
@@ -924,12 +929,11 @@ class AdminRouter:
     def handle_fabric(self, parsed) -> str:
         """Report live Repository Fabric status through the canonical config-driven adapter."""
         status = FabricStatusDTO(False, None, None, None, None, None).to_dict()
-        fabric_client = self._get_fabric_client()
-        if fabric_client is None:
-            status["fabric_status"] = "NOT_CONFIGURED"
-            return fabric_page(status, self._get_csrf())
-
         try:
+            fabric_client = self._get_fabric_client()
+            if fabric_client is None:
+                status["fabric_status"] = "NOT_CONFIGURED"
+                return fabric_page(status, self._get_csrf())
             health = fabric_client.probe_health()
             status["fabric_status"] = "CONNECTED" if health.reachable else "DEGRADED"
             status["node_id"] = health.node_id
