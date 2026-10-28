@@ -14,7 +14,7 @@ from runtime.telemetry.telemetry import TelemetryEnvelope
 class ExecutionManager:
     """Manage queue and history of bounded workspace executions."""
 
-    def __init__(self, workspace_manager: EphemeralWorkspaceManager, audit_manager=None, github_client=None, fabric_client=None, telemetry_collector=None, runtime_engine=None, continuity_engine=None):
+    def __init__(self, workspace_manager: EphemeralWorkspaceManager, audit_manager=None, github_client=None, fabric_client=None, telemetry_collector=None, runtime_engine=None, continuity_engine=None, inbox_downloads_root: str = ""):
         self._executions: Dict[str, TaskExecutionContext] = {}
         self._tasks: Dict[str, Task] = {}
         self.workspace_manager = workspace_manager
@@ -49,6 +49,10 @@ class ExecutionManager:
             mcp_gateway=self.mcp_gateway,
             telemetry_collector=self.telemetry_collector
         )
+        self.worker_manager.deterministic_executor.configure_inbox_capabilities(inbox_downloads_root)
+
+    def configure_inbox_capabilities(self, downloads_root: str, status_provider=None) -> None:
+        self.worker_manager.deterministic_executor.configure_inbox_capabilities(downloads_root, status_provider)
 
     def submit_task(self, task: Task) -> TaskExecutionContext:
         execution_id = str(uuid.uuid4())

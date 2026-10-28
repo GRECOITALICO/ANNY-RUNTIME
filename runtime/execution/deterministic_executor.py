@@ -21,10 +21,16 @@ class ExecutorSecurityError(Exception):
 class DeterministicExecutor:
     """Execute local deterministic capabilities with bounded, auditable behavior."""
 
-    def __init__(self, workspace_manager: EphemeralWorkspaceManager):
+    def __init__(self, workspace_manager: EphemeralWorkspaceManager, inbox_downloads_root: str = "", inbox_status_provider=None):
         self.workspace_manager = workspace_manager
         self.runtime_version = "1.1.0"
         self.tool_version = "1.1.0"
+        self.inbox_downloads_root = inbox_downloads_root
+        self.inbox_status_provider = inbox_status_provider
+
+    def configure_inbox_capabilities(self, downloads_root: str, status_provider=None) -> None:
+        self.inbox_downloads_root = downloads_root
+        self.inbox_status_provider = status_provider
 
     def execute(self, task: Task, context: TaskExecutionContext) -> None:
         if context.status != ExecutionStatus.QUEUED:
@@ -44,6 +50,9 @@ class DeterministicExecutor:
             "repository.read": self._execute_repository_read,
             "repository.diff": self._execute_repository_diff,
             "artifact.metadata": self._execute_artifact_metadata,
+            "runtime.ping": self._execute_runtime_ping,
+            "filesystem.list_text_files": self._execute_list_text_files,
+            "filesystem.read_text": self._execute_read_text,
         }
         handler = supported.get(task.capability_id)
         if handler is None:
@@ -267,6 +276,26 @@ class DeterministicExecutor:
                 "sha256": self._sha256_path(abs_target) if os.path.isfile(abs_target) else None,
             }
         self._limit_output(context, result)
+
+    def _execute_runtime_ping(self, task: Task, context: TaskExecutionContext) -> None:
+        if task.input or task.constraints:
+            raise ValueError("runtime.ping accepts no input or constraints")
+        from runtime.core.version import __commit__, __version__
+        from runtime.core.config import get_data_dir
+        from runtime.identity.runtime_identity import RuntimeIdentity
+        identity = RuntimeIdentity.load(get_data_dir())
+        status = self.inbox_status_provider() if callable(self.inbox_status_provider) else {"active": False, "activation": "NOT_CONFIGURED"}
+        self._limit_output(context, {"runtime_id": identity.runtime_id, "build_revision": __commit__, "version": __version__, "github_inbox": status})
+
+    def _execute_list_text_files(self, task: Task, context: TaskExecutionContext) -> None:
+        if task.input or task.constraints:
+            raise ValueError("filesystem.list_text_files accepts no input or constraints")
+        from runtime.execution.inbox_capabilities import list_text_files
+        self._limit_output(context, list_text_files(self.inbox_downloads_root))
+
+    def _execute_read_text(self, task: Task, context: TaskExecutionContext) -> None:
+        from runtime.execution.inbox_capabilities import read_text_file
+        self._limit_output(context, read_text_file(self.inbox_downloads_root, task.input.get("relative_path"), task.constraints.get("max_bytes")))
 
     def _sha256_path(self, path: str) -> str:
         digest = hashlib.sha256()

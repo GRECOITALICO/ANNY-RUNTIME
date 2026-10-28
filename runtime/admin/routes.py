@@ -72,6 +72,7 @@ class AdminRouter:
             '/search': self.handle_search,
             '/api/status': self.handle_api_status,
             '/api/github/readonly': self.handle_github_readonly,
+            '/api/github/inbox/status': self.handle_github_inbox_status,
             '/api/operational-state': self.handle_operational_state,
             '/api/conrrad/simulator': self.handle_conrrad_simulator,
             '/api/local-planner/status': self.handle_local_planner_status,
@@ -609,6 +610,16 @@ class AdminRouter:
                 'last_error': 'GitHub CLI read-only source unavailable',
             }
         )
+        return '/'
+
+    def handle_github_inbox_status(self, parsed) -> str:
+        """Expose the inbox worker's sanitized operational state only."""
+        worker = self.context.get('github_inbox_worker')
+        self.context['direct_json_response'] = worker.status() if worker else {
+            'active': False,
+            'activation': 'NOT_CONFIGURED',
+            'last_error_code': 'INBOX_WORKER_UNAVAILABLE',
+        }
         return '/'
 
     def handle_operational_state(self, parsed) -> str:
