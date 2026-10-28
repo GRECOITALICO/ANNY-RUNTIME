@@ -21,15 +21,17 @@ class ExecutorSecurityError(Exception):
 class DeterministicExecutor:
     """Execute local deterministic capabilities with bounded, auditable behavior."""
 
-    def __init__(self, workspace_manager: EphemeralWorkspaceManager, inbox_downloads_root: str = "", inbox_status_provider=None):
+    def __init__(self, workspace_manager: EphemeralWorkspaceManager, inbox_local_roots=None, inbox_status_provider=None):
         self.workspace_manager = workspace_manager
         self.runtime_version = "1.1.0"
         self.tool_version = "1.1.0"
-        self.inbox_downloads_root = inbox_downloads_root
+        self.inbox_local_policy = None
         self.inbox_status_provider = inbox_status_provider
+        self.configure_inbox_capabilities(inbox_local_roots or {}, inbox_status_provider)
 
-    def configure_inbox_capabilities(self, downloads_root: str, status_provider=None) -> None:
-        self.inbox_downloads_root = downloads_root
+    def configure_inbox_capabilities(self, local_roots, status_provider=None) -> None:
+        from runtime.execution.inbox_capabilities import build_local_access_policy
+        self.inbox_local_policy = build_local_access_policy(local_roots)
         self.inbox_status_provider = status_provider
 
     def execute(self, task: Task, context: TaskExecutionContext) -> None:
@@ -51,8 +53,10 @@ class DeterministicExecutor:
             "repository.diff": self._execute_repository_diff,
             "artifact.metadata": self._execute_artifact_metadata,
             "runtime.ping": self._execute_runtime_ping,
-            "filesystem.list_text_files": self._execute_list_text_files,
-            "filesystem.read_text": self._execute_read_text,
+            "filesystem.local.list": self._execute_local_list,
+            "filesystem.local.read_text": self._execute_local_read_text,
+            "filesystem.local.inspect": self._execute_local_inspect,
+            "filesystem.local.hash": self._execute_local_hash,
         }
         handler = supported.get(task.capability_id)
         if handler is None:
@@ -287,15 +291,33 @@ class DeterministicExecutor:
         status = self.inbox_status_provider() if callable(self.inbox_status_provider) else {"active": False, "activation": "NOT_CONFIGURED"}
         self._limit_output(context, {"runtime_id": identity.runtime_id, "build_revision": __commit__, "version": __version__, "github_inbox": status})
 
-    def _execute_list_text_files(self, task: Task, context: TaskExecutionContext) -> None:
-        if task.input or task.constraints:
-            raise ValueError("filesystem.list_text_files accepts no input or constraints")
-        from runtime.execution.inbox_capabilities import list_text_files
-        self._limit_output(context, list_text_files(self.inbox_downloads_root))
+    def _execute_local_list(self, task: Task, context: TaskExecutionContext) -> None:
+        from runtime.execution.inbox_capabilities import InboxCapabilityError, list_local_directory
+        try:
+            self._limit_output(context, list_local_directory(self.inbox_local_policy, task.input.get("root_id"), task.input.get("relative_path"), task.constraints.get("max_entries")))
+        except InboxCapabilityError as exc:
+            raise ExecutorSecurityError(str(exc)) from exc
 
-    def _execute_read_text(self, task: Task, context: TaskExecutionContext) -> None:
-        from runtime.execution.inbox_capabilities import read_text_file
-        self._limit_output(context, read_text_file(self.inbox_downloads_root, task.input.get("relative_path"), task.constraints.get("max_bytes")))
+    def _execute_local_read_text(self, task: Task, context: TaskExecutionContext) -> None:
+        from runtime.execution.inbox_capabilities import InboxCapabilityError, read_local_text
+        try:
+            self._limit_output(context, read_local_text(self.inbox_local_policy, task.input.get("root_id"), task.input.get("relative_path"), task.constraints.get("max_bytes")))
+        except InboxCapabilityError as exc:
+            raise ExecutorSecurityError(str(exc)) from exc
+
+    def _execute_local_inspect(self, task: Task, context: TaskExecutionContext) -> None:
+        from runtime.execution.inbox_capabilities import InboxCapabilityError, inspect_local_file
+        try:
+            self._limit_output(context, inspect_local_file(self.inbox_local_policy, task.input.get("root_id"), task.input.get("relative_path")))
+        except InboxCapabilityError as exc:
+            raise ExecutorSecurityError(str(exc)) from exc
+
+    def _execute_local_hash(self, task: Task, context: TaskExecutionContext) -> None:
+        from runtime.execution.inbox_capabilities import InboxCapabilityError, hash_local_file
+        try:
+            self._limit_output(context, hash_local_file(self.inbox_local_policy, task.input.get("root_id"), task.input.get("relative_path"), task.constraints.get("max_bytes")))
+        except InboxCapabilityError as exc:
+            raise ExecutorSecurityError(str(exc)) from exc
 
     def _sha256_path(self, path: str) -> str:
         digest = hashlib.sha256()

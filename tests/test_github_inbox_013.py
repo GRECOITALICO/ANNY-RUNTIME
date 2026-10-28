@@ -5,8 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from runtime.execution.inbox_capabilities import InboxCapabilityError, list_text_files, read_text_file
+from runtime.execution.inbox_capabilities import build_local_access_policy, hash_local_file, inspect_local_file, list_local_directory, read_local_text
 from runtime.execution.deterministic_executor import DeterministicExecutor
+from runtime.execution.capability import CapabilityRegistry
 from runtime.execution.models import ExecutionStatus, Task, TaskExecutionContext
 from runtime.github.inbox import GitHubInboxClient, GitHubInboxWorker, InboxContractError, InboxSettings, parse_inbox_request
 from runtime.workspace.ephemeral import EphemeralWorkspaceManager
@@ -47,46 +48,69 @@ def test_request_contract_rejects_wrong_actor_and_pr():
         parse_inbox_request(issue, "anny-l0")
 
 
-def test_read_contract_limits_and_simple_relative_name():
-    valid = parse_inbox_request(_issue(_payload("filesystem.read_text", {"relative_path": "one.txt"}, {"max_bytes": 16384})), "anny-l0")
-    assert valid.capability == "filesystem.read_text"
-    for path in ("../one.txt", "/tmp/one.txt", "nested/one.txt", "one.md"):
+def test_local_contract_accepts_only_registered_operations_and_relative_paths():
+    valid = parse_inbox_request(_issue(_payload("filesystem.local.read_text", {"root_id": "workspace", "relative_path": "nested/one.txt"}, {"max_bytes": 16384})), "anny-l0")
+    assert valid.capability == "filesystem.local.read_text"
+    for capability, input_data, constraints in (
+        ("shell.execute", {}, {}),
+        ("filesystem.local.read_text", {"root_id": "workspace", "relative_path": "../one.txt"}, {"max_bytes": 16}),
+        ("filesystem.local.list", {"root_id": "workspace", "relative_path": "/tmp"}, {"max_entries": 1}),
+        ("filesystem.local.hash", {"root_id": "workspace", "relative_path": "one.txt"}, {"max_bytes": 4 * 1024 * 1024 + 1}),
+    ):
         with pytest.raises(InboxContractError):
-            parse_inbox_request(_issue(_payload("filesystem.read_text", {"relative_path": path}, {"max_bytes": 16})), "anny-l0")
+            parse_inbox_request(_issue(_payload(capability, input_data, constraints)), "anny-l0")
 
 
-def test_downloads_text_capabilities_reject_symlink_invalid_utf8_and_large_file(tmp_path):
-    root = tmp_path / "downloads"
+def _policy(root, operations=("read", "list", "inspect", "hash")):
+    return build_local_access_policy({"fixture": {"path": str(root), "operations": list(operations)}})
+
+
+def test_local_policy_separates_operations_and_rejects_escape_sensitive_and_symlink_paths(tmp_path):
+    root = tmp_path / "fixture"
     root.mkdir()
-    (root / "three.txt").write_text("3\n", encoding="utf-8")
-    (root / "other.md").write_text("not listed", encoding="utf-8")
-    os.symlink(root / "three.txt", root / "link.txt")
-    (root / "broken.txt").write_bytes(b"\xff")
-    (root / "large.txt").write_text("x" * 17, encoding="utf-8")
+    (root / "nested").mkdir()
+    (root / "nested" / "three.txt").write_text("3\n", encoding="utf-8")
+    (root / ".ssh").mkdir()
+    (root / ".ssh" / "id_rsa").write_text("never publish", encoding="utf-8")
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside", encoding="utf-8")
+    os.symlink(outside, root / "link.txt")
+    policy = _policy(root)
 
-    assert list_text_files(str(root))["files"] == [
-        {"name": "broken.txt", "size_bytes": 1},
-        {"name": "large.txt", "size_bytes": 17},
-        {"name": "three.txt", "size_bytes": 2},
-    ]
-    assert read_text_file(str(root), "three.txt", 16) == {
-        "relative_path": "three.txt", "content": "3\n", "encoding": "utf-8", "bytes": 2,
-        "sha256": "1121cfccd5913f0a63fec40a6ffd44ea64f9dc135c66634ba001d10bcf4302a2",
-    }
-    for name, limit, code in (("link.txt", 16, "TEXT_FILE_OPEN_DENIED"), ("broken.txt", 16, "TEXT_FILE_NOT_UTF8"), ("large.txt", 16, "TEXT_FILE_TOO_LARGE"), ("missing.txt", 16, "TEXT_FILE_NOT_FOUND"), ("../three.txt", 16, "INVALID_RELATIVE_TEXT_NAME")):
-        with pytest.raises(InboxCapabilityError, match=code):
-            read_text_file(str(root), name, limit)
+    assert list_local_directory(policy, "fixture", ".", 10)["entries"] == [{"name": "nested", "kind": "directory", "size_bytes": pytest.approx((root / "nested").stat().st_size)}]
+    assert read_local_text(policy, "fixture", "nested/three.txt", 16)["content"] == "3\n"
+    assert inspect_local_file(policy, "fixture", "nested/three.txt")["kind"] == "file"
+    assert hash_local_file(policy, "fixture", "nested/three.txt", 16)["bytes"] == 2
+    for path in ("../outside.txt", ".ssh/id_rsa", "link.txt"):
+        with pytest.raises(Exception):
+            read_local_text(policy, "fixture", path, 16)
+    with pytest.raises(Exception, match="LOCAL_OPERATION_NOT_AUTHORIZED"):
+        read_local_text(_policy(root, ("list",)), "fixture", "nested/three.txt", 16)
 
 
-def test_deterministic_executor_uses_the_registered_bounded_text_capability(tmp_path):
-    root = tmp_path / "downloads"
+def test_local_policy_mutations_require_separate_explicit_grants_and_stay_inside_fixture(tmp_path):
+    root = tmp_path / "fixture"
+    root.mkdir()
+    policy = _policy(root, ("create", "write", "move", "delete"))
+
+    assert policy.create_text("fixture", "created.txt", "first")["bytes"] == 5
+    assert policy.write_text("fixture", "created.txt", "edited")["bytes"] == 6
+    assert policy.move_file("fixture", "created.txt", "moved.txt")["moved"] is True
+    assert policy.delete_file("fixture", "moved.txt")["deleted"] is True
+    assert not (root / "moved.txt").exists()
+    with pytest.raises(Exception, match="LOCAL_OPERATION_NOT_AUTHORIZED"):
+        _policy(root, ("read",)).create_text("fixture", "not-allowed.txt", "no")
+
+
+def test_deterministic_executor_uses_registered_local_policy_and_blocks_ungranted_root(tmp_path):
+    root = tmp_path / "fixture"
     root.mkdir()
     (root / "value.txt").write_text("3\n", encoding="utf-8")
     manager = EphemeralWorkspaceManager(str(tmp_path / "workspaces"))
     workspace = manager.create_workspace("inbox-exec", "inbox")
     task = Task(
-        task_id="inbox-read", capability_id="filesystem.read_text", account_id="inbox", project_id="inbox",
-        input={"relative_path": "value.txt"}, constraints={"max_bytes": 16},
+        task_id="inbox-read", capability_id="filesystem.local.read_text", account_id="inbox", project_id="inbox",
+        input={"root_id": "fixture", "relative_path": "value.txt"}, constraints={"max_bytes": 16},
         deadline=datetime.now(timezone.utc) + timedelta(seconds=20), workspace_policy="retain",
         evidence_policy="required", requested_by="anny-l0", created_at=datetime.now(timezone.utc),
     )
@@ -96,10 +120,21 @@ def test_deterministic_executor_uses_the_registered_bounded_text_capability(tmp_
         deadline=task.deadline, resource_limits={"max_output_size": 1024 * 1024, "max_workspace_size": 1024 * 1024},
         network_policy="disabled", write_policy="read_only",
     )
-    DeterministicExecutor(manager, inbox_downloads_root=str(root)).execute(task, context)
+    DeterministicExecutor(manager, inbox_local_roots={"fixture": {"path": str(root), "operations": ["read"]}}).execute(task, context)
     assert context.status == ExecutionStatus.SUCCEEDED
     assert context.result["content"] == "3\n"
     assert context.result_hash
+
+
+def test_registry_exposes_only_read_only_local_inbox_capabilities():
+    registry = CapabilityRegistry()
+    for capability_id in ("filesystem.local.list", "filesystem.local.read_text", "filesystem.local.inspect", "filesystem.local.hash"):
+        capability = registry.get(capability_id)
+        assert capability is not None
+        assert capability.side_effect == "read"
+        assert capability.deterministic_allowed is True
+    assert registry.get("filesystem.local.delete") is None
+    assert registry.get("shell.execute") is None
 
 
 class _Response:
@@ -198,7 +233,7 @@ class _FakeExecutionManager:
 def test_worker_acknowledges_executes_publishes_verifies_and_is_idempotent(tmp_path):
     inbox = _FakeInbox([_issue(_payload())])
     manager = _FakeExecutionManager()
-    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0"), inbox, manager, tmp_path, "rt-test")
+    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0", local_roots={"fixture": {"path": str(tmp_path), "operations": ["read"]}}), inbox, manager, tmp_path, "rt-test")
 
     assert worker.start() is True
     worker.stop()
@@ -215,7 +250,7 @@ def test_worker_acknowledges_executes_publishes_verifies_and_is_idempotent(tmp_p
 def test_worker_fails_closed_for_excess_token_scope_and_never_executes(tmp_path):
     inbox = _FakeInbox([_issue(_payload())], scopes=["repo", "read:org", "workflow"])
     manager = _FakeExecutionManager()
-    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0"), inbox, manager, tmp_path, "rt-test")
+    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0", local_roots={"fixture": {"path": str(tmp_path), "operations": ["read"]}}), inbox, manager, tmp_path, "rt-test")
     assert worker.start() is False
     assert worker.status()["activation"] == "TOKEN_SCOPE_EXCESS"
     assert not manager.calls
@@ -225,19 +260,49 @@ def test_worker_fails_closed_when_token_or_authorized_identity_is_unavailable(tm
     class MissingTokenInbox:
         def verify_activation(self):
             raise RuntimeError("credential unavailable")
-    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0"), MissingTokenInbox(), _FakeExecutionManager(), tmp_path, "rt-test")
+    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0", local_roots={"fixture": {"path": str(tmp_path), "operations": ["read"]}}), MissingTokenInbox(), _FakeExecutionManager(), tmp_path, "rt-test")
     assert worker.start() is False
     assert worker.status()["activation"] == "TOKEN_AUTH_FAILED"
 
     wrong = _FakeInbox([], scopes=["repo", "read:org"])
     wrong.verify_activation = lambda: {"principal": "different-user", "missing_scopes": [], "excess_scopes": [], "private": True}
-    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0"), wrong, _FakeExecutionManager(), tmp_path, "rt-test")
+    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0", local_roots={"fixture": {"path": str(tmp_path), "operations": ["read"]}}), wrong, _FakeExecutionManager(), tmp_path, "rt-test")
     assert worker.start() is False
     assert worker.status()["activation"] == "AUTHENTICATED_PRINCIPAL_NOT_AUTHORIZED"
 
 
 def test_worker_allows_explicit_self_actor_only_after_token_identity_verification(tmp_path):
     inbox = _FakeInbox([])
-    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="self"), inbox, _FakeExecutionManager(), tmp_path, "rt-test")
+    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="self", local_roots={"fixture": {"path": str(tmp_path), "operations": ["read"]}}), inbox, _FakeExecutionManager(), tmp_path, "rt-test")
     assert worker.start() is True
     worker.stop()
+
+
+def test_worker_requires_explicit_local_root_configuration_before_activation(tmp_path):
+    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0"), _FakeInbox([]), _FakeExecutionManager(), tmp_path, "rt-test")
+    assert worker.start() is False
+    assert worker.status()["activation"] == "LOCAL_ROOTS_MISSING"
+
+    invalid = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0", local_roots={"broken": {}}), _FakeInbox([]), _FakeExecutionManager(), tmp_path, "rt-test")
+    assert invalid.start() is False
+    assert invalid.status()["activation"] == "LOCAL_ROOTS_INVALID"
+
+
+def test_worker_publishes_blocked_for_a_policy_denial(tmp_path):
+    class PolicyDeniedManager(_FakeExecutionManager):
+        def execute_sync(self, execution_id):
+            context = self.contexts[execution_id]
+            context.status = ExecutionStatus.FAILED
+            from runtime.execution.models import FailureReason
+            context.failure_reason = FailureReason.AUTHORIZATION_DENIED
+            context.result_hash = "b" * 64
+            context.started_at = context.completed_at = datetime.now(timezone.utc)
+
+    inbox = _FakeInbox([_issue(_payload("filesystem.local.read_text", {"root_id": "fixture", "relative_path": "one.txt"}, {"max_bytes": 16}))])
+    worker = GitHubInboxWorker(InboxSettings(enabled=True, authorized_actor="anny-l0", local_roots={"fixture": {"path": str(tmp_path), "operations": ["read"]}}), inbox, PolicyDeniedManager(), tmp_path, "rt-test")
+    assert worker.start() is True
+    worker.stop()
+    worker.poll_once()
+    result = json.loads(inbox.comments(7)[-1]["body"])
+    assert result["status"] == "BLOCKED"
+    assert result["error"]["code"] == "AUTHORIZATION_DENIED"

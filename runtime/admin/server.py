@@ -315,7 +315,7 @@ def start_admin_server(host: str, port: int):
         github_client=github_client,
         fabric_client=fabric_client,
         telemetry_collector=telemetry_collector,
-        inbox_downloads_root=getattr(config, "github_inbox_downloads_root", ""),
+        inbox_local_roots=getattr(config, "github_inbox_local_roots", {}),
     )
         
     disc_repos_raw = []
@@ -339,7 +339,7 @@ def start_admin_server(host: str, port: int):
         data_dir=data_dir,
         runtime_id=identity_manager.runtime_id,
     )
-    execution_manager.configure_inbox_capabilities(inbox_settings.downloads_root, inbox_worker.status)
+    execution_manager.configure_inbox_capabilities(inbox_settings.local_roots, inbox_worker.status)
     
     update_source_repo = os.environ.get("ANNY_UPDATE_SOURCE_REPO", "").strip()
     update_source = None

@@ -59,7 +59,7 @@ class InboxContractError(InboxError):
 class InboxSettings:
     enabled: bool = False
     authorized_actor: str = ""
-    downloads_root: str = ""
+    local_roots: Dict[str, Any] | None = None
     poll_interval_seconds: int = 25
 
     @classmethod
@@ -67,7 +67,7 @@ class InboxSettings:
         return cls(
             enabled=bool(getattr(config, "github_inbox_enabled", False)),
             authorized_actor=str(getattr(config, "github_inbox_authorized_actor", "") or "").strip(),
-            downloads_root=str(getattr(config, "github_inbox_downloads_root", "") or "").strip(),
+            local_roots=getattr(config, "github_inbox_local_roots", None),
             poll_interval_seconds=max(20, min(30, int(getattr(config, "github_inbox_poll_interval_seconds", 25)))),
         )
 
@@ -122,24 +122,44 @@ def parse_inbox_request(issue: Dict[str, Any], authorized_actor: str) -> InboxRe
     if capability == "runtime.ping":
         if input_data or constraints:
             raise InboxContractError("PING_CONTRACT_INVALID")
-    elif capability == "filesystem.list_text_files":
-        if input_data or constraints:
-            raise InboxContractError("LIST_CONTRACT_INVALID")
-    elif capability == "filesystem.read_text":
-        if set(input_data) != {"relative_path"} or set(constraints) != {"max_bytes"}:
-            raise InboxContractError("READ_CONTRACT_INVALID")
-        relative_path = input_data.get("relative_path")
-        max_bytes = constraints.get("max_bytes")
-        if not isinstance(relative_path, str) or not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or not 1 <= max_bytes <= 16384:
-            raise InboxContractError("READ_CONTRACT_INVALID")
-        from runtime.execution.inbox_capabilities import InboxCapabilityError, validate_relative_text_name
-        try:
-            validate_relative_text_name(relative_path)
-        except InboxCapabilityError as exc:
-            raise InboxContractError("READ_CONTRACT_INVALID") from exc
+    elif capability == "filesystem.local.list":
+        if set(input_data) != {"root_id", "relative_path"} or set(constraints) != {"max_entries"}:
+            raise InboxContractError("LOCAL_LIST_CONTRACT_INVALID")
+        if not _valid_root_path(input_data) or not _positive_int(constraints.get("max_entries"), 200):
+            raise InboxContractError("LOCAL_LIST_CONTRACT_INVALID")
+    elif capability == "filesystem.local.read_text":
+        if set(input_data) != {"root_id", "relative_path"} or set(constraints) != {"max_bytes"}:
+            raise InboxContractError("LOCAL_READ_CONTRACT_INVALID")
+        if not _valid_root_path(input_data) or not _positive_int(constraints.get("max_bytes"), 16 * 1024):
+            raise InboxContractError("LOCAL_READ_CONTRACT_INVALID")
+    elif capability == "filesystem.local.inspect":
+        if set(input_data) != {"root_id", "relative_path"} or constraints:
+            raise InboxContractError("LOCAL_INSPECT_CONTRACT_INVALID")
+        if not _valid_root_path(input_data, allow_root=False):
+            raise InboxContractError("LOCAL_INSPECT_CONTRACT_INVALID")
+    elif capability == "filesystem.local.hash":
+        if set(input_data) != {"root_id", "relative_path"} or set(constraints) != {"max_bytes"}:
+            raise InboxContractError("LOCAL_HASH_CONTRACT_INVALID")
+        if not _valid_root_path(input_data, allow_root=False) or not _positive_int(constraints.get("max_bytes"), 4 * 1024 * 1024):
+            raise InboxContractError("LOCAL_HASH_CONTRACT_INVALID")
     else:
         raise InboxContractError("CAPABILITY_NOT_AUTHORIZED")
     return InboxRequest(request_id=request_id, capability=capability, input=input_data, constraints=constraints)
+
+
+def _positive_int(value: Any, maximum: int) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= maximum
+
+
+def _valid_root_path(input_data: Dict[str, Any], *, allow_root: bool = True) -> bool:
+    root_id, relative_path = input_data.get("root_id"), input_data.get("relative_path")
+    if not isinstance(root_id, str) or not root_id or len(root_id) > 64:
+        return False
+    if not isinstance(relative_path, str) or len(relative_path) > 1024:
+        return False
+    if relative_path == ".":
+        return allow_root
+    return bool(relative_path) and not relative_path.startswith("/") and "\\" not in relative_path and all(part not in {"", ".", ".."} for part in relative_path.split("/"))
 
 
 class InboxStateStore:
@@ -288,6 +308,15 @@ class GitHubInboxWorker:
         if not self.settings.enabled:
             self._set(active=False, activation="DISABLED")
             return False
+        if not isinstance(self.settings.local_roots, dict) or not self.settings.local_roots:
+            self._set(active=False, activation="LOCAL_ROOTS_MISSING")
+            return False
+        try:
+            from runtime.execution.inbox_capabilities import build_local_access_policy
+            build_local_access_policy(self.settings.local_roots)
+        except Exception as exc:
+            self._set(active=False, activation="LOCAL_ROOTS_INVALID", last_error_code=_normalized_error(exc))
+            return False
         try:
             check = self.inbox.verify_activation()
         except Exception as exc:
@@ -355,7 +384,7 @@ class GitHubInboxWorker:
         context = self.execution_manager.submit_task(task)
         self.execution_manager.execute_sync(context.execution_id)
         status = context.status.value
-        terminal = status if status in {"SUCCEEDED", "FAILED", "TIMED_OUT"} else "BLOCKED"
+        terminal = "BLOCKED" if context.failure_reason and context.failure_reason.value == "AUTHORIZATION_DENIED" else status if status in {"SUCCEEDED", "FAILED", "TIMED_OUT"} else "BLOCKED"
         result = context.result if isinstance(context.result, dict) else {}
         evidence = {"execution_id": context.execution_id, "result_sha256": context.result_hash, "started_at": context.started_at.isoformat() if context.started_at else None, "finished_at": context.completed_at.isoformat() if context.completed_at else None}
         return self._result(request, 0, terminal, result, evidence, context.failure_reason.value if context.failure_reason else None)

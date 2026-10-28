@@ -23,11 +23,17 @@ JSON object, with exactly these top-level fields:
 Only the configured GitHub actor may submit a request. The explicit `self`
 configuration is resolved only once at activation to the principal of the
 verified encrypted token; it is never accepted without that verification.
-Supported capabilities
-are `runtime.ping`, `filesystem.list_text_files`, and `filesystem.read_text`.
-The latter accepts a simple `.txt` filename and `max_bytes` from 1 through
-16384. The Runtime rejects unknown fields, malformed JSON, PRs, unauthorized
-actors, paths, links, non-UTF-8 files, and policy violations before execution.
+Supported capabilities are `runtime.ping`, `filesystem.local.list`,
+`filesystem.local.read_text`, `filesystem.local.inspect`, and
+`filesystem.local.hash`.  Every filesystem request names a configured
+`root_id` and a relative path; it cannot supply a host path or its own
+permissions.  Listing accepts `max_entries` from 1 through 200. Text reads
+accept `max_bytes` from 1 through 16384 and hashes accept `max_bytes` from 1
+through 4194304. The Runtime rejects unknown fields, malformed JSON, PRs,
+unauthorized actors, traversal, links, sensitive paths, non-UTF-8 text, and
+policy violations before execution.  No GitHub capability creates, edits,
+moves, deletes, or executes a command. A request outside a configured root or
+operation is answered with terminal status `BLOCKED` and a normalized error.
 
 ## Response and recovery
 
