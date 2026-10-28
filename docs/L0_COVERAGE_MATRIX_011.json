@@ -1,0 +1,39 @@
+{
+  "audit_id": "ANNY-RUNTIME-L0-AUDIT-011",
+  "source_observation": {
+    "conrrad_engineering": "read-only /home/anny/Workspace/CONRRAD-ENGINEERING",
+    "candidate_catalog_claim": 1560,
+    "catalog_records_found": 0,
+    "classification": "BLOCKED_CATALOG_NOT_PRESENT"
+  },
+  "candidate_scope": {
+    "registered_runtime_capabilities": 12,
+    "l0_test_only_candidates": 11,
+    "excluded": {
+      "id": "fabric.register",
+      "reason": "disabled write capability is outside read-only L0 test scope"
+    }
+  },
+  "runtime_candidates": [
+    {"id": "filesystem.inspect", "source": "Runtime CapabilityRegistry", "contract": "file metadata", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "small local file", "expected_output": "size and file flags", "execution_route": "DeterministicExecutor", "state": "IMPLEMENTED_AND_RUN_PASS", "verification": "metadata fixture"},
+    {"id": "filesystem.list", "source": "Runtime CapabilityRegistry", "contract": "sorted directory listing", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "two-file directory", "expected_output": "sorted entry names", "execution_route": "DeterministicExecutor", "state": "IMPLEMENTED_AND_RUN_PASS", "verification": "listed fixture entries"},
+    {"id": "filesystem.hash", "source": "Runtime CapabilityRegistry", "contract": "SHA-256 file digest", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "small local file", "expected_output": "reference SHA-256", "execution_route": "ExecutionManager -> WorkerManager -> DeterministicExecutor", "state": "IMPLEMENTED_AND_RUN_PASS", "verification": "SHA-256 reference and no model_id"},
+    {"id": "repository.inspect", "source": "Runtime CapabilityRegistry", "contract": "local repository metadata", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "one-commit Git fixture", "expected_output": "Git indicator and HEAD", "execution_route": "DeterministicExecutor", "state": "IMPLEMENTED_AND_RUN_PASS", "verification": "Git fixture"},
+    {"id": "repository.search", "source": "Runtime CapabilityRegistry", "contract": "literal local repository search", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "one-commit Git fixture", "expected_output": "literal reference match", "execution_route": "DeterministicExecutor (Manager path delegates this capability to MCP Gateway)", "state": "IMPLEMENTED_AND_RUN_PASS", "verification": "literal reference matches"},
+    {"id": "repository.read", "source": "Runtime CapabilityRegistry", "contract": "local repository state", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "one-commit dirty Git fixture", "expected_output": "HEAD and dirty state", "execution_route": "DeterministicExecutor (Manager path delegates this capability to MCP Gateway)", "state": "IMPLEMENTED_AND_RUN_PASS", "verification": "Git metadata fixture"},
+    {"id": "repository.diff", "source": "Runtime CapabilityRegistry", "contract": "local Git diff", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "one-commit dirty Git fixture", "expected_output": "changed file in diff", "execution_route": "DeterministicExecutor", "state": "IMPLEMENTED_AND_RUN_PASS", "verification": "Git diff reference"},
+    {"id": "artifact.metadata", "source": "Runtime CapabilityRegistry", "contract": "artifact metadata and digest", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "small local artifact", "expected_output": "metadata plus SHA-256", "execution_route": "DeterministicExecutor", "state": "IMPLEMENTED_AND_RUN_PASS", "verification": "metadata fixture"},
+    {"id": "schema.validate", "source": "Runtime CapabilityRegistry", "contract": "validate structured data against schema", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "not applicable", "expected_output": "validation result", "execution_route": "no handler registered", "state": "MISSING_IMPLEMENTATION", "verification": "no DeterministicExecutor handler"},
+    {"id": "fabric.read", "source": "Runtime CapabilityRegistry", "contract": "read Fabric state", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "not applicable", "expected_output": "Fabric state", "execution_route": "WorkerManager -> MCP Gateway -> configured Fabric client", "state": "IMPLEMENTED_NOT_RUN", "verification": "requires configured Fabric client"},
+    {"id": "document.classify", "source": "Runtime CapabilityRegistry", "contract": "classify a document", "class": "INFERENTIAL", "inference": "REQUIRED", "input_fixture": "not run through governed path", "expected_output": "label under explicit contract", "execution_route": "WorkerManager LOCAL_MODEL -> QwenModelExecutor", "state": "BLOCKED", "verification": "governed LOCAL_MODEL path requires QWEN_MODEL_PATH/llama_cpp; no Ollama adapter"},
+    {"id": "fabric.register", "source": "Runtime CapabilityRegistry", "contract": "register Fabric entry", "class": "DETERMINISTIC", "inference": "NEVER", "input_fixture": "excluded", "expected_output": "write result", "execution_route": "disabled capability", "state": "BLOCKED", "verification": "disabled write capability; excluded from L0 test-only"}
+  ],
+  "summary": {
+    "runtime_l0_candidates": 11,
+    "deterministic_run_pass": 8,
+    "missing_implementation": 1,
+    "implemented_not_run": 1,
+    "inference_end_to_end_pass": 0,
+    "inference_blocked": 1
+  }
+}

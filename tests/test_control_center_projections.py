@@ -261,6 +261,8 @@ def test_control_center_conrrad_projection_is_strict_and_non_synthetic():
     assert data["conrrad_observed_service_count"] == 0
     assert data["conrrad_online_verified_count"] == 0
     assert data["conrrad_trust_verified_count"] == 0
+    assert data["conrrad_valid_certification_count"] == 0
+    assert data["conrrad_certification_status"] == "UNKNOWN"
     assert len(data["conrrad_dependencies"]) == 8
     assert data["github_org"] == "UNKNOWN"
     assert data["tenant"] == "UNKNOWN"
@@ -299,7 +301,7 @@ def test_control_center_conrrad_projection_is_strict_and_non_synthetic():
                     "service_name": name,
                     "online_status": "ONLINE_VERIFIED",
                     "trust_status": "VERIFIED",
-                    "certification_state": "CERTIFIED_BY_LIVE_EVIDENCE",
+                    "certification_state": "CERTIFIED",
                     "last_live_check": "2026-09-23T21:00:00+00:00",
                     "evidence_ref": "evidence/" + name,
                 }
@@ -314,6 +316,8 @@ def test_control_center_conrrad_projection_is_strict_and_non_synthetic():
     assert data["conrrad_observed_service_count"] == 8
     assert data["conrrad_online_verified_count"] == 8
     assert data["conrrad_trust_verified_count"] == 8
+    assert data["conrrad_valid_certification_count"] == 8
+    assert data["conrrad_certification_status"] == "CERTIFIED_BY_LIVE_EVIDENCE"
     assert data["anny_ready"] is True
     assert data["fabric_status"] == "ONLINE_VERIFIED"
     assert data["continuity"]["status"] == "UNKNOWN"
@@ -333,7 +337,10 @@ def test_control_center_conrrad_panel_is_bound_and_offline_safe():
     assert 'data-projection-id="control.conrrad_mandatory_services"' in html
     assert 'id="conrrad-deps-tbody"' in html
     assert "ONLINE_VERIFIED" in html
-    assert "CERTIFIED_BY_LIVE_EVIDENCE" in html
+    assert "VALID_CERTIFICATIONS=0" in html
+    assert "GATE=BLOCKED" in html
+    assert "CERTIFICATION=UNKNOWN" in html
+    assert "CERTIFIED_BY_LIVE_EVIDENCE" not in html
     assert "No CONRRAD" not in html
 
 

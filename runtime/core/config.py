@@ -71,6 +71,13 @@ class RuntimeConfig:
     # Fabric config
     fabric_org: str = None
     fabric_repo: str = None
+
+    # Disabled until an explicit actor, root and least-privilege credential pass checks.
+    github_inbox_enabled: bool = False
+    github_inbox_authorized_actor: str = ''
+    # Mapping of root id -> {path, operations}; unset means no host roots are granted.
+    github_inbox_local_roots: dict = field(default_factory=dict)
+    github_inbox_poll_interval_seconds: int = 25
     
     # Admin panel configuration
     admin_enabled: bool = True

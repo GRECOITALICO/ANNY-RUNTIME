@@ -182,7 +182,7 @@ ThreadedHTTPServer = LoopbackIPv4Server
 class AdminServer:
     """Manages the threaded HTTP server lifecycle."""
     
-    def __init__(self, host: str, port: int, auth_manager, audit_manager, github_manager, secret_backend=None, event_bus=None, runtime_engine=None, local_operational_path=None, bootstrap_snapshot=None, sync_service=None):
+    def __init__(self, host: str, port: int, auth_manager, audit_manager, github_manager, secret_backend=None, event_bus=None, runtime_engine=None, local_operational_path=None, bootstrap_snapshot=None, sync_service=None, github_inbox_worker=None):
         self.host = host
         self.port = port
         self.server = None
@@ -198,6 +198,7 @@ class AdminServer:
             'local_operational_path': local_operational_path,
             'bootstrap_snapshot': bootstrap_snapshot,
             'sync_service': sync_service,
+            'github_inbox_worker': github_inbox_worker,
         }
         
         self.router = AdminRouter(self.admin_context)
@@ -235,6 +236,9 @@ class AdminServer:
     def stop(self):
         """Stop all server sockets cleanly."""
         logger.info("Stopping Admin Server...")
+        inbox_worker = self.admin_context.get('github_inbox_worker')
+        if inbox_worker:
+            inbox_worker.stop()
         for srv, thr in [(getattr(self, 'server4', None), getattr(self, 'thread4', None)),
                          (getattr(self, 'server6', None), getattr(self, 'thread6', None))]:
             if srv:
@@ -257,10 +261,22 @@ def build_github_auth_manager(secret_backend, config):
 def build_fabric_client(github_client, config):
     """Build the provider-neutral Repository Fabric adapter from RuntimeConfig.
 
-    Missing Fabric configuration must fail closed in GitHubFabricAdapter; this helper
-    only wires the canonical RuntimeConfig into the adapter and never invents values.
+    An absent binding leaves Fabric unavailable to the local admin/runtime path.
+    Fabric-dependent operations remain fail-closed when no client is present.
     """
     if github_client is None:
+        return None
+    fabric_org = getattr(config, "fabric_org", None) if config else None
+    fabric_repo = getattr(config, "fabric_repo", None) if config else None
+    if (
+        not isinstance(fabric_org, str)
+        or not fabric_org.strip()
+        or not isinstance(fabric_repo, str)
+        or not fabric_repo.strip()
+    ):
+        logger.info(
+            "Repository Fabric NOT_CONFIGURED: fabric_org/fabric_repo binding is absent"
+        )
         return None
     from runtime.fabric.github_adapter import GitHubFabricAdapter
     return GitHubFabricAdapter(github_client=github_client, config=config)
@@ -310,7 +326,8 @@ def start_admin_server(host: str, port: int):
         audit_manager=audit_manager,
         github_client=github_client,
         fabric_client=fabric_client,
-        telemetry_collector=telemetry_collector
+        telemetry_collector=telemetry_collector,
+        inbox_local_roots=getattr(config, "github_inbox_local_roots", {}),
     )
         
     disc_repos_raw = []
@@ -324,6 +341,17 @@ def start_admin_server(host: str, port: int):
     from runtime.core.engine import RuntimeEngine
     engine = RuntimeEngine(config)
     execution_manager.runtime_engine = engine
+
+    from runtime.github.inbox import GitHubInboxClient, GitHubInboxWorker, InboxSettings
+    inbox_settings = InboxSettings.from_config(config)
+    inbox_worker = GitHubInboxWorker(
+        settings=inbox_settings,
+        inbox=GitHubInboxClient(secret_backend),
+        execution_manager=execution_manager,
+        data_dir=data_dir,
+        runtime_id=identity_manager.runtime_id,
+    )
+    execution_manager.configure_inbox_capabilities(inbox_settings.local_roots, inbox_worker.status)
     
     update_source_repo = os.environ.get("ANNY_UPDATE_SOURCE_REPO", "").strip()
     update_source = None
@@ -354,6 +382,7 @@ def start_admin_server(host: str, port: int):
         local_operational_path=None,
         bootstrap_snapshot={'result': None, 'discovered_repos': disc_repos_raw},
         sync_service=sync_service,
+        github_inbox_worker=inbox_worker,
     )
     
     server.admin_context['execution_manager'] = execution_manager
@@ -370,6 +399,7 @@ def start_admin_server(host: str, port: int):
             logger.error(f"Runtime engine startup error: {e}")
 
     if server.start():
+        inbox_worker.start()
         t = threading.Thread(target=run_bootstrap, daemon=True)
         t.start()
         try:

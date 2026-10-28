@@ -119,7 +119,9 @@ def control_center_page(csrf_token: str) -> str:
     <div class="kv-grid">
         <div class="kv"><span class="lbl">ANNY STATUS</span><span class="val" id="st-anny">--</span></div>
         <div class="kv"><span class="lbl">RUNTIME HEALTH</span><span class="val" id="st-health">--</span></div>
-        <div class="kv"><span class="lbl">GITHUB STATUS</span><span class="val" id="st-github">--</span></div>
+        <div class="kv"><span class="lbl">RUNTIME GITHUB</span><span class="val" id="st-github">--</span></div>
+        <div class="kv"><span class="lbl">EXTERNAL GITHUB (READ-ONLY)</span><span class="val" id="st-github-external">--</span></div>
+        <div class="kv"><span class="lbl">BOOTSTRAP GITHUB PRECONDITION</span><span class="val" id="st-github-bootstrap">--</span></div>
         <div class="kv"><span class="lbl">FABRIC STATUS</span><span class="val" id="st-fabric">--</span></div>
         <div class="kv"><span class="lbl">ADMISSION STATUS</span><span class="val" id="st-admission">--</span></div>
         <div class="kv"><span class="lbl">RECONCILIATION</span><span class="val" id="st-recon">--</span></div>
@@ -178,7 +180,7 @@ def control_center_page(csrf_token: str) -> str:
 <div class="panel full" data-projection-id="control.conrrad_mandatory_services">
     <h2>CONRRAD Mandatory Services — Live Truth</h2>
     <div id="conrrad-summary" style="font-size:.72rem;color:var(--text-secondary);margin-bottom:.8rem">
-        REQUIRED=8 · OBSERVED=0 · ONLINE_VERIFIED=0 · TRUST_VERIFIED=0 · GATE=BLOCKED · CERTIFICATION=UNKNOWN · VALID_CERTIFICATION=CERTIFIED_BY_LIVE_EVIDENCE
+        REQUIRED=8 · OBSERVED=0 · ONLINE_VERIFIED=0 · TRUST_VERIFIED=0 · VALID_CERTIFICATIONS=0 · GATE=BLOCKED · CERTIFICATION=UNKNOWN
     </div>
     <div style="overflow-x:auto">
         <table>
@@ -194,6 +196,23 @@ def control_center_page(csrf_token: str) -> str:
 </div>
 
 <!-- Repository Fabric -->
+<div class="panel full" data-projection-id="control.local_conrrad_simulator">
+    <h2>LOCAL CONRRAD SIMULATOR — NOT PRODUCTION</h2>
+    <div class="kv-grid">
+        <div class="kv"><span class="lbl">SOURCE TYPE</span><span class="val mono" id="sim-source-type">--</span></div>
+        <div class="kv"><span class="lbl">PROVIDER</span><span class="val mono" id="sim-provider-id">--</span></div>
+        <div class="kv"><span class="lbl">API CONNECTION</span><span class="val" id="sim-connection">--</span></div>
+        <div class="kv"><span class="lbl">SIMULATOR STATUS</span><span class="val" id="sim-status">--</span></div>
+        <div class="kv"><span class="lbl">CONTRACT REVISION</span><span class="val mono" id="sim-contract">--</span></div>
+        <div class="kv"><span class="lbl">LAST OBSERVATION</span><span class="val mono" id="sim-observed-at">--</span></div>
+        <div class="kv"><span class="lbl">PROVIDER ERROR</span><span class="val mono" id="sim-error">--</span></div>
+    </div>
+    <div style="overflow-x:auto;margin-top:1rem">
+        <table><thead><tr><th>Required service</th><th>Availability</th><th>Trust</th><th>Certification</th><th>Evidence</th></tr></thead>
+        <tbody id="sim-services-tbody"><tr><td colspan="5" style="color:var(--text-secondary)">Loading...</td></tr></tbody></table>
+    </div>
+</div>
+
 <div class="panel" data-projection-id="control.repository_fabric">
     <h2>Repository Fabric</h2>
     <table><thead><tr><th>Component</th><th>Status</th></tr></thead>
@@ -370,6 +389,62 @@ def control_center_page(csrf_token: str) -> str:
 </div>
 
 <!-- Continuity -->
+<div class="panel full" data-projection-id="control.local_planner">
+    <h2>Local Planner — Discovery Only</h2>
+    <div class="kv-grid">
+        <div class="kv"><span class="lbl">STATE</span><span class="val" id="planner-state">--</span></div>
+        <div class="kv"><span class="lbl">PROVIDER</span><span class="val mono" id="planner-provider">--</span></div>
+        <div class="kv"><span class="lbl">CLIENT</span><span class="val mono" id="planner-client">--</span></div>
+        <div class="kv"><span class="lbl">LOCAL MODELS</span><span class="val mono" id="planner-models">--</span></div>
+        <div class="kv"><span class="lbl">INFERENCE</span><span class="val" id="planner-inference">--</span></div>
+        <div class="kv"><span class="lbl">PLANNER AVAILABLE</span><span class="val" id="planner-available">--</span></div>
+        <div class="kv"><span class="lbl">EVIDENCE</span><span class="val mono" id="planner-evidence">--</span></div>
+        <div class="kv"><span class="lbl">LAST PLAN ATTEMPT</span><span class="val mono" id="planner-attempt">--</span></div>
+    </div>
+    <p style="color:var(--text-secondary);font-size:.78rem">A local runtime alone does not imply model inference. Model output is never authorized directly.</p>
+</div>
+
+<div class="panel full" data-projection-id="control.local_native_execution">
+    <h2>ANNY Runtime Native Local Executions — Structured Plans Only</h2>
+    <div class="kv-grid">
+        <div class="kv"><span class="lbl">TASK</span><span class="val mono" id="native-task">--</span></div>
+        <div class="kv"><span class="lbl">STATUS</span><span class="val" id="native-status">--</span></div>
+        <div class="kv"><span class="lbl">CAPABILITY</span><span class="val mono" id="native-capability">--</span></div>
+        <div class="kv"><span class="lbl">AUTHORIZATION</span><span class="val mono" id="native-auth">--</span></div>
+        <div class="kv"><span class="lbl">WORKSPACE</span><span class="val mono" id="native-workspace">--</span></div>
+        <div class="kv"><span class="lbl">TESTS</span><span class="val mono" id="native-tests">--</span></div>
+        <div class="kv"><span class="lbl">EVIDENCE</span><span class="val mono" id="native-evidence">--</span></div>
+    </div>
+    <div style="overflow-x:auto;margin-top:1rem">
+        <table><thead><tr><th>Task</th><th>Status</th><th>Capability</th><th>Planner</th><th>Executor</th><th>Runner / isolation</th><th>Tests</th><th>Evidence / result hash</th><th>Executed</th><th>Durable detail</th></tr></thead>
+        <tbody id="native-executions-tbody"><tr><td colspan="10" style="color:var(--text-secondary)">No durable ANNY Runtime native execution observed.</td></tr></tbody></table>
+    </div>
+</div>
+
+<div class="panel full" data-projection-id="control.canonical_operational_state">
+    <h2>Canonical Operational State — Read Only</h2>
+    <div class="kv-grid">
+        <div class="kv"><span class="lbl">SOURCE</span><span class="val mono" id="canonical-source">--</span></div>
+        <div class="kv"><span class="lbl">FRESHNESS</span><span class="val" id="canonical-freshness">--</span></div>
+        <div class="kv"><span class="lbl">MISSION</span><span class="val mono" id="canonical-mission">--</span></div>
+        <div class="kv"><span class="lbl">NEXT ACTION</span><span class="val mono" id="canonical-next-action">--</span></div>
+        <div class="kv"><span class="lbl">CONTINUITY</span><span class="val mono" id="canonical-continuity">--</span></div>
+        <div class="kv"><span class="lbl">L1 CONFORMANCE</span><span class="val mono" id="canonical-conformance">--</span></div>
+    </div>
+    <div style="overflow-x:auto;margin-top:1rem">
+        <table><thead><tr><th>Canonical source</th><th>SHA</th><th>Last successful read</th><th>Freshness</th><th>Error</th></tr></thead>
+        <tbody id="canonical-sources-tbody"><tr><td colspan="5" style="color:var(--text-secondary)">Loading...</td></tr></tbody></table>
+    </div>
+    <div style="overflow-x:auto;margin-top:1rem">
+        <table><thead><tr><th>Open blocker</th><th>Status / severity</th></tr></thead>
+        <tbody id="canonical-blockers-tbody"><tr><td colspan="2" style="color:var(--text-secondary)">Loading...</td></tr></tbody></table>
+    </div>
+    <div style="overflow-x:auto;margin-top:1rem">
+        <table><thead><tr><th>Return / ACK / evidence signal</th><th>Observed value</th></tr></thead>
+        <tbody id="canonical-returns-tbody"><tr><td colspan="2" style="color:var(--text-secondary)">Loading...</td></tr></tbody></table>
+    </div>
+</div>
+
 <div class="panel full" data-projection-id="control.continuity">
     <h2>Continuity</h2>
     <div class="kv-grid">
@@ -413,7 +488,16 @@ function setInner(id, html) {
 }
 function setText(id, text) {
     const el = document.getElementById(id);
-    if (el) el.textContent = text || '--';
+    if (el) el.textContent = displayValue(text, '--');
+}
+
+function displayValue(value, fallback = '—') {
+    if (value === null || value === undefined || value === '') return fallback;
+    if (Array.isArray(value)) return value.length ? value.map(function(item) { return displayValue(item, 'UNKNOWN'); }).join(', ') : fallback;
+    if (typeof value === 'object') {
+        try { return JSON.stringify(value); } catch (e) { return 'UNRENDERABLE'; }
+    }
+    return String(value);
 }
 
 function populateTable(tbodyId, arr, cols) {
@@ -440,7 +524,9 @@ function updateUI(d) {
     // Top-level state
     setInner('st-anny', badge(d.anny_ready ? 'READY' : 'BLOCKED'));
     setInner('st-health', badge(d.runtime_health));
-    setInner('st-github', badge(d.github_status));
+    setInner('st-github', badge(d.github_runtime_status || d.github_status));
+    setInner('st-github-external', badge(d.github_external_status));
+    setInner('st-github-bootstrap', badge(d.github_bootstrap_precondition));
     setInner('st-fabric', badge(d.fabric_status));
     setInner('st-admission', badge(d.admission_status));
     setInner('st-recon', badge(d.reconciliation_status));
@@ -480,7 +566,7 @@ function updateUI(d) {
     // Health
     if (d.health && Object.keys(d.health).length) {
         setInner('health-tbody', Object.entries(d.health).map(function(kv) {
-            return '<tr><td class="mono">' + escapeHtml(kv[0]) + '</td><td>' + badge(kv[1]) + '</td></tr>';
+            return '<tr><td class="mono">' + escapeHtml(kv[0]) + '</td><td>' + badge(displayValue(kv[1])) + '</td></tr>';
         }).join(''));
     }
 
@@ -541,6 +627,8 @@ function updateUI(d) {
     const observedCount = Number(d.conrrad_observed_service_count || 0);
     const onlineCount = Number(d.conrrad_online_verified_count || 0);
     const trustCount = Number(d.conrrad_trust_verified_count || 0);
+    const certificationCount = Number(d.conrrad_valid_certification_count || 0);
+    const certificationStatus = d.conrrad_certification_status || 'UNKNOWN';
     setText('st-conrrad', conrradGate);
     if (conrradSummary) {
         conrradSummary.textContent =
@@ -548,7 +636,9 @@ function updateUI(d) {
             ' · OBSERVED=' + observedCount +
             ' · ONLINE_VERIFIED=' + onlineCount +
             ' · TRUST_VERIFIED=' + trustCount +
-            ' · GATE=' + conrradGate;
+            ' · VALID_CERTIFICATIONS=' + certificationCount +
+            ' · GATE=' + conrradGate +
+            ' · CERTIFICATION=' + certificationStatus;
     }
     if (conrradBody) {
         while (conrradBody.firstChild) conrradBody.removeChild(conrradBody.firstChild);
@@ -571,10 +661,46 @@ function updateUI(d) {
                 for (const value of values) {
                     const cell = document.createElement('td');
                     cell.className = 'mono';
-                    cell.textContent = value === null || value === undefined || value === '' ? '—' : String(value);
+                    cell.textContent = displayValue(value);
                     row.appendChild(cell);
                 }
                 conrradBody.appendChild(row);
+            }
+        }
+    }
+
+    // Local simulator facts are separate from the external CONRRAD gate.
+    const simulator = d.conrrad_simulator || {};
+    setText('sim-source-type', simulator.source_type);
+    setText('sim-provider-id', simulator.provider_id);
+    setInner('sim-connection', badge(simulator.connection_status));
+    setInner('sim-status', badge(simulator.status));
+    setText('sim-contract', simulator.contract_revision);
+    setText('sim-observed-at', simulator.observed_at);
+    setText('sim-error', simulator.error);
+    const simRows = Array.isArray(simulator.services) ? simulator.services : [];
+    const simBody = document.getElementById('sim-services-tbody');
+    if (simBody) {
+        while (simBody.firstChild) simBody.removeChild(simBody.firstChild);
+        if (!simRows.length) {
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 5;
+            cell.textContent = simulator.status === 'NOT_CONFIGURED' ? 'Local simulator is not configured.' : 'No simulator service observation.';
+            cell.style.color = 'var(--text-secondary)';
+            row.appendChild(cell);
+            simBody.appendChild(row);
+        } else {
+            for (const service of simRows) {
+                const row = document.createElement('tr');
+                const values = [service.service_name, service.online_status, service.trust_status, service.certification_state, service.evidence_ref];
+                for (const value of values) {
+                    const cell = document.createElement('td');
+                    cell.className = 'mono';
+                    cell.textContent = displayValue(value);
+                    row.appendChild(cell);
+                }
+                simBody.appendChild(row);
             }
         }
     }
@@ -588,6 +714,178 @@ function updateUI(d) {
         setText('cont-blockers', d.continuity.blockers);
         setInner('cont-status', badge(d.continuity.status));
     }
+
+    const verifyButton = document.getElementById('verify-btn');
+    if (verifyButton && d.github_external_status === 'CONNECTED_READ_ONLY') {
+        verifyButton.disabled = true;
+        verifyButton.textContent = 'READ-ONLY';
+        verifyButton.title = 'Runtime bootstrap mutation is disabled in this local read-only Control Center.';
+    }
+}
+
+function renderCanonicalRows(tbodyId, rows, cells, emptyText) {
+    const body = document.getElementById(tbodyId);
+    if (!body) return;
+    while (body.firstChild) body.removeChild(body.firstChild);
+    if (!Array.isArray(rows) || !rows.length) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = cells.length;
+        cell.textContent = emptyText;
+        cell.style.color = 'var(--text-secondary)';
+        row.appendChild(cell);
+        body.appendChild(row);
+        return;
+    }
+    for (const item of rows) {
+        const row = document.createElement('tr');
+        for (const getter of cells) {
+            const cell = document.createElement('td');
+            cell.className = 'mono';
+            cell.textContent = displayValue(getter(item));
+            row.appendChild(cell);
+        }
+        body.appendChild(row);
+    }
+}
+
+async function fetchOperationalState() {
+    try {
+        const response = await fetch('/api/operational-state');
+        if (!response.ok) return;
+        const state = await response.json();
+        setText('canonical-source', displayValue(state.repository) + '/' + displayValue(state.branch));
+        setInner('canonical-freshness', badge(state.freshness));
+        const mission = state.mission || {};
+        const nextAction = state.next_action || {};
+        const continuity = state.continuity || {};
+        const conformance = state.conformance || {};
+        setText('canonical-mission', mission.mission_id || mission.title);
+        setText('canonical-next-action', nextAction.action || continuity.next_action);
+        setText('canonical-continuity', continuity.status || continuity.current_state);
+        setText('canonical-conformance', conformance.status || conformance.correction_id);
+        renderCanonicalRows(
+            'canonical-sources-tbody', state.sources,
+            [
+                function(item) { return displayValue(item.repository) + '/' + displayValue(item.branch) + ':' + displayValue(item.path); },
+                function(item) { return item.sha; },
+                function(item) { return item.last_success_at; },
+                function(item) { return item.freshness; },
+                function(item) { return item.error; },
+            ],
+            'No canonical source has been observed.'
+        );
+        renderCanonicalRows(
+            'canonical-blockers-tbody', state.blockers,
+            [
+                function(item) { return item.description || item.id || item.blocker_id; },
+                function(item) { return item.status || item.severity || item.state; },
+            ],
+            'No active blocker observation is available.'
+        );
+        const returnSignals = Object.entries(state.return_signals || {}).map(function(entry) {
+            return {name: entry[0], value: entry[1]};
+        });
+        renderCanonicalRows(
+            'canonical-returns-tbody', returnSignals,
+            [
+                function(item) { return item.name; },
+                function(item) { return item.value; },
+            ],
+            'No return, ACK, result, handoff, or evidence signal is available.'
+        );
+    } catch (e) {
+        console.error('Canonical operational state fetch failed:', e);
+    }
+}
+
+async function fetchLocalNativeExecution() {
+    try {
+        const response = await fetch('/api/local-executions/latest');
+        if (!response.ok) return;
+        const execution = await response.json();
+        setText('native-task', execution.task_id);
+        setInner('native-status', badge(execution.status));
+        setText('native-capability', execution.capability_id);
+        setText('native-auth', execution.authorization);
+        setText('native-workspace', execution.workspace);
+        setText('native-tests', execution.test ? ('exit=' + displayValue(execution.test.exit_code) + ' · ' + displayValue(execution.test.duration_ms) + 'ms') : 'NO_RESULT');
+        setText('native-evidence', execution.evidence_ref);
+    } catch (e) { console.error('Local native execution fetch failed:', e); }
+}
+
+async function fetchLocalPlannerStatus() {
+    try {
+        const response = await fetch('/api/local-planner/status');
+        if (!response.ok) return;
+        const planner = await response.json();
+        setInner('planner-state', badge(planner.status));
+        setText('planner-provider', planner.provider_id);
+        setText('planner-client', planner.client_version);
+        setText('planner-models', planner.models);
+        setInner('planner-inference', badge(planner.inference_status));
+        setInner('planner-available', badge(planner.status === 'LOCAL_MODEL_READY' && planner.inference_status === 'VERIFIED' ? 'AVAILABLE' : 'UNAVAILABLE'));
+        setText('planner-evidence', planner.evidence_ref || planner.evidence);
+        const attemptResponse = await fetch('/api/local-plan-attempt/latest');
+        if (attemptResponse.ok) {
+            const attempt = await attemptResponse.json();
+            setText('planner-attempt', displayValue(attempt.attempt_status) + ' / ' + displayValue(attempt.evidence_ref));
+        }
+    } catch (e) { console.error('Local planner status fetch failed:', e); }
+}
+
+async function fetchLocalNativeExecutions() {
+    try {
+        const response = await fetch('/api/local-executions');
+        if (!response.ok) return;
+        const payload = await response.json();
+        const executions = Array.isArray(payload.executions) ? payload.executions : [];
+        const body = document.getElementById('native-executions-tbody');
+        if (!body) return;
+        while (body.firstChild) body.removeChild(body.firstChild);
+        if (!executions.length) {
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 10;
+            cell.textContent = 'No durable ANNY Runtime native execution observed.';
+            cell.style.color = 'var(--text-secondary)';
+            row.appendChild(cell); body.appendChild(row); return;
+        }
+        for (const execution of executions) {
+            const row = document.createElement('tr');
+            const test = execution.test || {};
+            const isolation = execution.runner_isolation || {};
+            const values = [
+                execution.task_id,
+                execution.status,
+                execution.capability_id,
+                execution.planner,
+                execution.executor_process,
+                displayValue(execution.runner_identity) + ' / network=' + displayValue(isolation.network),
+                'exit=' + displayValue(test.exit_code) + ' · ' + displayValue(test.duration_ms) + 'ms',
+                displayValue(execution.evidence_ref) + ' / ' + displayValue(execution.result_hash),
+                execution.completed_at,
+            ];
+            for (let index = 0; index < values.length; index++) {
+                const cell = document.createElement('td');
+                cell.className = 'mono';
+                if (index === 1) cell.innerHTML = badge(values[index]);
+                else cell.textContent = displayValue(values[index]);
+                row.appendChild(cell);
+            }
+            const detailCell = document.createElement('td');
+            const detail = document.createElement('details');
+            const summary = document.createElement('summary');
+            summary.textContent = 'Open';
+            const pre = document.createElement('pre');
+            pre.className = 'mono';
+            pre.style.cssText = 'max-width:42rem;max-height:20rem;overflow:auto;white-space:pre-wrap';
+            pre.textContent = JSON.stringify(execution, null, 2);
+            detail.appendChild(summary); detail.appendChild(pre); detailCell.appendChild(detail);
+            row.appendChild(detailCell);
+            body.appendChild(row);
+        }
+    } catch (e) { console.error('Local native executions fetch failed:', e); }
 }
 
 async function fetchStatus() {
@@ -857,6 +1155,10 @@ const projectionDetailClose = document.getElementById('projection-detail-close')
 if (projectionDetailClose) projectionDetailClose.addEventListener('click', closeProjectionDetail);
 
 fetchStatus();
+fetchOperationalState();
+fetchLocalNativeExecution();
+fetchLocalNativeExecutions();
+fetchLocalPlannerStatus();
 fetchProcessingMatrix();
 fetchProjectionRegistry();
 
@@ -868,6 +1170,13 @@ setInterval(function() {
 setInterval(function() {
     fetchProjectionRegistry();
 }, 10000);
+
+setInterval(function() {
+    fetchOperationalState();
+    fetchLocalNativeExecution();
+    fetchLocalNativeExecutions();
+    fetchLocalPlannerStatus();
+}, 60000);
 
 for (const id of ['projection-priority-filter','projection-status-filter','projection-truth-filter','projection-section-filter','projection-freshness-filter']) {
     const el = document.getElementById(id);

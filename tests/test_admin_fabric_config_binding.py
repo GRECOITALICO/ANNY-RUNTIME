@@ -1,8 +1,5 @@
-import pytest
-
 from runtime.admin.server import build_fabric_client
 from runtime.core.config import RuntimeConfig
-from runtime.fabric.github_adapter import FabricError
 
 
 class FakeGitHubClient:
@@ -21,10 +18,9 @@ def test_admin_fabric_client_uses_runtime_config() -> None:
     assert client.repo == "REPOSITORY-FABRIC"
 
 
-def test_admin_fabric_client_fails_closed_without_binding() -> None:
+def test_admin_fabric_client_is_not_configured_without_binding() -> None:
     config = RuntimeConfig(data_dir="/tmp/anny-runtime-test")
-    with pytest.raises(FabricError, match="FABRIC_CONFIG_MISSING"):
-        build_fabric_client(FakeGitHubClient(), config)
+    assert build_fabric_client(FakeGitHubClient(), config) is None
 
 
 def test_admin_fabric_client_is_absent_without_github_client() -> None:

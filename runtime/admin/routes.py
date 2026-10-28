@@ -71,6 +71,14 @@ class AdminRouter:
             '/audit/evidence': self.handle_audit_evidence,
             '/search': self.handle_search,
             '/api/status': self.handle_api_status,
+            '/api/github/readonly': self.handle_github_readonly,
+            '/api/github/inbox/status': self.handle_github_inbox_status,
+            '/api/operational-state': self.handle_operational_state,
+            '/api/conrrad/simulator': self.handle_conrrad_simulator,
+            '/api/local-planner/status': self.handle_local_planner_status,
+            '/api/local-plan-attempt/latest': self.handle_local_plan_attempt_latest,
+            '/api/local-executions': self.handle_local_execution_results,
+            '/api/local-executions/latest': self.handle_local_execution_latest,
             '/api/control-center/projections': self.handle_control_center_projections,
             '/api/v1/continuity/bootstrap': self.handle_bootstrap_api,
             '/telemetry/live': self.handle_telemetry_live,
@@ -175,6 +183,16 @@ class AdminRouter:
         POST handlers return a redirect location string (e.g. '/' or '/github?error=...').
         """
         parsed = urllib.parse.urlparse(path)
+        if self.context.get('github_readonly') and parsed.path not in {
+            '/logout',
+            '/admin/diagnostics',
+        }:
+            self._send_html(
+                handler,
+                '403 Read-only Control Center: remote or runtime mutations are disabled.',
+                status=403,
+            )
+            return
         if parsed.path.startswith('/api/v1/bridge/'):
             from runtime.api.bridge import BridgeRouter
             bridge = BridgeRouter(self.context)
@@ -355,7 +373,8 @@ class AdminRouter:
                 "fabric_status": "NOT_CONFIGURED", "conrrad_gate_status": "BLOCKED",
                 "conrrad_required_service_count": len(REQUIRED_CONRRAD_SERVICES),
                 "conrrad_observed_service_count": 0, "conrrad_online_verified_count": 0,
-                "conrrad_trust_verified_count": 0, "conrrad_dependencies": project_dependency_matrix(None),
+                "conrrad_trust_verified_count": 0, "conrrad_valid_certification_count": 0,
+                "conrrad_certification_status": "UNKNOWN", "conrrad_dependencies": project_dependency_matrix(None),
                 "admission_status": "BLOCKED", "reconciliation_status": "BLOCKED",
                 "timestamp": None, "runtime_id": "UNKNOWN", "runtime_version": __version__,
                 "configured_endpoint": None,
@@ -377,6 +396,7 @@ class AdminRouter:
                 "workers": "UNKNOWN", "connectors": "UNKNOWN",
                 "continuity": {"mission": "UNKNOWN", "task": "UNKNOWN", "step": "UNKNOWN",
                                "action": "UNKNOWN", "blockers": "BLOCKED", "status": "BLOCKED"},
+                "conrrad_simulator": {"status": "NOT_CONFIGURED", "services": []},
                 "error": "No runtime engine",
             }
             return '/'
@@ -384,10 +404,35 @@ class AdminRouter:
         state_name = getattr(getattr(engine, 'state', None), 'name', str(getattr(engine, 'state', 'UNKNOWN')))
         config = getattr(engine, 'config', None)
         gh_mgr = self.context.get('github_manager')
+        gh_readonly = self.context.get('github_readonly')
+        gh_readonly_status = gh_readonly.refresh_if_due() if gh_readonly else {}
+        conrrad_provider = self.context.get('conrrad_provider')
+        if conrrad_provider:
+            try:
+                simulator_observation = conrrad_provider.observation()
+                simulator_observation['connection_status'] = 'CONNECTED'
+                simulator_observation['error'] = None
+            except Exception as exc:
+                simulator_observation = {
+                    'source_type': 'LOCAL_SIMULATOR',
+                    'status': 'UNAVAILABLE',
+                    'connection_status': 'UNAVAILABLE',
+                    'services': [],
+                    'error': type(exc).__name__,
+                }
+        else:
+            simulator_observation = {
+                'source_type': 'NONE', 'status': 'NOT_CONFIGURED',
+                'connection_status': 'NOT_CONFIGURED', 'services': [], 'error': None,
+            }
         try:
-            gh_status = gh_mgr.get_status().auth_status if gh_mgr else 'UNAUTHORIZED'
+            runtime_github_status = gh_mgr.get_status().auth_status if gh_mgr else 'UNAUTHORIZED'
         except Exception:
-            gh_status = 'UNKNOWN'
+            runtime_github_status = 'UNKNOWN'
+        external_github_status = gh_readonly_status.get('connection', 'NOT_CONNECTED')
+        github_bootstrap_precondition = (
+            'SATISFIED' if runtime_github_status == 'AUTHORIZED' else 'BLOCKED'
+        )
         auth_mgr = self.context.get('auth_manager')
         runtime_id = getattr(auth_mgr, 'runtime_id', 'UNKNOWN') if auth_mgr else 'UNKNOWN'
         report = getattr(engine, 'bootstrap_report', None)
@@ -399,6 +444,23 @@ class AdminRouter:
                               if str(item.get("online_status", "UNKNOWN")).upper() == "ONLINE_VERIFIED")
         trust_verified = sum(1 for item in dependency_matrix
                             if str(item.get("trust_status", "UNKNOWN")).upper() == "VERIFIED")
+        def _valid_live_certification(item: dict[str, Any]) -> bool:
+            evidence = str(item.get("evidence_ref", "")).strip().upper()
+            checked = str(item.get("last_live_check", "")).strip().upper()
+            return (
+                str(item.get("certification_state", "")).upper() == "CERTIFIED"
+                and str(item.get("online_status", "")).upper() == "ONLINE_VERIFIED"
+                and str(item.get("trust_status", "")).upper() == "VERIFIED"
+                and evidence not in {"", "UNKNOWN", "NOT_CONFIGURED", "NONE"}
+                and checked not in {"", "UNKNOWN", "NOT_CONFIGURED", "NONE"}
+            )
+        valid_certifications = sum(1 for item in dependency_matrix if _valid_live_certification(item))
+        if conrrad_observed == 0:
+            conrrad_certification_status = "UNKNOWN"
+        elif conrrad_complete and valid_certifications == len(REQUIRED_CONRRAD_SERVICES):
+            conrrad_certification_status = "CERTIFIED_BY_LIVE_EVIDENCE"
+        else:
+            conrrad_certification_status = "NOT_VERIFIED"
         reported_ready = bool(getattr(report, 'anny_ready', False)) if report else False
         bootstrap_state = getattr(report, 'bootstrap_state', 'UNKNOWN') if report else 'UNKNOWN'
         if bootstrap_state not in {'READY', 'BLOCKED', 'UNKNOWN'}:
@@ -472,16 +534,36 @@ class AdminRouter:
         if configured_host and configured_port:
             configured_endpoint = f"http://{configured_host}:{configured_port}"
 
+        canonical_state = gh_readonly.operational_state() if gh_readonly else {}
+        canonical_continuity = canonical_state.get('continuity', {}) if isinstance(canonical_state, dict) else {}
+        canonical_mission = canonical_state.get('mission', {}) if isinstance(canonical_state, dict) else {}
+        canonical_next_action = canonical_state.get('next_action', {}) if isinstance(canonical_state, dict) else {}
+        canonical_blockers = canonical_state.get('blockers', []) if isinstance(canonical_state, dict) else []
+        if not isinstance(canonical_blockers, list):
+            canonical_blockers = []
+
+        def _canonical_value(mapping: Any, key: str, default: str = 'UNKNOWN') -> Any:
+            value = mapping.get(key) if isinstance(mapping, dict) else None
+            return value if value not in (None, '') else default
+
         data = {
             'anny_ready': anny_ready, 'bootstrap_state': bootstrap_state,
             'runtime_state': state_name, 'runtime_health': runtime_health,
-            'github_status': gh_status, 'fabric_status': fabric_status,
+            'github_status': runtime_github_status,
+            'github_runtime_status': runtime_github_status,
+            'github_external_status': external_github_status,
+            'github_bootstrap_precondition': github_bootstrap_precondition,
+            'fabric_status': fabric_status,
+            'github_readonly': gh_readonly_status,
             'conrrad_gate_status': 'ONLINE_VERIFIED' if conrrad_complete else 'BLOCKED',
             'conrrad_required_service_count': len(REQUIRED_CONRRAD_SERVICES),
             'conrrad_observed_service_count': conrrad_observed,
             'conrrad_online_verified_count': online_verified,
             'conrrad_trust_verified_count': trust_verified,
+            'conrrad_valid_certification_count': valid_certifications,
+            'conrrad_certification_status': conrrad_certification_status,
             'conrrad_dependencies': dependency_matrix,
+            'conrrad_simulator': simulator_observation,
             'admission_status': _report_status('admission_status', {'ADMITTED', 'BLOCKED', 'UNKNOWN'}),
             'reconciliation_status': _report_status('reconciliation_status', {'COHERENT', 'INCOHERENT', 'BLOCKED', 'UNKNOWN'}),
             'timestamp': timestamp,
@@ -495,16 +577,129 @@ class AdminRouter:
             'policy_revision': getattr(report, 'policy_revision', 'UNKNOWN') if report else 'UNKNOWN',
             'contract_revision': 'UNKNOWN', 'gates': gates_list,
             'capabilities': _inventory('capabilities'),
-            'health': {'engine': state_name, 'runtime': runtime_health, 'github': gh_status,
-                       'conrrad_dependencies': dependency_matrix},
+            'health': {
+                'engine': state_name,
+                'runtime': runtime_health,
+                'github_runtime': runtime_github_status,
+                'github_external': external_github_status,
+                'github_bootstrap_precondition': github_bootstrap_precondition,
+            },
             'access': 'UNKNOWN', 'tools': _inventory('tools'), 'models': _inventory('models'),
             'workers': _inventory('workers'), 'connectors': _inventory('connectors'),
-            'continuity': {'mission': 'UNKNOWN', 'task': 'UNKNOWN', 'step': 'UNKNOWN',
-                           'action': 'UNKNOWN',
-                           'blockers': 'BLOCKED' if bootstrap_state == 'BLOCKED' else 'UNKNOWN',
-                           'status': 'BLOCKED' if bootstrap_state == 'BLOCKED' else 'UNKNOWN'},
+            'canonical_state_freshness': canonical_state.get('freshness', 'UNKNOWN') if isinstance(canonical_state, dict) else 'UNKNOWN',
+            'continuity': {
+                'mission': _canonical_value(canonical_mission, 'mission_id', _canonical_value(canonical_continuity, 'mission_id')),
+                'task': _canonical_value(canonical_continuity, 'task_id'),
+                'step': _canonical_value(canonical_continuity, 'step_id'),
+                'action': _canonical_value(canonical_next_action, 'action', _canonical_value(canonical_continuity, 'next_action')),
+                'blockers': str(len(canonical_blockers)) if canonical_blockers else ('BLOCKED' if bootstrap_state == 'BLOCKED' else 'UNKNOWN'),
+                'status': _canonical_value(canonical_continuity, 'status', canonical_state.get('freshness', 'UNKNOWN') if isinstance(canonical_state, dict) else 'UNKNOWN'),
+            },
         }
         self.context['direct_json_response'] = data
+        return '/'
+
+    def handle_github_readonly(self, parsed) -> str:
+        """Expose only the sanitized cache from the existing GitHub CLI session."""
+        source = self.context.get('github_readonly')
+        self.context['direct_json_response'] = (
+            source.refresh_if_due() if source else {
+                'connection': 'NOT_CONNECTED',
+                'principal': None,
+                'repositories': [],
+                'last_error': 'GitHub CLI read-only source unavailable',
+            }
+        )
+        return '/'
+
+    def handle_github_inbox_status(self, parsed) -> str:
+        """Expose the inbox worker's sanitized operational state only."""
+        worker = self.context.get('github_inbox_worker')
+        self.context['direct_json_response'] = worker.status() if worker else {
+            'active': False,
+            'activation': 'NOT_CONFIGURED',
+            'last_error_code': 'INBOX_WORKER_UNAVAILABLE',
+        }
+        return '/'
+
+    def handle_operational_state(self, parsed) -> str:
+        """Expose cached canonical state with per-file provenance and freshness."""
+        source = self.context.get('github_readonly')
+        if source:
+            source.refresh_if_due()
+            self.context['direct_json_response'] = source.operational_state()
+        else:
+            self.context['direct_json_response'] = {
+                'repository': 'GRECOITALICO/ANNY-OPERATIONAL',
+                'branch': 'main',
+                'connection': 'NOT_CONNECTED',
+                'freshness': 'UNKNOWN',
+                'mission': {}, 'next_action': {}, 'continuity': {},
+                'blockers': [], 'conformance': {}, 'return_signals': {}, 'sources': [],
+            }
+        return '/'
+
+    def handle_conrrad_simulator(self, parsed) -> str:
+        """Expose a local simulator observation without translating it to production truth."""
+        provider = self.context.get('conrrad_provider')
+        if not provider:
+            self.context['direct_json_response'] = {
+                'source_type': 'NONE', 'status': 'NOT_CONFIGURED',
+                'connection_status': 'NOT_CONFIGURED', 'services': [], 'error': None,
+            }
+        else:
+            try:
+                payload = provider.observation()
+                payload['connection_status'] = 'CONNECTED'
+                payload['error'] = None
+                self.context['direct_json_response'] = payload
+            except Exception as exc:
+                self.context['direct_json_response'] = {
+                    'source_type': 'LOCAL_SIMULATOR', 'status': 'UNAVAILABLE',
+                    'connection_status': 'UNAVAILABLE', 'services': [],
+                    'error': type(exc).__name__,
+                }
+        return '/'
+
+    def handle_local_execution_latest(self, parsed) -> str:
+        """Read a durable local-native execution result; never starts execution."""
+        from runtime.core.config import get_data_dir
+        from runtime.execution.local_native import LocalNativeTaskExecutor
+        result = LocalNativeTaskExecutor(get_data_dir()).latest()
+        self.context['direct_json_response'] = result or {
+            'status': 'UNKNOWN', 'execution_kind': 'NO_LOCAL_NATIVE_EXECUTION_OBSERVED',
+        }
+        return '/'
+
+    def handle_local_execution_results(self, parsed) -> str:
+        """Read every durable local-native result; this endpoint never executes work."""
+        from runtime.core.config import get_data_dir
+        from runtime.execution.local_native import LocalNativeTaskExecutor
+        self.context['direct_json_response'] = {
+            'execution_kind': 'ANNY_RUNTIME_NATIVE',
+            'executions': LocalNativeTaskExecutor(get_data_dir()).list_results(),
+        }
+        return '/'
+
+    def handle_local_planner_status(self, parsed) -> str:
+        """Return persisted, sanitized local-model discovery; never starts a model."""
+        from runtime.core.config import get_data_dir
+        from runtime.planning.local_planner import inspect_local_model_runtime, load_discovery, persist_discovery
+        data_dir = get_data_dir()
+        payload = load_discovery(data_dir)
+        if payload is None:
+            payload = persist_discovery(data_dir, inspect_local_model_runtime())
+        self.context['direct_json_response'] = payload
+        return '/'
+
+    def handle_local_plan_attempt_latest(self, parsed) -> str:
+        """Read model-plan evidence without starting inference or execution."""
+        from runtime.core.config import get_data_dir
+        from runtime.planning.local_planner import load_plan_attempt
+        self.context['direct_json_response'] = load_plan_attempt(get_data_dir()) or {
+            'attempt_status': 'UNKNOWN', 'execution': None,
+            'evidence_ref': 'local://native-executions/planning/',
+        }
         return '/'
 
     def _get_fabric_client(self):
@@ -513,21 +708,58 @@ class AdminRouter:
         secret_backend = self.context.get('secret_backend')
         if not gh_mgr or not gh_mgr.has_token():
             return None
-        try:
-            from runtime.github.client import GitHubClient
-            from runtime.fabric.github_adapter import GitHubFabricAdapter
-            gh_client = GitHubClient(secret_backend=secret_backend)
-            engine = self.context.get('runtime_engine')
-            config = engine.config if engine else None
-            return GitHubFabricAdapter(github_client=gh_client, config=config)
-        except Exception as e:
-            logger.warning(f"Could not create GitHubFabricAdapter: {e}")
+        engine = self.context.get('runtime_engine')
+        config = engine.config if engine else None
+        fabric_org = getattr(config, 'fabric_org', None)
+        fabric_repo = getattr(config, 'fabric_repo', None)
+        if (
+            not isinstance(fabric_org, str)
+            or not fabric_org.strip()
+            or not isinstance(fabric_repo, str)
+            or not fabric_repo.strip()
+        ):
+            logger.info("Repository Fabric NOT_CONFIGURED: fabric_org/fabric_repo binding is absent")
             return None
+        from runtime.github.client import GitHubClient
+        from runtime.fabric.github_adapter import GitHubFabricAdapter
+        return GitHubFabricAdapter(github_client=GitHubClient(secret_backend=secret_backend), config=config)
 
     def _get_continuity_dto(self) -> ContinuityDTO:
         gh_mgr = self.context.get('github_manager')
         gh_status_dto = gh_mgr.get_status() if gh_mgr else None
         gh_status_str = gh_status_dto.auth_status if gh_status_dto else "UNAUTHORIZED"
+
+        gh_readonly = self.context.get('github_readonly')
+        if gh_readonly:
+            canonical = gh_readonly.operational_state()
+            continuity = canonical.get('continuity', {})
+            mission = canonical.get('mission', {})
+            next_action = canonical.get('next_action', {})
+            raw_blockers = canonical.get('blockers', [])
+            blockers = [
+                BlockerDTO(
+                    id=str(item.get('id', item.get('blocker_id', 'UNKNOWN'))),
+                    description=str(item.get('description', item.get('reason', 'UNKNOWN'))),
+                    severity=str(item.get('severity', item.get('status', 'UNKNOWN'))),
+                )
+                for item in raw_blockers if isinstance(item, dict)
+            ]
+            continuity_status = continuity.get('status') or canonical.get('freshness', 'UNKNOWN')
+            return ContinuityDTO(
+                status=str(continuity_status),
+                canonical_source=f"{canonical.get('repository', 'UNKNOWN')}/{canonical.get('branch', 'UNKNOWN')}",
+                canonical_revision=None,
+                current_mission=mission.get('mission_id') or continuity.get('mission_id'),
+                current_task=continuity.get('task_id'),
+                next_action=next_action.get('action') or continuity.get('next_action'),
+                blocker_count=len(blockers),
+                reconciliation_status=str(canonical.get('conformance', {}).get('status') or 'UNKNOWN'),
+                github_status=canonical.get('connection', gh_status_str),
+                runtime_status=getattr(getattr(self.context.get('runtime_engine'), 'state', None), 'name', 'UNKNOWN'),
+                fabric_status="NOT_CONFIGURED",
+                organizations=[], repositories=[], blockers=blockers,
+                l2_worker_summary=L2WorkerSummaryDTO(count=0, registered_workers=[]),
+            )
 
         snapshot = self.context.get('bootstrap_snapshot')
         if not snapshot:
@@ -651,8 +883,9 @@ class AdminRouter:
 
     def handle_dashboard(self, parsed) -> str:
         gh_mgr = self.context.get('github_manager')
+        gh_readonly = self.context.get('github_readonly')
         session = self.context.get('admin_session')
-        is_first_run = gh_mgr and not gh_mgr.has_token()
+        is_first_run = gh_mgr and not gh_mgr.has_token() and not (gh_readonly and gh_readonly.connected())
         
         query_params = urllib.parse.parse_qs(parsed.query)
         error = query_params.get('error', [''])[0] or None
@@ -676,7 +909,14 @@ class AdminRouter:
 
     def handle_github(self, parsed) -> str:
         gh_mgr = self.context.get('github_manager')
-        if gh_mgr:
+        gh_readonly = self.context.get('github_readonly')
+        if gh_readonly and gh_readonly.connected():
+            snapshot = gh_readonly.status()
+            status = GitHubStatusDTO(
+                True, snapshot.get('principal'), 'CONNECTED_READ_ONLY', 'EXTERNAL_SESSION',
+                None, ['read-only'], snapshot.get('confirmed_at'), None,
+            ).to_dict()
+        elif gh_mgr:
             status = gh_mgr.get_status().to_dict()
         else:
             status = GitHubStatusDTO(False, None, "UNAUTHORIZED", "MISSING", None, [], None, None).to_dict()
@@ -689,12 +929,11 @@ class AdminRouter:
     def handle_fabric(self, parsed) -> str:
         """Report live Repository Fabric status through the canonical config-driven adapter."""
         status = FabricStatusDTO(False, None, None, None, None, None).to_dict()
-        fabric_client = self._get_fabric_client()
-        if fabric_client is None:
-            status["fabric_status"] = "NOT_CONFIGURED"
-            return fabric_page(status, self._get_csrf())
-
         try:
+            fabric_client = self._get_fabric_client()
+            if fabric_client is None:
+                status["fabric_status"] = "NOT_CONFIGURED"
+                return fabric_page(status, self._get_csrf())
             health = fabric_client.probe_health()
             status["fabric_status"] = "CONNECTED" if health.reachable else "DEGRADED"
             status["node_id"] = health.node_id
